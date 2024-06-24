@@ -1,0 +1,8 @@
+[package]
+name = "tenda"
+version = "0.1.0"
+edition = "2021"
+authors = ["Gabriel Bruno <gabrielbrunoes@gmail.com>"]
+license = "MIT"
+
+[dependencies]
