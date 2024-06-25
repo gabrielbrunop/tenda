@@ -9,3 +9,9 @@ impl Interpreter {
         string
     }
 }
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
