@@ -6,3 +6,4 @@ authors = ["Gabriel Bruno <gabrielbrunoes@gmail.com>"]
 license = "MIT"
 
 [dependencies]
+rustyline = "14.0.0"
