@@ -199,3 +199,54 @@ pub enum LexicalErrorKind {
     LeadingZeroNumberLiterals,
     UnexpectedChar(char),
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::token_list;
+
+    use super::*;
+
+    fn scan<T: ToString>(string: T) -> Result<Vec<Token>, Vec<LexicalError>> {
+        let input = string.to_string();
+
+        let mut scanner = Scanner::new(&input);
+
+        scanner.scan()
+    }
+
+    fn scan_to_token_list<T: ToString>(string: T) -> Result<Vec<TokenKind>, Vec<LexicalError>> {
+        let result = scan(string)?
+            .into_iter()
+            .map(|t| t.kind)
+            .collect::<Vec<TokenKind>>();
+
+        Ok(result)
+    }
+
+    #[test]
+    fn extra_spacing() {
+        assert!(
+            scan_to_token_list(" 1 + 2 ")
+                .unwrap()
+                .iter()
+                .eq(token_list![Number, Plus, Number, Eof]),
+            "sum of integers with additional spacing between characters"
+        )
+    }
+
+    #[test]
+    fn illegal_leading_zero() {
+        assert!(scan_to_token_list("01").is_err(), "illegal leading zero")
+    }
+
+    #[test]
+    fn legal_leading_zero() {
+        assert!(
+            scan_to_token_list("0.1")
+                .unwrap()
+                .iter()
+                .eq(token_list![Number, Eof]),
+            "legal leading zero"
+        )
+    }
+}
