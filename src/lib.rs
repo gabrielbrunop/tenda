@@ -180,4 +180,14 @@ mod test {
 
         assert_eq!(result, expected, "legal leading zeroes");
     }
+
+    #[test]
+    fn reflexive_zero() {
+        let mut tenda = Tenda::new();
+
+        let result = tenda.run("0".to_string());
+        let expected = "0";
+
+        assert_eq!(result, expected, "zero evaluates to itself");
+    }
 }
