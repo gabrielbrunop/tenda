@@ -56,7 +56,12 @@ impl Interpreter {
             Modulo => lhs % rhs,
         };
 
-        Ok(expr)
+        match expr {
+            Value::Number(number) if number.abs() == f64::INFINITY => {
+                runtime_error!(NumberOverflow).into()
+            }
+            _ => Ok(expr),
+        }
     }
 
     fn interpret_unary_op(&self, op: UnaryOp, rhs: Expr) -> Result<Value, RuntimeError> {
@@ -89,6 +94,7 @@ impl RuntimeError {
 
         match &self.kind {
             DivisionByZero => "division by zero".to_string(),
+            NumberOverflow => "number overflow".to_string(),
         }
     }
 }
@@ -108,6 +114,7 @@ impl fmt::Display for RuntimeError {
 #[derive(Debug)]
 pub enum RuntimeErrorKind {
     DivisionByZero,
+    NumberOverflow,
 }
 
 #[cfg(test)]
@@ -224,5 +231,12 @@ mod tests {
             Value::Number(4.0),
             "multiplication of integer with parentheses"
         )
+    }
+
+    #[test]
+    fn number_overflow() {
+        run_expr("10^1000")
+            .is_ok()
+            .then(|| panic!("overflow should error"));
     }
 }
