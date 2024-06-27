@@ -117,7 +117,8 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        let illegal_leading_zero = number.starts_with('0') && !number.starts_with("0.");
+        let illegal_leading_zero =
+            number.starts_with('0') && !number.starts_with("0.") && number != "0";
 
         if illegal_leading_zero {
             return lexical_error!(LeadingZeroNumberLiterals, self.line).into();
