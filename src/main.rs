@@ -2,7 +2,7 @@ use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::io;
 use std::io::{IsTerminal, Read};
-use tenda::Interpreter;
+use tenda::Tenda;
 
 fn main() -> io::Result<()> {
     let mut stdin = io::stdin();
@@ -21,7 +21,7 @@ fn main() -> io::Result<()> {
 
 fn start_repl() {
     let mut rl = DefaultEditor::new().unwrap();
-    let mut interpreter = Interpreter::new();
+    let mut tenda = Tenda::new();
 
     loop {
         let readline = rl.readline("> ");
@@ -30,7 +30,7 @@ fn start_repl() {
             Ok(line) => {
                 rl.add_history_entry(line.as_str()).unwrap();
 
-                let output = interpreter.interpret(line);
+                let output = tenda.run(line);
                 println!("{}", output);
             }
             Err(ReadlineError::Interrupted) => {
@@ -49,8 +49,8 @@ fn start_repl() {
 }
 
 fn run_string(string: String) {
-    let mut interpreter = Interpreter::new();
-    let output = interpreter.interpret(string);
+    let mut tenda = Tenda::new();
+    let output = tenda.run(string);
 
     println!("{}", output);
 }
