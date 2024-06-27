@@ -5,6 +5,16 @@ use std::fmt;
 use std::iter::Peekable;
 use std::slice::Iter;
 
+macro_rules! parser_error {
+    ($kind:expr, $line:expr) => {{
+        use ParserErrorKind::*;
+        ParserError {
+            kind: $kind,
+            line: $line,
+        }
+    }};
+}
+
 pub struct Parser<'a> {
     tokens: Peekable<Iter<'a, Token>>,
 }
@@ -82,18 +92,18 @@ impl<'a> Parser<'a> {
         };
 
         match token.kind {
-            TokenKind::Number => Ok(Expr::make_literal(token.literal.clone().unwrap())),
+            TokenKind::Number => Ok(Expr::make_literal(token.literal.unwrap())),
             TokenKind::LeftParen => {
                 let expr = self.expression()?;
 
                 if self.match_tokens(token_list![RightParen]).is_none() {
-                    return Err(ParserError::MissingParentheses);
+                    return parser_error!(MissingParentheses, token.line).into();
                 }
 
                 Ok(Expr::make_grouping(expr))
             }
-            TokenKind::Eof => Err(ParserError::UnexpectedEoi),
-            _ => Err(ParserError::UnexpectedToken(token.clone())),
+            TokenKind::Eof => parser_error!(UnexpectedEoi, token.line).into(),
+            _ => parser_error!(UnexpectedToken(token.clone()), token.line).into(),
         }
     }
 }
@@ -116,17 +126,16 @@ impl<'a> Parser<'a> {
 }
 
 #[derive(Debug)]
-pub enum ParserError {
-    UnexpectedEoi,
-    UnexpectedToken(Token),
-    MissingParentheses,
+pub struct ParserError {
+    line: usize,
+    kind: ParserErrorKind,
 }
 
 impl ParserError {
     pub fn message(&self) -> String {
-        use ParserError::*;
+        use ParserErrorKind::*;
 
-        match self {
+        match &self.kind {
             UnexpectedEoi => "unexpected end of input".to_string(),
             MissingParentheses => "expected ')' after expression.".to_string(),
             UnexpectedToken(token) => format!("unexpected token: {}", token.lexeme),
@@ -134,8 +143,21 @@ impl ParserError {
     }
 }
 
+impl<T> From<ParserError> for Result<T, ParserError> {
+    fn from(val: ParserError) -> Self {
+        Err(val)
+    }
+}
+
 impl fmt::Display for ParserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message())
+        write!(f, "{} (at line {})", self.message(), self.line)
     }
+}
+
+#[derive(Debug)]
+pub enum ParserErrorKind {
+    UnexpectedEoi,
+    UnexpectedToken(Token),
+    MissingParentheses,
 }
