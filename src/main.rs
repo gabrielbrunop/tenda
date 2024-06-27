@@ -22,19 +22,25 @@ fn main() -> io::Result<()> {
 fn start_repl() {
     let mut rl = DefaultEditor::new().unwrap();
     let mut tenda = Tenda::new();
+    let mut exiting = false;
 
     loop {
         let readline = rl.readline("> ");
+
         match readline {
             Ok(line) if line.trim() == ".exit" => break,
             Ok(line) => {
+                exiting = false;
+
                 rl.add_history_entry(line.as_str()).unwrap();
 
                 let output = tenda.run(line);
                 println!("{}", output);
             }
+            Err(ReadlineError::Interrupted) if exiting => break,
             Err(ReadlineError::Interrupted) => {
-                println!("To exit, type .exit or press CTRL+D");
+                exiting = true;
+                println!("To exit, press CTRL+C again or type .exit or press CTRL+D");
             }
             Err(ReadlineError::Eof) => {
                 println!("CTRL-D");
