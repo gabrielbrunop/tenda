@@ -7,6 +7,16 @@ use std::fmt::Display;
 use std::iter::Peekable;
 use std::str::Chars;
 
+macro_rules! lexical_error {
+    ($kind:expr, $line:expr) => {{
+        use LexicalErrorKind::*;
+        LexicalError {
+            kind: $kind,
+            line: $line,
+        }
+    }};
+}
+
 pub struct Scanner<'a> {
     source: Peekable<Chars<'a>>,
     line: usize,
@@ -25,39 +35,39 @@ impl<'a> Scanner<'a> {
         let mut errors = Vec::new();
         let mut had_error = false;
 
+        macro_rules! ignore_char {
+            () => {
+                Ok(None)
+            };
+        }
+
         while let Some(c) = self.source.next() {
             let token: Result<Option<Token>, LexicalError> = match c {
                 c if c.is_whitespace() => Ok(None),
-                '(' => Ok(Some(token!(LeftParen, ")", self.line))),
-                ')' => Ok(Some(token!(RightParen, ")", self.line))),
-                '+' => Ok(Some(token!(Plus, "+", self.line))),
-                '-' => Ok(Some(token!(Minus, "-", self.line))),
-                '*' => Ok(Some(token!(Star, "*", self.line))),
-                '^' => Ok(Some(token!(Caret, "^", self.line))),
-                '%' => Ok(Some(token!(Percent, "%", self.line))),
-                c if c.is_ascii_digit() => match self.consume_number(c) {
-                    Ok(token) => Ok(Some(token)),
-                    Err(err) => Err(err),
-                },
+                '(' => token!(LeftParen, ")", self.line).into(),
+                ')' => token!(RightParen, ")", self.line).into(),
+                '+' => token!(Plus, "+", self.line).into(),
+                '-' => token!(Minus, "-", self.line).into(),
+                '*' => token!(Star, "*", self.line).into(),
+                '^' => token!(Caret, "^", self.line).into(),
+                '%' => token!(Percent, "%", self.line).into(),
+                c if c.is_ascii_digit() => self.consume_number(c).map(Some),
                 '/' => match self.source.peek() {
                     Some('/') => {
                         self.consume_comment();
-                        Ok(None)
+                        ignore_char!()
                     }
                     Some('*') => {
                         self.consume_multiline_comment();
-                        Ok(None)
+                        ignore_char!()
                     }
-                    _ => Ok(Some(token!(Slash, "/", self.line))),
+                    _ => token!(Slash, "/", self.line).into(),
                 },
                 '\n' => {
                     self.line += 1;
-                    Ok(None)
+                    ignore_char!()
                 }
-                _ => Err(LexicalError {
-                    line: 0,
-                    message: format!("unexpected character: {}", c),
-                }),
+                _ => lexical_error!(UnexpectedChar(c), self.line).into(),
             };
 
             match token {
@@ -73,9 +83,7 @@ impl<'a> Scanner<'a> {
             };
         }
 
-        let eof_token = Token::new(TokenKind::Eof, "".to_string(), None, self.line);
-
-        tokens.push(eof_token);
+        tokens.push(Token::eoi(self.line));
 
         if errors.is_empty() {
             Ok(tokens)
@@ -91,13 +99,11 @@ impl<'a> Scanner<'a> {
         number.push(char);
 
         while let Some(&peeked) = self.source.peek() {
+            let is_unexpected = |c: char| c == '.' && matched_dot || c.is_alphabetic();
+
             match peeked {
-                c if c == '.' && matched_dot => {
-                    return LexicalError {
-                        line: self.line,
-                        message: "unexpected character: '.'".to_string(),
-                    }
-                    .into();
+                c if is_unexpected(c) => {
+                    return lexical_error!(UnexpectedChar(c), self.line).into();
                 }
                 c if c.is_numeric() || c == '.' => {
                     if c == '.' {
@@ -107,13 +113,6 @@ impl<'a> Scanner<'a> {
                     number.push(peeked);
                     self.source.next();
                 }
-                c if c.is_alphabetic() => {
-                    return LexicalError {
-                        line: self.line,
-                        message: format!("unexpected character: {}", c),
-                    }
-                    .into();
-                }
                 _ => break,
             }
         }
@@ -121,10 +120,7 @@ impl<'a> Scanner<'a> {
         let illegal_leading_zero = number.starts_with('0') && !number.starts_with("0.");
 
         if illegal_leading_zero {
-            return Err(LexicalError {
-                message: "leading zeros in number literals are not permitted".to_string(),
-                line: self.line,
-            });
+            return lexical_error!(LeadingZeroNumberLiterals, self.line).into();
         }
 
         let number: f64 = number.parse().unwrap();
@@ -169,7 +165,20 @@ impl<'a> Scanner<'a> {
 #[derive(Debug)]
 pub struct LexicalError {
     pub line: usize,
-    pub message: String,
+    pub kind: LexicalErrorKind,
+}
+
+impl LexicalError {
+    pub fn message(&self) -> String {
+        use LexicalErrorKind::*;
+
+        match self.kind {
+            LeadingZeroNumberLiterals => {
+                "leading zeros in number literals are not permitted".to_string()
+            }
+            UnexpectedChar(c) => format!("unexpected character: {}", c),
+        }
+    }
 }
 
 impl<T> From<LexicalError> for Result<T, LexicalError> {
@@ -180,6 +189,12 @@ impl<T> From<LexicalError> for Result<T, LexicalError> {
 
 impl Display for LexicalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (at line {})", self.message, self.line)
+        write!(f, "{} (at line {})", self.message(), self.line)
     }
+}
+
+#[derive(Debug)]
+pub enum LexicalErrorKind {
+    LeadingZeroNumberLiterals,
+    UnexpectedChar(char),
 }
