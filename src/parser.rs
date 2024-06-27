@@ -1,6 +1,7 @@
 use crate::ast::Expr;
 use crate::token::{Token, TokenKind};
 use crate::token_list;
+use std::fmt;
 use std::iter::Peekable;
 use std::slice::Iter;
 
@@ -15,81 +16,84 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Expr {
+    pub fn parse(&mut self) -> Result<Expr, ParserError> {
         self.program()
     }
 
-    fn program(&mut self) -> Expr {
+    fn program(&mut self) -> Result<Expr, ParserError> {
         self.expression()
     }
 
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> Result<Expr, ParserError> {
         self.term()
     }
 
-    fn term(&mut self) -> Expr {
-        let mut expr = self.factor();
+    fn term(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.factor()?;
 
         while let Some(op) = self.match_tokens(token_list![Plus, Minus]) {
             let lhs = expr;
-            let rhs = self.factor();
+            let rhs = self.factor()?;
             expr = Expr::make_binary(lhs, op.into(), rhs);
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn factor(&mut self) -> Expr {
-        let mut expr = self.exponent();
+    fn factor(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.exponent()?;
 
         while let Some(op) = self.match_tokens(token_list![Star, Slash, Percent]) {
             let lhs = expr;
-            let rhs = self.exponent();
+            let rhs = self.exponent()?;
             expr = Expr::make_binary(lhs, op.into(), rhs);
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn exponent(&mut self) -> Expr {
-        let mut expr = self.unary();
+    fn exponent(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.unary()?;
 
         while let Some(op) = self.match_tokens(token_list![Caret]) {
             let lhs = expr;
-            let rhs = self.unary();
+            let rhs = self.unary()?;
             expr = Expr::make_binary(lhs, op.into(), rhs);
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> Expr {
+    fn unary(&mut self) -> Result<Expr, ParserError> {
         if let Some(op) = self.match_tokens(token_list![Minus]) {
-            let rhs = self.unary();
-            Expr::make_unary(op.into(), rhs)
+            let rhs = self.unary()?;
+            let expr = Expr::make_unary(op.into(), rhs);
+
+            Ok(expr)
         } else {
             self.primary()
         }
     }
 
-    fn primary(&mut self) -> Expr {
+    fn primary(&mut self) -> Result<Expr, ParserError> {
         let token = match self.tokens.next() {
             Some(token) => token,
-            _ => panic!("expected primary"),
+            _ => unreachable!(),
         };
 
         match token.kind {
-            TokenKind::Number => Expr::make_literal(token.literal.clone().unwrap()),
+            TokenKind::Number => Ok(Expr::make_literal(token.literal.clone().unwrap())),
             TokenKind::LeftParen => {
-                let expr = self.expression();
+                let expr = self.expression()?;
 
                 if self.match_tokens(token_list![RightParen]).is_none() {
-                    panic!("expected ')' after expression.");
+                    return Err(ParserError::MissingParentheses);
                 }
 
-                Expr::make_grouping(expr)
+                Ok(Expr::make_grouping(expr))
             }
-            _ => panic!("unexpected token: {}", token.lexeme),
+            TokenKind::Eof => Err(ParserError::UnexpectedEoi),
+            _ => Err(ParserError::UnexpectedToken(token.clone())),
         }
     }
 }
@@ -111,8 +115,27 @@ impl<'a> Parser<'a> {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
-pub struct ParserError {
-    pub message: String,
+pub enum ParserError {
+    UnexpectedEoi,
+    UnexpectedToken(Token),
+    MissingParentheses,
+}
+
+impl ParserError {
+    pub fn message(&self) -> String {
+        use ParserError::*;
+
+        match self {
+            UnexpectedEoi => "unexpected end of input".to_string(),
+            MissingParentheses => "expected ')' after expression.".to_string(),
+            UnexpectedToken(token) => format!("unexpected token: {}", token.lexeme),
+        }
+    }
+}
+
+impl fmt::Display for ParserError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message())
+    }
 }

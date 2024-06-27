@@ -30,7 +30,11 @@ impl Tenda {
         };
 
         let mut parser = Parser::new(&tokens);
-        let ast: ast::Expr = parser.parse();
+
+        let ast = match parser.parse() {
+            Ok(expr) => expr,
+            Err(err) => return format!("ParserError: {}", err),
+        };
 
         let result = self.interpreter.interpret_expr(ast);
 
