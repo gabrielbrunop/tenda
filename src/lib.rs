@@ -26,7 +26,7 @@ impl Tenda {
 
         let tokens = match scanner.scan() {
             Ok(token) => token,
-            Err(err) => return format!("Lexical Error: {:?}", err),
+            Err(err) => return format!("LexicalError: {:?}", err),
         };
 
         let mut parser = Parser::new(&tokens);

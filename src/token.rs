@@ -40,6 +40,11 @@ impl Token {
             line,
         }
     }
+
+    pub fn eoi(line: usize) -> Token {
+        const EOT: i32 = 0x04;
+        token!(Eof, EOT, line)
+    }
 }
 
 impl Display for Token {
@@ -49,6 +54,12 @@ impl Display for Token {
             "{:?} {{ Token {:?}, Literal {:?}, Line {} }}",
             self.lexeme, self.kind, self.literal, self.line
         )
+    }
+}
+
+impl<T> From<Token> for Result<Option<Token>, T> {
+    fn from(val: Token) -> Self {
+        Ok(Some(val))
     }
 }
 
