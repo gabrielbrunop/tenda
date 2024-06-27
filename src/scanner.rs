@@ -194,7 +194,7 @@ impl Display for LexicalError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum LexicalErrorKind {
     LeadingZeroNumberLiterals,
     UnexpectedChar(char),

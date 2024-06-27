@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Value {
     Number(f64),
 }
@@ -94,9 +94,9 @@ impl Rem for Value {
 }
 
 impl Value {
-    pub fn to_number(&self) -> f64 {
+    pub fn to_number(self) -> f64 {
         match self {
-            Value::Number(n) => *n,
+            Value::Number(n) => n,
         }
     }
 }
