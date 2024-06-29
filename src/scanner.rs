@@ -182,6 +182,7 @@ impl<'a> Scanner<'a> {
                 self.line,
                 Value::Boolean(false)
             ),
+            Value::NIL_LITERAL => token!(Nil, Value::NIL_LITERAL, self.line, Value::Nil),
             _ => return lexical_error!(UnexpectedChar(char), self.line).into(),
         };
 
@@ -337,6 +338,17 @@ mod tests {
                 .iter()
                 .eq(token_list![String, Eof]),
             "\"Hello, world!\" is a string literal lexeme"
+        )
+    }
+
+    #[test]
+    fn nil_literal() {
+        assert!(
+            scan_to_token_list("Nada")
+                .unwrap()
+                .iter()
+                .eq(token_list![Nil, Eof]),
+            "Nada is a lexeme"
         )
     }
 }

@@ -69,6 +69,7 @@ pub enum TokenKind {
     String,
     True,
     False,
+    Nil,
     Plus,
     Minus,
     Star,

@@ -329,4 +329,13 @@ mod tests {
             "string evaluates to itself"
         )
     }
+
+    #[test]
+    fn reflexive_nil() {
+        assert_eq!(
+            run_expr("Nada").unwrap(),
+            Value::Nil,
+            "nil evaluates to itself"
+        )
+    }
 }
