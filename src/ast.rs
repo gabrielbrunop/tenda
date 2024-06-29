@@ -58,6 +58,10 @@ pub enum BinaryOp {
     Modulo,
     Equality,
     Inequality,
+    Greater,
+    GreaterOrEqual,
+    Less,
+    LessOrEqual,
 }
 
 impl From<Token> for BinaryOp {
@@ -72,6 +76,10 @@ impl From<Token> for BinaryOp {
             TokenKind::Percent => Modulo,
             TokenKind::Caret => Exponentiation,
             TokenKind::Equals => Equality,
+            TokenKind::Greater => Greater,
+            TokenKind::GreaterOrEqual => GreaterOrEqual,
+            TokenKind::Less => Less,
+            TokenKind::LessOrEqual => LessOrEqual,
             _ => panic!("invalid token for binary operation"),
         }
     }

@@ -22,6 +22,15 @@ macro_rules! runtime_error {
     }};
 }
 
+macro_rules! type_error {
+    ($message:expr, $($params:expr),*) => {
+        runtime_error!(
+            TypeError,
+            format!($message, $($params.get_type()),*)
+        )
+    };
+}
+
 pub struct Interpreter {}
 
 impl Interpreter {
@@ -55,62 +64,32 @@ impl Interpreter {
         let expr = match op {
             Add => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs + rhs),
-                (lhs, rhs) => {
-                    return Err(runtime_error!(
-                        TypeError,
-                        format!("cannot add {} to {}", lhs.get_type(), rhs.get_type())
-                    ))
-                }
+                (lhs, rhs) => return Err(type_error!("cannot add {} to {}", lhs, rhs)),
             },
             Subtract => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs - rhs),
-                (lhs, rhs) => {
-                    return Err(runtime_error!(
-                        TypeError,
-                        format!("cannot subtract {} from {}", rhs.get_type(), lhs.get_type())
-                    ))
-                }
+                (lhs, rhs) => return Err(type_error!("cannot subtract {} from {}", rhs, lhs)),
             },
             Multiply => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs * rhs),
-                (lhs, rhs) => {
-                    return Err(runtime_error!(
-                        TypeError,
-                        format!("cannot multiply {} by {}", lhs.get_type(), rhs.get_type())
-                    ))
-                }
+                (lhs, rhs) => return Err(type_error!("cannot multiply {} by {}", lhs, rhs)),
             },
             Divide => match (lhs, rhs) {
-                (_, Number(rhs)) if rhs == 0.0 => return Err(runtime_error!(DivisionByZero)),
-                (Number(lhs), Number(rhs)) => Number(lhs / rhs),
-                (lhs, rhs) => {
-                    return Err(runtime_error!(
-                        TypeError,
-                        format!("cannot divide {} by {}", lhs.get_type(), rhs.get_type())
-                    ))
+                (Number(_), Number(rhs)) if rhs == 0.0 => {
+                    return Err(runtime_error!(DivisionByZero))
                 }
+                (Number(lhs), Number(rhs)) => Number(lhs / rhs),
+                (lhs, rhs) => return Err(type_error!("cannot divide {} by {}", lhs, rhs)),
             },
             Exponentiation => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs.powf(rhs)),
                 (lhs, rhs) => {
-                    return Err(runtime_error!(
-                        TypeError,
-                        format!(
-                            "cannot raise {} to the power of {}",
-                            lhs.get_type(),
-                            rhs.get_type()
-                        )
-                    ))
+                    return Err(type_error!("cannot raise {} to the power of {}", lhs, rhs))
                 }
             },
             Modulo => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs % rhs),
-                (lhs, rhs) => {
-                    return Err(runtime_error!(
-                        TypeError,
-                        format!("cannot mod {} by {}", lhs.get_type(), rhs.get_type())
-                    ))
-                }
+                (lhs, rhs) => return Err(type_error!("cannot mod {} by {}", lhs, rhs)),
             },
             Equality => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs == rhs),
@@ -123,6 +102,50 @@ impl Interpreter {
                 (Boolean(lhs), Boolean(rhs)) => Boolean(lhs != rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs != rhs),
                 _ => Boolean(false),
+            },
+            Greater => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Boolean(lhs > rhs),
+                (String(lhs), String(rhs)) => Boolean(lhs > rhs),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                        "cannot apply 'greater than' partial order operation to {} and {}",
+                        lhs,
+                        rhs
+                    ))
+                }
+            },
+            GreaterOrEqual => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Boolean(lhs >= rhs),
+                (String(lhs), String(rhs)) => Boolean(lhs >= rhs),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                    "cannot apply 'greater than or equal to' partial order operation to {} and {}",
+                    lhs,
+                    rhs
+                ))
+                }
+            },
+            Less => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Boolean(lhs < rhs),
+                (String(lhs), String(rhs)) => Boolean(lhs < rhs),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                        "cannot apply 'less than' partial order operation to {} and {}",
+                        lhs,
+                        rhs
+                    ))
+                }
+            },
+            LessOrEqual => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Boolean(lhs <= rhs),
+                (String(lhs), String(rhs)) => Boolean(lhs <= rhs),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                        "cannot apply 'less than or equal to' partial order operation to {} and {}",
+                        lhs,
+                        rhs
+                    ))
+                }
             },
         };
 
@@ -141,12 +164,7 @@ impl Interpreter {
         let expr = match op {
             Negative => match rhs {
                 Number(rhs) => Number(-rhs),
-                _ => {
-                    return Err(runtime_error!(
-                        TypeError,
-                        format!("cannot negate {}", rhs.get_type())
-                    ))
-                }
+                _ => return Err(type_error!("cannot negate {}", rhs)),
             },
         };
 
@@ -366,6 +384,42 @@ mod tests {
             run_expr("1 for 2").unwrap(),
             Value::Boolean(false),
             "1 is not equal to 2"
+        )
+    }
+
+    #[test]
+    fn numeric_greater() {
+        assert_eq!(
+            run_expr("1 > 2").unwrap(),
+            Value::Boolean(false),
+            "1 is not greater than 2"
+        )
+    }
+
+    #[test]
+    fn numeric_greater_than() {
+        assert_eq!(
+            run_expr("1 < 2").unwrap(),
+            Value::Boolean(true),
+            "1 is less than 2"
+        )
+    }
+
+    #[test]
+    fn numeric_less() {
+        assert_eq!(
+            run_expr("1 >= 1").unwrap(),
+            Value::Boolean(true),
+            "1 is greater than or equal to itself"
+        )
+    }
+
+    #[test]
+    fn numeric_less_than() {
+        assert_eq!(
+            run_expr("1 >= 2").unwrap(),
+            Value::Boolean(false),
+            "1 is not greater than or equal to 2"
         )
     }
 }

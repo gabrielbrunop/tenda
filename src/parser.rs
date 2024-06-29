@@ -39,7 +39,7 @@ impl<'a> Parser<'a> {
     }
 
     fn equality(&mut self) -> Result<Expr, ParserError> {
-        let mut expr = self.term()?;
+        let mut expr = self.comparison()?;
 
         loop {
             let op: Option<BinaryOp> = {
@@ -56,11 +56,25 @@ impl<'a> Parser<'a> {
 
             if let Some(op) = op {
                 let lhs = expr;
-                let rhs = self.term()?;
+                let rhs = self.comparison()?;
                 expr = Expr::make_binary(lhs, op, rhs);
             } else {
                 break;
             }
+        }
+
+        Ok(expr)
+    }
+
+    fn comparison(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.term()?;
+
+        while let Some(op) =
+            self.match_tokens(token_list![Greater, GreaterOrEqual, Less, LessOrEqual])
+        {
+            let lhs = expr;
+            let rhs = self.term()?;
+            expr = Expr::make_binary(lhs, op.into(), rhs);
         }
 
         Ok(expr)
