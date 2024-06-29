@@ -55,7 +55,7 @@ impl Interpreter {
         let expr = match op {
             Add => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs + rhs),
-                _ => {
+                (lhs, rhs) => {
                     return Err(runtime_error!(
                         TypeError,
                         format!("cannot add {} to {}", lhs.get_type(), rhs.get_type())
@@ -64,16 +64,16 @@ impl Interpreter {
             },
             Subtract => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs - rhs),
-                _ => {
+                (lhs, rhs) => {
                     return Err(runtime_error!(
                         TypeError,
-                        format!("cannot subtract {} from {}", lhs.get_type(), rhs.get_type())
+                        format!("cannot subtract {} from {}", rhs.get_type(), lhs.get_type())
                     ))
                 }
             },
             Multiply => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs * rhs),
-                _ => {
+                (lhs, rhs) => {
                     return Err(runtime_error!(
                         TypeError,
                         format!("cannot multiply {} by {}", lhs.get_type(), rhs.get_type())
@@ -83,7 +83,7 @@ impl Interpreter {
             Divide => match (lhs, rhs) {
                 (_, Number(rhs)) if rhs == 0.0 => return Err(runtime_error!(DivisionByZero)),
                 (Number(lhs), Number(rhs)) => Number(lhs / rhs),
-                _ => {
+                (lhs, rhs) => {
                     return Err(runtime_error!(
                         TypeError,
                         format!("cannot divide {} by {}", lhs.get_type(), rhs.get_type())
@@ -92,7 +92,7 @@ impl Interpreter {
             },
             Exponentiation => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs.powf(rhs)),
-                _ => {
+                (lhs, rhs) => {
                     return Err(runtime_error!(
                         TypeError,
                         format!(
@@ -105,7 +105,7 @@ impl Interpreter {
             },
             Modulo => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs % rhs),
-                _ => {
+                (lhs, rhs) => {
                     return Err(runtime_error!(
                         TypeError,
                         format!("cannot mod {} by {}", lhs.get_type(), rhs.get_type())
@@ -319,5 +319,14 @@ mod tests {
             Value::Boolean(false),
             "`falso` evaluates to itself"
         );
+    }
+
+    #[test]
+    fn reflexive_string() {
+        assert_eq!(
+            run_expr("\"Hello, world!\"").unwrap(),
+            Value::String("Hello, world!".to_string()),
+            "string evaluates to itself"
+        )
     }
 }

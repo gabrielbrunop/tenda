@@ -94,7 +94,9 @@ impl<'a> Parser<'a> {
         };
 
         match token.kind {
-            Number | True | False => Ok(Expr::make_literal(token.literal.unwrap())),
+            Number | True | False | String => {
+                Ok(Expr::make_literal(token.literal.clone().unwrap()))
+            }
             LeftParen => {
                 let expr = self.expression()?;
 
