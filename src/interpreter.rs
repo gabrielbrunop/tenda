@@ -118,6 +118,12 @@ impl Interpreter {
                 (String(lhs), String(rhs)) => Boolean(lhs == rhs),
                 _ => Boolean(false),
             },
+            Inequality => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Boolean(lhs != rhs),
+                (Boolean(lhs), Boolean(rhs)) => Boolean(lhs != rhs),
+                (String(lhs), String(rhs)) => Boolean(lhs != rhs),
+                _ => Boolean(false),
+            },
         };
 
         match expr {
@@ -347,6 +353,19 @@ mod tests {
 
     #[test]
     fn numeric_equality() {
-        assert_eq!(run_expr("1 for 1").unwrap(), Value::Nil, "1 is equal to 1")
+        assert_eq!(
+            run_expr("1 for 1").unwrap(),
+            Value::Boolean(true),
+            "1 is equal to 1"
+        )
+    }
+
+    #[test]
+    fn numeric_inequality() {
+        assert_eq!(
+            run_expr("1 for 2").unwrap(),
+            Value::Boolean(false),
+            "1 is not equal to 2"
+        )
     }
 }

@@ -1,8 +1,8 @@
-use crate::ast::Expr;
+use crate::ast::{BinaryOp, Expr};
 use crate::token::{Token, TokenKind};
 use crate::token_list;
+use peekmore::{PeekMore, PeekMoreIterator};
 use std::fmt;
-use std::iter::Peekable;
 use std::slice::Iter;
 
 macro_rules! parser_error {
@@ -16,13 +16,13 @@ macro_rules! parser_error {
 }
 
 pub struct Parser<'a> {
-    tokens: Peekable<Iter<'a, Token>>,
+    tokens: PeekMoreIterator<Iter<'a, Token>>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a [Token]) -> Parser<'a> {
         Parser {
-            tokens: source.iter().peekable(),
+            tokens: source.iter().peekmore(),
         }
     }
 
@@ -41,10 +41,26 @@ impl<'a> Parser<'a> {
     fn equality(&mut self) -> Result<Expr, ParserError> {
         let mut expr = self.term()?;
 
-        while let Some(op) = self.match_tokens(token_list![Equals]) {
-            let lhs = expr;
-            let rhs = self.term()?;
-            expr = Expr::make_binary(lhs, op.into(), rhs);
+        loop {
+            let op: Option<BinaryOp> = {
+                if let Some(token) = self.match_tokens(token_list![Equals]) {
+                    Some(token.into())
+                } else if self.matches_sequence(token_list![Not, Equals]) {
+                    Some(BinaryOp::Inequality)
+                } else if let Some(token) = self.match_tokens(token_list![Not]) {
+                    return parser_error!(UnexpectedToken(token.clone()), token.line).into();
+                } else {
+                    None
+                }
+            };
+
+            if let Some(op) = op {
+                let lhs = expr;
+                let rhs = self.term()?;
+                expr = Expr::make_binary(lhs, op, rhs);
+            } else {
+                break;
+            }
         }
 
         Ok(expr)
@@ -138,6 +154,28 @@ impl<'a> Parser<'a> {
         }
 
         None
+    }
+
+    fn matches_sequence(&mut self, token_types: Iter<TokenKind>) -> bool {
+        assert_eq!(self.tokens.cursor(), 0, "cursor is already in use");
+
+        for token_type in token_types {
+            let matched_sequence =
+                matches!(self.tokens.peek(), Some(token) if *token_type == token.kind);
+
+            if !matched_sequence {
+                self.tokens.reset_cursor();
+                return false;
+            }
+
+            self.tokens.advance_cursor();
+        }
+
+        for _ in 0..self.tokens.cursor() {
+            self.tokens.next();
+        }
+
+        true
     }
 }
 
