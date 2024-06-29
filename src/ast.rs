@@ -1,4 +1,3 @@
-use crate::ast::BinaryOp::{Add, Divide, Exponentiation, Modulo, Multiply, Subtract};
 use crate::ast::UnaryOp::Negative;
 use crate::token::{Token, TokenKind};
 use crate::value::Value;
@@ -57,10 +56,13 @@ pub enum BinaryOp {
     Divide,
     Exponentiation,
     Modulo,
+    Equality,
 }
 
 impl From<Token> for BinaryOp {
     fn from(value: Token) -> Self {
+        use BinaryOp::*;
+
         match value.kind {
             TokenKind::Plus => Add,
             TokenKind::Minus => Subtract,
@@ -68,6 +70,7 @@ impl From<Token> for BinaryOp {
             TokenKind::Slash => Divide,
             TokenKind::Percent => Modulo,
             TokenKind::Caret => Exponentiation,
+            TokenKind::Equals => Equality,
             _ => panic!("invalid token for binary operation"),
         }
     }

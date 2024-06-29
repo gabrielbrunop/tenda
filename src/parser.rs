@@ -35,7 +35,19 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<Expr, ParserError> {
-        self.term()
+        self.equality()
+    }
+
+    fn equality(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.term()?;
+
+        while let Some(op) = self.match_tokens(token_list![Equals]) {
+            let lhs = expr;
+            let rhs = self.term()?;
+            expr = Expr::make_binary(lhs, op.into(), rhs);
+        }
+
+        Ok(expr)
     }
 
     fn term(&mut self) -> Result<Expr, ParserError> {

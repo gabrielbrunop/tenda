@@ -112,6 +112,12 @@ impl Interpreter {
                     ))
                 }
             },
+            Equality => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Boolean(lhs == rhs),
+                (Boolean(lhs), Boolean(rhs)) => Boolean(lhs == rhs),
+                (String(lhs), String(rhs)) => Boolean(lhs == rhs),
+                _ => Boolean(false),
+            },
         };
 
         match expr {
@@ -337,5 +343,10 @@ mod tests {
             Value::Nil,
             "nil evaluates to itself"
         )
+    }
+
+    #[test]
+    fn numeric_equality() {
+        assert_eq!(run_expr("1 for 1").unwrap(), Value::Nil, "1 is equal to 1")
     }
 }
