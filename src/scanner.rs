@@ -51,6 +51,7 @@ impl<'a> Scanner<'a> {
                 '*' => token!(Star, "*", self.line).into(),
                 '^' => token!(Caret, "^", self.line).into(),
                 '%' => token!(Percent, "%", self.line).into(),
+                '"' => self.consume_string(c).map(Some),
                 c if c.is_ascii_digit() => self.consume_number(c).map(Some),
                 c if c.is_alphabetic() || c == '_' => self.consume_identifier(c).map(Some),
                 '/' => match self.source.peek() {
@@ -91,6 +92,32 @@ impl<'a> Scanner<'a> {
         } else {
             Err(errors)
         }
+    }
+
+    fn consume_string(&mut self, char: char) -> Result<Token, LexicalError> {
+        let mut string = String::new();
+        string.push(char);
+
+        while let Some(&peeked) = self.source.peek() {
+            match peeked {
+                '"' => {
+                    self.source.next();
+                    break;
+                }
+                '\n' => {
+                    return lexical_error!(UnexpectedStringEol, self.line).into();
+                }
+                _ => {
+                    string.push(peeked);
+                    self.source.next();
+                }
+            }
+        }
+
+        let string = string[1..].to_string();
+        let token = token!(String, &string, self.line, Value::String(string));
+
+        Ok(token)
     }
 
     fn consume_number(&mut self, char: char) -> Result<Token, LexicalError> {
@@ -209,6 +236,7 @@ impl LexicalError {
                 "leading zeros in number literals are not permitted".to_string()
             }
             UnexpectedChar(c) => format!("unexpected character: {}", c),
+            UnexpectedStringEol => "unexpected end of line in single-line string".to_string(),
         }
     }
 }
@@ -228,6 +256,7 @@ impl Display for LexicalError {
 #[derive(Debug, Copy, Clone)]
 pub enum LexicalErrorKind {
     LeadingZeroNumberLiterals,
+    UnexpectedStringEol,
     UnexpectedChar(char),
 }
 
@@ -298,5 +327,16 @@ mod tests {
                 .eq(token_list![False, Eof]),
             "`falso` is a lexeme"
         );
+    }
+
+    #[test]
+    fn string_literals() {
+        assert!(
+            scan_to_token_list("\"Hello, world!\"")
+                .unwrap()
+                .iter()
+                .eq(token_list![String, Eof]),
+            "\"Hello, world!\" is a string literal lexeme"
+        )
     }
 }

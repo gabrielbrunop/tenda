@@ -1,10 +1,11 @@
 use std::fmt;
 use std::fmt::Display;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     Boolean(bool),
+    String(String),
 }
 
 impl Value {
@@ -17,17 +18,22 @@ impl Value {
         match self {
             Number(_) => ValueType::Number,
             Boolean(_) => ValueType::Boolean,
+            String(_) => ValueType::String,
         }
     }
 
-    pub fn to_number(self) -> Result<f64, ValueError> {
+    pub fn to_number(&self) -> Result<f64, ValueError> {
         use Value::*;
 
         match self {
-            Number(value) => Ok(value),
+            Number(value) => Ok(*value),
             Boolean(_) => Err(ValueError::UnsupportedTypeConversion(
                 self.get_type(),
                 ValueType::Boolean,
+            )),
+            String(_) => Err(ValueError::UnsupportedTypeConversion(
+                self.get_type(),
+                ValueType::Number,
             )),
         }
     }
@@ -52,6 +58,7 @@ impl Display for Value {
                     true => Value::TRUE_LITERAL.to_string(),
                     false => Value::FALSE_LITERAL.to_string(),
                 },
+                String(value) => format!("\"{}\"", value),
             }
         )
     }
@@ -60,6 +67,7 @@ impl Display for Value {
 pub enum ValueType {
     Number,
     Boolean,
+    String,
 }
 
 impl Display for ValueType {
@@ -69,6 +77,7 @@ impl Display for ValueType {
         let str = match self {
             Number => "number".to_string(),
             Boolean => "boolean".to_string(),
+            String => "string".to_string(),
         };
 
         write!(f, "{}", str)
