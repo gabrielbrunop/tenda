@@ -52,6 +52,20 @@ impl<'a> Scanner<'a> {
                 '^' => token!(Caret, "^", self.line).into(),
                 '%' => token!(Percent, "%", self.line).into(),
                 '"' => self.consume_string(c).map(Some),
+                '>' => match self.source.peek() {
+                    Some('=') => {
+                        self.source.next();
+                        token!(GreaterOrEqual, ">", self.line).into()
+                    }
+                    _ => token!(Greater, ">", self.line).into(),
+                },
+                '<' => match self.source.peek() {
+                    Some('=') => {
+                        self.source.next();
+                        token!(LessOrEqual, ">", self.line).into()
+                    }
+                    _ => token!(Less, ">", self.line).into(),
+                },
                 c if c.is_ascii_digit() => self.consume_number(c).map(Some),
                 c if c.is_alphabetic() || c == '_' => self.consume_identifier(c).map(Some),
                 '/' => match self.source.peek() {
