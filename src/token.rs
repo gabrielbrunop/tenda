@@ -71,6 +71,7 @@ pub enum TokenKind {
     False,
     Nil,
     Equals,
+    Not,
     Plus,
     Minus,
     Star,

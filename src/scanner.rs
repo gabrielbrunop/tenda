@@ -183,6 +183,7 @@ impl<'a> Scanner<'a> {
                 Value::Boolean(false)
             ),
             Value::NIL_LITERAL => token!(Nil, Value::NIL_LITERAL, self.line, Value::Nil),
+            "não" => token!(Not, "não", self.line),
             "for" => token!(Equals, "for", self.line),
             _ => return lexical_error!(UnexpectedChar(char), self.line).into(),
         };
@@ -361,6 +362,17 @@ mod tests {
                 .iter()
                 .eq(token_list![Equals, Eof]),
             "`for` is a identifier"
+        )
+    }
+
+    #[test]
+    fn identifier_not() {
+        assert!(
+            scan_to_token_list("não")
+                .unwrap()
+                .iter()
+                .eq(token_list![Not, Eof]),
+            "`não` is a identifier"
         )
     }
 }

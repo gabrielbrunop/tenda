@@ -57,6 +57,7 @@ pub enum BinaryOp {
     Exponentiation,
     Modulo,
     Equality,
+    Inequality,
 }
 
 impl From<Token> for BinaryOp {
