@@ -6,11 +6,13 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     String(String),
+    Nil,
 }
 
 impl Value {
     pub const TRUE_LITERAL: &'static str = "verdadeiro";
     pub const FALSE_LITERAL: &'static str = "falso";
+    pub const NIL_LITERAL: &'static str = "Nada";
 
     pub fn get_type(&self) -> ValueType {
         use Value::*;
@@ -19,6 +21,7 @@ impl Value {
             Number(_) => ValueType::Number,
             Boolean(_) => ValueType::Boolean,
             String(_) => ValueType::String,
+            Nil => ValueType::Nil,
         }
     }
 
@@ -27,11 +30,7 @@ impl Value {
 
         match self {
             Number(value) => Ok(*value),
-            Boolean(_) => Err(ValueError::UnsupportedTypeConversion(
-                self.get_type(),
-                ValueType::Boolean,
-            )),
-            String(_) => Err(ValueError::UnsupportedTypeConversion(
+            _ => Err(ValueError::UnsupportedTypeConversion(
                 self.get_type(),
                 ValueType::Number,
             )),
@@ -59,6 +58,7 @@ impl Display for Value {
                     false => Value::FALSE_LITERAL.to_string(),
                 },
                 String(value) => format!("\"{}\"", value),
+                Nil => Value::NIL_LITERAL.to_string(),
             }
         )
     }
@@ -68,6 +68,7 @@ pub enum ValueType {
     Number,
     Boolean,
     String,
+    Nil,
 }
 
 impl Display for ValueType {
@@ -78,6 +79,7 @@ impl Display for ValueType {
             Number => "number".to_string(),
             Boolean => "boolean".to_string(),
             String => "string".to_string(),
+            Nil => "nil".to_string(),
         };
 
         write!(f, "{}", str)

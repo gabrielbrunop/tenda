@@ -94,7 +94,7 @@ impl<'a> Parser<'a> {
         };
 
         match token.kind {
-            Number | True | False | String => {
+            Number | True | False | String | Nil => {
                 Ok(Expr::make_literal(token.literal.clone().unwrap()))
             }
             LeftParen => {
