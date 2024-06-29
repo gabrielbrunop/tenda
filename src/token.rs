@@ -66,6 +66,8 @@ impl<T> From<Token> for Result<Option<Token>, T> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
     Number,
+    True,
+    False,
     Plus,
     Minus,
     Star,

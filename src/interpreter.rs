@@ -8,7 +8,17 @@ use crate::{
 macro_rules! runtime_error {
     ($kind:expr) => {{
         use RuntimeErrorKind::*;
-        RuntimeError { kind: $kind }
+        RuntimeError {
+            kind: $kind,
+            message: None,
+        }
+    }};
+    ($kind:expr, $message:expr) => {{
+        use RuntimeErrorKind::*;
+        RuntimeError {
+            kind: $kind,
+            message: Some($message.to_string()),
+        }
     }};
 }
 
@@ -37,40 +47,95 @@ impl Interpreter {
         rhs: Expr,
     ) -> Result<Value, RuntimeError> {
         use crate::ast::BinaryOp::*;
+        use Value::*;
 
         let lhs = self.interpret_expr(lhs)?;
         let rhs = self.interpret_expr(rhs)?;
 
         let expr = match op {
-            Add => lhs + rhs,
-            Subtract => lhs - rhs,
-            Multiply => lhs * rhs,
-            Divide => {
-                if rhs == Value::Number(0.0) {
-                    return runtime_error!(DivisionByZero).into();
+            Add => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Number(lhs + rhs),
+                _ => {
+                    return Err(runtime_error!(
+                        TypeError,
+                        format!("cannot add {} to {}", lhs.get_type(), rhs.get_type())
+                    ))
                 }
-
-                lhs / rhs
-            }
-            Exponentiation => lhs.to_number().powf(rhs.into()).into(),
-            Modulo => lhs % rhs,
+            },
+            Subtract => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Number(lhs - rhs),
+                _ => {
+                    return Err(runtime_error!(
+                        TypeError,
+                        format!("cannot subtract {} from {}", lhs.get_type(), rhs.get_type())
+                    ))
+                }
+            },
+            Multiply => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Number(lhs * rhs),
+                _ => {
+                    return Err(runtime_error!(
+                        TypeError,
+                        format!("cannot multiply {} by {}", lhs.get_type(), rhs.get_type())
+                    ))
+                }
+            },
+            Divide => match (lhs, rhs) {
+                (_, Number(rhs)) if rhs == 0.0 => return Err(runtime_error!(DivisionByZero)),
+                (Number(lhs), Number(rhs)) => Number(lhs / rhs),
+                _ => {
+                    return Err(runtime_error!(
+                        TypeError,
+                        format!("cannot divide {} by {}", lhs.get_type(), rhs.get_type())
+                    ))
+                }
+            },
+            Exponentiation => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Number(lhs.powf(rhs)),
+                _ => {
+                    return Err(runtime_error!(
+                        TypeError,
+                        format!(
+                            "cannot raise {} to the power of {}",
+                            lhs.get_type(),
+                            rhs.get_type()
+                        )
+                    ))
+                }
+            },
+            Modulo => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Number(lhs % rhs),
+                _ => {
+                    return Err(runtime_error!(
+                        TypeError,
+                        format!("cannot mod {} by {}", lhs.get_type(), rhs.get_type())
+                    ))
+                }
+            },
         };
 
         match expr {
-            Value::Number(number) if number.abs() == f64::INFINITY => {
-                runtime_error!(NumberOverflow).into()
-            }
+            Number(value) if value.abs() == f64::INFINITY => Err(runtime_error!(NumberOverflow)),
             _ => Ok(expr),
         }
     }
 
     fn interpret_unary_op(&self, op: UnaryOp, rhs: Expr) -> Result<Value, RuntimeError> {
         use crate::ast::UnaryOp::*;
+        use Value::*;
 
         let rhs = self.interpret_expr(rhs)?;
 
         let expr = match op {
-            Negative => -rhs,
+            Negative => match rhs {
+                Number(rhs) => Number(-rhs),
+                _ => {
+                    return Err(runtime_error!(
+                        TypeError,
+                        format!("cannot negate {}", rhs.get_type())
+                    ))
+                }
+            },
         };
 
         Ok(expr)
@@ -86,22 +151,22 @@ impl Default for Interpreter {
 #[derive(Debug)]
 pub struct RuntimeError {
     kind: RuntimeErrorKind,
+    message: Option<String>,
 }
 
 impl RuntimeError {
     pub fn message(&self) -> String {
         use RuntimeErrorKind::*;
 
+        if let Some(message) = &self.message {
+            return message.to_string();
+        }
+
         match &self.kind {
             DivisionByZero => "division by zero".to_string(),
             NumberOverflow => "number overflow".to_string(),
+            TypeError => "type error".to_string(),
         }
-    }
-}
-
-impl<T> From<RuntimeError> for Result<T, RuntimeError> {
-    fn from(val: RuntimeError) -> Self {
-        Err(val)
     }
 }
 
@@ -115,6 +180,7 @@ impl fmt::Display for RuntimeError {
 pub enum RuntimeErrorKind {
     DivisionByZero,
     NumberOverflow,
+    TypeError,
 }
 
 #[cfg(test)]
@@ -153,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn reflexive_property() {
+    fn reflexive_zero() {
         assert_eq!(
             run_expr("0").unwrap(),
             Value::Number(0.0),
@@ -238,5 +304,20 @@ mod tests {
         run_expr("10^1000")
             .is_ok()
             .then(|| panic!("overflow should error"));
+    }
+
+    #[test]
+    fn reflexive_boolean() {
+        assert_eq!(
+            run_expr("verdadeiro").unwrap(),
+            Value::Boolean(true),
+            "`verdadeiro` evaluates to itself"
+        );
+
+        assert_eq!(
+            run_expr("falso").unwrap(),
+            Value::Boolean(false),
+            "`falso` evaluates to itself"
+        );
     }
 }
