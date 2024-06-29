@@ -86,14 +86,16 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Expr, ParserError> {
+        use TokenKind::*;
+
         let token = match self.tokens.next() {
             Some(token) => token,
             _ => unreachable!(),
         };
 
         match token.kind {
-            TokenKind::Number => Ok(Expr::make_literal(token.literal.unwrap())),
-            TokenKind::LeftParen => {
+            Number | True | False => Ok(Expr::make_literal(token.literal.unwrap())),
+            LeftParen => {
                 let expr = self.expression()?;
 
                 if self.match_tokens(token_list![RightParen]).is_none() {
@@ -102,7 +104,7 @@ impl<'a> Parser<'a> {
 
                 Ok(Expr::make_grouping(expr))
             }
-            TokenKind::Eof => parser_error!(UnexpectedEoi, token.line).into(),
+            Eof => parser_error!(UnexpectedEoi, token.line).into(),
             _ => parser_error!(UnexpectedToken(token.clone()), token.line).into(),
         }
     }

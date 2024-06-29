@@ -52,6 +52,7 @@ impl<'a> Scanner<'a> {
                 '^' => token!(Caret, "^", self.line).into(),
                 '%' => token!(Percent, "%", self.line).into(),
                 c if c.is_ascii_digit() => self.consume_number(c).map(Some),
+                c if c.is_alphabetic() || c == '_' => self.consume_identifier(c).map(Some),
                 '/' => match self.source.peek() {
                     Some('/') => {
                         self.consume_comment();
@@ -126,6 +127,36 @@ impl<'a> Scanner<'a> {
 
         let number: f64 = number.parse().unwrap();
         let token = token!(Number, &number, self.line, Value::Number(number));
+
+        Ok(token)
+    }
+
+    fn consume_identifier(&mut self, char: char) -> Result<Token, LexicalError> {
+        let mut identifier = String::new();
+
+        identifier.push(char);
+
+        while let Some(&peeked) = self.source.peek() {
+            if peeked.is_alphanumeric() || peeked == '_' {
+                identifier.push(peeked);
+                self.source.next();
+            } else {
+                break;
+            }
+        }
+
+        let token = match identifier.as_str() {
+            Value::TRUE_LITERAL => {
+                token!(True, Value::TRUE_LITERAL, self.line, Value::Boolean(true))
+            }
+            Value::FALSE_LITERAL => token!(
+                False,
+                Value::FALSE_LITERAL,
+                self.line,
+                Value::Boolean(false)
+            ),
+            _ => return lexical_error!(UnexpectedChar(char), self.line).into(),
+        };
 
         Ok(token)
     }
@@ -248,5 +279,24 @@ mod tests {
                 .eq(token_list![Number, Eof]),
             "legal leading zero"
         )
+    }
+
+    #[test]
+    fn boolean_lexemes() {
+        assert!(
+            scan_to_token_list("verdadeiro")
+                .unwrap()
+                .iter()
+                .eq(token_list![True, Eof]),
+            "`verdadeiro` is a lexeme"
+        );
+
+        assert!(
+            scan_to_token_list("falso")
+                .unwrap()
+                .iter()
+                .eq(token_list![False, Eof]),
+            "`falso` is a lexeme"
+        );
     }
 }
