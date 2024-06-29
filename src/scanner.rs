@@ -183,6 +183,7 @@ impl<'a> Scanner<'a> {
                 Value::Boolean(false)
             ),
             Value::NIL_LITERAL => token!(Nil, Value::NIL_LITERAL, self.line, Value::Nil),
+            "for" => token!(Equals, "for", self.line),
             _ => return lexical_error!(UnexpectedChar(char), self.line).into(),
         };
 
@@ -349,6 +350,17 @@ mod tests {
                 .iter()
                 .eq(token_list![Nil, Eof]),
             "Nada is a lexeme"
+        )
+    }
+
+    #[test]
+    fn identifier_equals() {
+        assert!(
+            scan_to_token_list("for")
+                .unwrap()
+                .iter()
+                .eq(token_list![Equals, Eof]),
+            "`for` is a identifier"
         )
     }
 }
