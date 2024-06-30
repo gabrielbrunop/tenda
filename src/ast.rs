@@ -1,7 +1,7 @@
 use crate::token::{Token, TokenKind};
 use crate::value::Value;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Expr {
     Binary {
         lhs: Box<Expr>,
@@ -47,7 +47,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum BinaryOp {
     Add,
     Subtract,
@@ -84,7 +84,7 @@ impl From<Token> for BinaryOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum UnaryOp {
     Negative,
     LogicalNot,
