@@ -76,10 +76,10 @@ impl Display for ValueType {
         use ValueType::*;
 
         let str = match self {
-            Number => "number".to_string(),
-            Boolean => "boolean".to_string(),
-            String => "string".to_string(),
-            Nil => "nil".to_string(),
+            Number => "número".to_string(),
+            Boolean => "lógico".to_string(),
+            String => "texto".to_string(),
+            Nil => "Nada".to_string(),
         };
 
         write!(f, "{}", str)

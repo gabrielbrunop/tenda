@@ -29,7 +29,7 @@ impl Tenda {
             Err(errs) => {
                 return errs
                     .iter()
-                    .map(|e| format!("SyntaxError: {}", e))
+                    .map(|e| format!("Erro léxico: {}", e))
                     .collect::<Vec<String>>()
                     .join("\n")
             }
@@ -39,12 +39,12 @@ impl Tenda {
 
         let ast = match parser.parse() {
             Ok(expr) => expr,
-            Err(err) => return format!("ParserError: {}", err),
+            Err(err) => return format!("Erro sintático: {}", err),
         };
 
         let result = match self.interpreter.interpret_expr(ast) {
             Ok(val) => val,
-            Err(err) => return format!("RuntimeError: {}", err),
+            Err(err) => return format!("Erro semântico: {}", err),
         };
 
         format!("{}", result)
