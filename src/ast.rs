@@ -1,4 +1,3 @@
-use crate::ast::UnaryOp::Negative;
 use crate::token::{Token, TokenKind};
 use crate::value::Value;
 
@@ -88,12 +87,16 @@ impl From<Token> for BinaryOp {
 #[derive(Debug)]
 pub enum UnaryOp {
     Negative,
+    LogicalNot,
 }
 
 impl From<Token> for UnaryOp {
     fn from(value: Token) -> Self {
+        use UnaryOp::*;
+
         match value.kind {
             TokenKind::Minus => Negative,
+            TokenKind::Not => LogicalNot,
             _ => panic!("invalid token for unary operation"),
         }
     }

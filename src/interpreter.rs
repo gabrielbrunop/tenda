@@ -169,6 +169,18 @@ impl Interpreter {
                 Number(rhs) => Number(-rhs),
                 _ => return Err(type_error!("cannot negate {}", rhs)),
             },
+            LogicalNot => match rhs {
+                Number(rhs) if rhs == 0.0 => Boolean(false),
+                Number(_) => Boolean(true),
+                Boolean(rhs) => Boolean(!rhs),
+                Nil => Boolean(false),
+                _ => {
+                    return Err(type_error!(
+                        "logical NOT is not a valid operation for {}",
+                        rhs
+                    ))
+                }
+            },
         };
 
         Ok(expr)
@@ -432,6 +444,15 @@ mod tests {
             run_expr("\"Hello, \" + \"world!\"").unwrap(),
             Value::String("Hello, world!".to_string()),
             "string concatenation"
+        )
+    }
+
+    #[test]
+    fn logical_not() {
+        assert_eq!(
+            run_expr("não 0 for não Nada for não verdadeiro for não não falso").unwrap(),
+            Value::Boolean(true),
+            "logical not"
         )
     }
 }
