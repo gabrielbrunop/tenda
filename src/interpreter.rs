@@ -67,32 +67,62 @@ impl Interpreter {
                 (String(lhs), String(rhs)) => String(format!("{}{}", lhs, rhs)),
                 (String(lhs), rhs) => String(format!("{}{}", lhs, rhs)),
                 (lhs, String(rhs)) => String(format!("{}{}", lhs, rhs)),
-                (lhs, rhs) => return Err(type_error!("cannot add {} to {}", lhs, rhs)),
+                (lhs, rhs) => {
+                    return Err(type_error!("não é possível somar '{}' e '{}'", lhs, rhs))
+                }
             },
             Subtract => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs - rhs),
-                (lhs, rhs) => return Err(type_error!("cannot subtract {} from {}", rhs, lhs)),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                        "não é possível subtrair '{}' de '{}'",
+                        rhs,
+                        lhs
+                    ))
+                }
             },
             Multiply => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs * rhs),
-                (lhs, rhs) => return Err(type_error!("cannot multiply {} by {}", lhs, rhs)),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                        "não é possível multiplicar '{}' por '{}'",
+                        lhs,
+                        rhs
+                    ))
+                }
             },
             Divide => match (lhs, rhs) {
                 (Number(_), Number(rhs)) if rhs == 0.0 => {
                     return Err(runtime_error!(DivisionByZero))
                 }
                 (Number(lhs), Number(rhs)) => Number(lhs / rhs),
-                (lhs, rhs) => return Err(type_error!("cannot divide {} by {}", lhs, rhs)),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                        "não é possível dividir '{}' por '{}'",
+                        lhs,
+                        rhs
+                    ))
+                }
             },
             Exponentiation => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs.powf(rhs)),
                 (lhs, rhs) => {
-                    return Err(type_error!("cannot raise {} to the power of {}", lhs, rhs))
+                    return Err(type_error!(
+                        "não é possível elevar '{}' à potência de '{}'",
+                        lhs,
+                        rhs
+                    ))
                 }
             },
             Modulo => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs % rhs),
-                (lhs, rhs) => return Err(type_error!("cannot mod {} by {}", lhs, rhs)),
+                (lhs, rhs) => {
+                    return Err(type_error!(
+                        "não é possível encontrar o resto da divisão de '{}' por '{}'",
+                        lhs,
+                        rhs
+                    ))
+                }
             },
             Equality => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs == rhs),
@@ -111,7 +141,7 @@ impl Interpreter {
                 (String(lhs), String(rhs)) => Boolean(lhs > rhs),
                 (lhs, rhs) => {
                     return Err(type_error!(
-                        "cannot apply 'greater than' partial order operation to {} and {}",
+                        "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
                         lhs,
                         rhs
                     ))
@@ -122,10 +152,10 @@ impl Interpreter {
                 (String(lhs), String(rhs)) => Boolean(lhs >= rhs),
                 (lhs, rhs) => {
                     return Err(type_error!(
-                    "cannot apply 'greater than or equal to' partial order operation to {} and {}",
-                    lhs,
-                    rhs
-                ))
+                        "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
+                        lhs,
+                        rhs
+                    ))
                 }
             },
             Less => match (lhs, rhs) {
@@ -133,7 +163,7 @@ impl Interpreter {
                 (String(lhs), String(rhs)) => Boolean(lhs < rhs),
                 (lhs, rhs) => {
                     return Err(type_error!(
-                        "cannot apply 'less than' partial order operation to {} and {}",
+                        "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
                         lhs,
                         rhs
                     ))
@@ -144,7 +174,7 @@ impl Interpreter {
                 (String(lhs), String(rhs)) => Boolean(lhs <= rhs),
                 (lhs, rhs) => {
                     return Err(type_error!(
-                        "cannot apply 'less than or equal to' partial order operation to {} and {}",
+                        "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
                         lhs,
                         rhs
                     ))
@@ -167,7 +197,7 @@ impl Interpreter {
         let expr = match op {
             Negative => match rhs {
                 Number(rhs) => Number(-rhs),
-                _ => return Err(type_error!("cannot negate {}", rhs)),
+                _ => return Err(type_error!("não é possível negar '{}'", rhs)),
             },
             LogicalNot => match rhs {
                 Number(rhs) if rhs == 0.0 => Boolean(false),
@@ -176,7 +206,7 @@ impl Interpreter {
                 Nil => Boolean(false),
                 _ => {
                     return Err(type_error!(
-                        "logical NOT is not a valid operation for {}",
+                        "a negação lógica não é uma operação válida para '{}'",
                         rhs
                     ))
                 }
@@ -208,9 +238,9 @@ impl RuntimeError {
         }
 
         match &self.kind {
-            DivisionByZero => "division by zero".to_string(),
-            NumberOverflow => "number overflow".to_string(),
-            TypeError => "type error".to_string(),
+            DivisionByZero => "divisão por zero não é permitida".to_string(),
+            NumberOverflow => "números muito grandes não são permitidos".to_string(),
+            TypeError => "erro de tipo".to_string(),
         }
     }
 }

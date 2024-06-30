@@ -28,7 +28,7 @@ fn start_repl() {
         let readline = rl.readline("> ");
 
         match readline {
-            Ok(line) if line.trim() == ".exit" => break,
+            Ok(line) if line.trim() == ".sair" => break,
             Ok(line) => {
                 exiting = false;
 
@@ -40,14 +40,16 @@ fn start_repl() {
             Err(ReadlineError::Interrupted) if exiting => break,
             Err(ReadlineError::Interrupted) => {
                 exiting = true;
-                println!("To exit, press CTRL+C again or type .exit or press CTRL+D");
+                println!(
+                    "Para sair, pressione CTRL+C novamente, ou digite .sair, ou pressione CTRL+D"
+                );
             }
             Err(ReadlineError::Eof) => {
                 println!("CTRL-D");
                 break;
             }
             Err(err) => {
-                println!("Error: {:?}", err);
+                println!("Erro: {:?}", err);
                 break;
             }
         }

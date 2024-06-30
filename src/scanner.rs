@@ -250,10 +250,10 @@ impl LexicalError {
 
         match self.kind {
             LeadingZeroNumberLiterals => {
-                "leading zeros in number literals are not permitted".to_string()
+                "zeros à esquerda em literais numéricos não são permitidos".to_string()
             }
-            UnexpectedChar(c) => format!("unexpected character: {}", c),
-            UnexpectedStringEol => "unexpected end of line in single-line string".to_string(),
+            UnexpectedChar(c) => format!("caractere inesperado: {}", c),
+            UnexpectedStringEol => "fim de linha inesperado em texto".to_string(),
         }
     }
 }
@@ -266,7 +266,7 @@ impl<T> From<LexicalError> for Result<T, LexicalError> {
 
 impl Display for LexicalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (at line {})", self.message(), self.line)
+        write!(f, "{} (na linha {})", self.message(), self.line)
     }
 }
 

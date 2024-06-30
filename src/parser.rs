@@ -204,9 +204,9 @@ impl ParserError {
         use ParserErrorKind::*;
 
         match &self.kind {
-            UnexpectedEoi => "unexpected end of input".to_string(),
-            MissingParentheses => "expected ')' after expression.".to_string(),
-            UnexpectedToken(token) => format!("unexpected token: {}", token.lexeme),
+            UnexpectedEoi => "fim inesperado de input".to_string(),
+            MissingParentheses => "esperado ')' após a expressão".to_string(),
+            UnexpectedToken(token) => format!("token inesperado: {}", token.lexeme),
         }
     }
 }
@@ -219,7 +219,7 @@ impl<T> From<ParserError> for Result<T, ParserError> {
 
 impl fmt::Display for ParserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (at line {})", self.message(), self.line)
+        write!(f, "{} (na linha {})", self.message(), self.line)
     }
 }
 
