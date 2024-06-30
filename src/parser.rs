@@ -27,7 +27,19 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) -> Result<Expr, ParserError> {
-        self.program()
+        let program = self.program()?;
+
+        match self.tokens.peek() {
+            Some(token) if token.kind == TokenKind::Eof => Ok(program),
+            Some(token) => Err(parser_error!(UnexpectedToken((*token).clone()), token.line)),
+            None => Err(parser_error!(
+                UnexpectedEoi,
+                self.tokens
+                    .peek_backward_or_first(0)
+                    .map(|t| t.line)
+                    .unwrap_or(0)
+            )),
+        }
     }
 
     fn program(&mut self) -> Result<Expr, ParserError> {
