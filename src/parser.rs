@@ -117,7 +117,7 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Result<Expr, ParserError> {
-        if let Some(op) = self.match_tokens(token_list![Minus]) {
+        if let Some(op) = self.match_tokens(token_list![Minus, Not]) {
             let rhs = self.unary()?;
             let expr = Expr::make_unary(op.into(), rhs);
 
