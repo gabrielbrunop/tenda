@@ -241,3 +241,6 @@ pub enum ParserErrorKind {
     UnexpectedToken(Token),
     MissingParentheses,
 }
+
+#[cfg(test)]
+mod tests;
