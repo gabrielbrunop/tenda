@@ -64,6 +64,9 @@ impl Interpreter {
         let expr = match op {
             Add => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs + rhs),
+                (String(lhs), String(rhs)) => String(format!("{}{}", lhs, rhs)),
+                (String(lhs), rhs) => String(format!("{}{}", lhs, rhs)),
+                (lhs, String(rhs)) => String(format!("{}{}", lhs, rhs)),
                 (lhs, rhs) => return Err(type_error!("cannot add {} to {}", lhs, rhs)),
             },
             Subtract => match (lhs, rhs) {
@@ -420,6 +423,15 @@ mod tests {
             run_expr("1 >= 2").unwrap(),
             Value::Boolean(false),
             "1 is not greater than or equal to 2"
+        )
+    }
+
+    #[test]
+    fn concatenation() {
+        assert_eq!(
+            run_expr("\"Hello, \" + \"world!\"").unwrap(),
+            Value::String("Hello, world!".to_string()),
+            "string concatenation"
         )
     }
 }
