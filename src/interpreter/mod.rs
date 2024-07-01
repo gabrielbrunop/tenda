@@ -14,7 +14,7 @@ macro_rules! runtime_error {
             message: None,
         }
     }};
-    ($kind:expr, $message:expr, $($params:expr),*) => {{
+    ($kind:expr, $message:literal, $($params:expr),*) => {{
         use RuntimeErrorKind::*;
         RuntimeError {
             kind: $kind,
@@ -24,7 +24,7 @@ macro_rules! runtime_error {
 }
 
 macro_rules! type_error {
-    ($message:expr, $($params:expr),*) => {
+    ($message:literal, $($params:expr),*) => {
         runtime_error!(
             TypeError,
             $message,

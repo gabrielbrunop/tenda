@@ -10,6 +10,16 @@ mod scanner;
 mod token;
 mod value;
 
+macro_rules! print_errors {
+    ($errs:expr, $msg:literal) => {
+        $errs
+            .into_iter()
+            .map(|e| format!("{}: {}", $msg, e))
+            .collect::<Vec<String>>()
+            .join("\n")
+    };
+}
+
 pub struct Tenda {
     interpreter: Interpreter,
 }
@@ -26,26 +36,14 @@ impl Tenda {
 
         let tokens = match scanner.scan() {
             Ok(token) => token,
-            Err(errs) => {
-                return errs
-                    .into_iter()
-                    .map(|e| format!("Erro léxico: {}", e))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            }
+            Err(errs) => return print_errors!(errs, "Erro léxico"),
         };
 
         let mut parser = Parser::new(&tokens);
 
         let ast = match parser.parse() {
             Ok(expr) => expr,
-            Err(errs) => {
-                return errs
-                    .into_iter()
-                    .map(|e| format!("Erro sintático: {}", e))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            }
+            Err(errs) => return print_errors!(errs, "Erro sintático"),
         };
 
         let result = match self.interpreter.interpret(ast) {
