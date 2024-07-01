@@ -42,7 +42,7 @@ impl Tenda {
             Err(err) => return format!("Erro sintático: {}", err),
         };
 
-        let result = match self.interpreter.interpret_expr(ast) {
+        let result = match self.interpreter.interpret(ast) {
             Ok(val) => val,
             Err(err) => return format!("Erro semântico: {}", err),
         };

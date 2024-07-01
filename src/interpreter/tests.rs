@@ -1,6 +1,6 @@
 use crate::{interpreter::*, parser::Parser, scanner::Scanner, value::Value};
 
-fn run_expr<T: ToString>(string: T) -> Result<Value, RuntimeError> {
+fn run<T: ToString>(string: T) -> Result<Value, RuntimeError> {
     let input = string.to_string();
 
     let mut scanner = Scanner::new(&input);
@@ -17,14 +17,14 @@ fn run_expr<T: ToString>(string: T) -> Result<Value, RuntimeError> {
         Err(err) => panic!("could not parse tokens: {:?}", err),
     };
 
-    let interpreter: Interpreter = Interpreter::new();
+    let mut interpreter: Interpreter = Interpreter::new();
 
-    interpreter.interpret_expr(ast)
+    interpreter.interpret(ast)
 }
 
 #[test]
 fn division_by_zero() {
-    run_expr("0/0")
+    run("0/0")
         .is_ok()
         .then(|| panic!("division by zero should error"));
 }
@@ -32,7 +32,7 @@ fn division_by_zero() {
 #[test]
 fn reflexive_zero() {
     assert_eq!(
-        run_expr("0").unwrap(),
+        run("0").unwrap(),
         Value::Number(0.0),
         "zero evaluates to itself"
     )
@@ -40,17 +40,13 @@ fn reflexive_zero() {
 
 #[test]
 fn sum_of_integers() {
-    assert_eq!(
-        run_expr("1 + 2").unwrap(),
-        Value::Number(3.0),
-        "sum of integers"
-    )
+    assert_eq!(run("1 + 2").unwrap(), Value::Number(3.0), "sum of integers")
 }
 
 #[test]
 fn precedence_of_operations() {
     assert_eq!(
-        run_expr("1 + 2 * 3").unwrap(),
+        run("1 + 2 * 3").unwrap(),
         Value::Number(7.0),
         "expression depending on order of precendence of operations"
     )
@@ -59,7 +55,7 @@ fn precedence_of_operations() {
 #[test]
 fn chain_of_additions() {
     assert_eq!(
-        run_expr("1 + 1 + 1 + 1").unwrap(),
+        run("1 + 1 + 1 + 1").unwrap(),
         Value::Number(4.0),
         "chain of additions"
     )
@@ -68,7 +64,7 @@ fn chain_of_additions() {
 #[test]
 fn chain_of_operations() {
     assert_eq!(
-        run_expr("1 - 1 - 1 + 2 * 4 / 2 / 2").unwrap(),
+        run("1 - 1 - 1 + 2 * 4 / 2 / 2").unwrap(),
         Value::Number(1.0),
         "chain of basic arithmetical operations"
     )
@@ -77,7 +73,7 @@ fn chain_of_operations() {
 #[test]
 fn negative_number() {
     assert_eq!(
-        run_expr("-1").unwrap(),
+        run("-1").unwrap(),
         Value::Number(-1.0),
         "negative number evaluates to itself"
     )
@@ -86,7 +82,7 @@ fn negative_number() {
 #[test]
 fn negative_number_with_operation() {
     assert_eq!(
-        run_expr("-1 + -1").unwrap(),
+        run("-1 + -1").unwrap(),
         Value::Number(-2.0),
         "addition of negative numbers"
     )
@@ -95,7 +91,7 @@ fn negative_number_with_operation() {
 #[test]
 fn parentheses() {
     assert_eq!(
-        run_expr("(1 + 1)").unwrap(),
+        run("(1 + 1)").unwrap(),
         Value::Number(2.0),
         "addition of integers within parentheses"
     )
@@ -104,7 +100,7 @@ fn parentheses() {
 #[test]
 fn parentheses_with_operation() {
     assert_eq!(
-        run_expr("(1 + 1) * 2").unwrap(),
+        run("(1 + 1) * 2").unwrap(),
         Value::Number(4.0),
         "multiplication of integer with parentheses"
     )
@@ -112,7 +108,7 @@ fn parentheses_with_operation() {
 
 #[test]
 fn number_overflow() {
-    run_expr("10^1000")
+    run("10^1000")
         .is_ok()
         .then(|| panic!("overflow should error"));
 }
@@ -120,13 +116,13 @@ fn number_overflow() {
 #[test]
 fn reflexive_boolean() {
     assert_eq!(
-        run_expr("verdadeiro").unwrap(),
+        run("verdadeiro").unwrap(),
         Value::Boolean(true),
         "`verdadeiro` evaluates to itself"
     );
 
     assert_eq!(
-        run_expr("falso").unwrap(),
+        run("falso").unwrap(),
         Value::Boolean(false),
         "`falso` evaluates to itself"
     );
@@ -135,7 +131,7 @@ fn reflexive_boolean() {
 #[test]
 fn reflexive_string() {
     assert_eq!(
-        run_expr("\"Hello, world!\"").unwrap(),
+        run("\"Hello, world!\"").unwrap(),
         Value::String("Hello, world!".to_string()),
         "string evaluates to itself"
     )
@@ -143,17 +139,13 @@ fn reflexive_string() {
 
 #[test]
 fn reflexive_nil() {
-    assert_eq!(
-        run_expr("Nada").unwrap(),
-        Value::Nil,
-        "nil evaluates to itself"
-    )
+    assert_eq!(run("Nada").unwrap(), Value::Nil, "nil evaluates to itself")
 }
 
 #[test]
 fn numeric_equality() {
     assert_eq!(
-        run_expr("1 for 1").unwrap(),
+        run("1 for 1").unwrap(),
         Value::Boolean(true),
         "1 is equal to 1"
     )
@@ -162,7 +154,7 @@ fn numeric_equality() {
 #[test]
 fn numeric_inequality() {
     assert_eq!(
-        run_expr("1 for 2").unwrap(),
+        run("1 for 2").unwrap(),
         Value::Boolean(false),
         "1 is not equal to 2"
     )
@@ -171,7 +163,7 @@ fn numeric_inequality() {
 #[test]
 fn numeric_greater() {
     assert_eq!(
-        run_expr("1 > 2").unwrap(),
+        run("1 > 2").unwrap(),
         Value::Boolean(false),
         "1 is not greater than 2"
     )
@@ -180,7 +172,7 @@ fn numeric_greater() {
 #[test]
 fn numeric_greater_than() {
     assert_eq!(
-        run_expr("1 < 2").unwrap(),
+        run("1 < 2").unwrap(),
         Value::Boolean(true),
         "1 is less than 2"
     )
@@ -189,7 +181,7 @@ fn numeric_greater_than() {
 #[test]
 fn numeric_less() {
     assert_eq!(
-        run_expr("1 >= 1").unwrap(),
+        run("1 >= 1").unwrap(),
         Value::Boolean(true),
         "1 is greater than or equal to itself"
     )
@@ -198,7 +190,7 @@ fn numeric_less() {
 #[test]
 fn numeric_less_than() {
     assert_eq!(
-        run_expr("1 >= 2").unwrap(),
+        run("1 >= 2").unwrap(),
         Value::Boolean(false),
         "1 is not greater than or equal to 2"
     )
@@ -207,7 +199,7 @@ fn numeric_less_than() {
 #[test]
 fn concatenation() {
     assert_eq!(
-        run_expr("\"Hello, \" + \"world!\"").unwrap(),
+        run("\"Hello, \" + \"world!\"").unwrap(),
         Value::String("Hello, world!".to_string()),
         "string concatenation"
     )
@@ -216,7 +208,7 @@ fn concatenation() {
 #[test]
 fn logical_not() {
     assert_eq!(
-        run_expr("não 0 for não Nada for não verdadeiro for não não falso").unwrap(),
+        run("não 0 for não Nada for não verdadeiro for não não falso").unwrap(),
         Value::Boolean(true),
         "logical not"
     )

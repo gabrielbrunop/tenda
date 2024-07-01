@@ -51,6 +51,7 @@ impl<'a> Scanner<'a> {
                 '*' => token!(Star, "*", self.line).into(),
                 '^' => token!(Caret, "^", self.line).into(),
                 '%' => token!(Percent, "%", self.line).into(),
+                '=' => token!(EqualSign, "=", self.line).into(),
                 '"' => self.consume_string(c).map(Some),
                 '>' => match self.source.peek() {
                     Some('=') => {
@@ -199,7 +200,13 @@ impl<'a> Scanner<'a> {
             Value::NIL_LITERAL => token!(Nil, Value::NIL_LITERAL, self.line, Value::Nil),
             "não" => token!(Not, "não", self.line),
             "for" => token!(Equals, "for", self.line),
-            _ => return lexical_error!(UnexpectedChar(char), self.line).into(),
+            "seja" => token!(Let, "seja", self.line),
+            identifier => token!(
+                Identifier,
+                identifier,
+                self.line,
+                Value::String(identifier.to_string())
+            ),
         };
 
         Ok(token)
