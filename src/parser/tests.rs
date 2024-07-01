@@ -1,6 +1,6 @@
 use crate::{parser::*, scanner::Scanner, value::Value};
 
-fn parse<T: ToString>(string: T) -> Result<Expr, ParserError> {
+fn parse<T: ToString>(string: T) -> Result<Vec<Stmt>, ParserError> {
     let input = string.to_string();
 
     let mut scanner = Scanner::new(&input);
@@ -18,12 +18,12 @@ fn parse<T: ToString>(string: T) -> Result<Expr, ParserError> {
 #[test]
 fn inequality() {
     assert_eq!(
-        parse("1 não for 1").unwrap(),
-        Expr::make_binary(
+        *parse("1 não for 1").unwrap().first().unwrap(),
+        Stmt::Expr(Expr::make_binary(
             Expr::make_literal(Value::Number(1.0)),
             BinaryOp::Inequality,
             Expr::make_literal(Value::Number(1.0))
-        ),
+        )),
         "parse inequality"
     )
 }

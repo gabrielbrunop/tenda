@@ -1,7 +1,8 @@
 use core::fmt;
+use std::collections::HashMap;
 
 use crate::{
-    ast::{BinaryOp, Expr, UnaryOp},
+    ast::{BinaryOp, Decl, Expr, Stmt, UnaryOp},
     value::Value,
 };
 
@@ -13,11 +14,11 @@ macro_rules! runtime_error {
             message: None,
         }
     }};
-    ($kind:expr, $message:expr) => {{
+    ($kind:expr, $message:expr, $($params:expr),*) => {{
         use RuntimeErrorKind::*;
         RuntimeError {
             kind: $kind,
-            message: Some($message.to_string()),
+            message: Some(format!($message, $($params),*)),
         }
     }};
 }
@@ -26,34 +27,86 @@ macro_rules! type_error {
     ($message:expr, $($params:expr),*) => {
         runtime_error!(
             TypeError,
-            format!($message, $($params.get_type()),*)
+            $message,
+            $($params.get_type()),*
         )
     };
 }
 
-pub struct Interpreter {}
+pub struct Interpreter {
+    state: HashMap<String, Value>,
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter {}
+        Interpreter {
+            state: HashMap::new(),
+        }
     }
 
-    pub fn interpret_expr(&self, expr: Expr) -> Result<Value, RuntimeError> {
+    pub fn interpret(&mut self, stmt_list: Vec<Stmt>) -> Result<Value, RuntimeError> {
+        use Stmt::*;
+
+        let stmt_iter = stmt_list.iter();
+        let mut last_value = Value::Nil;
+
+        for stmt in stmt_iter {
+            let value = match stmt {
+                Expr(expr) => self.interpret_expr(expr)?,
+                Decl(decl) => self.interpret_decl(decl)?,
+            };
+
+            last_value = value;
+        }
+
+        Ok(last_value)
+    }
+
+    pub fn interpret_decl(&mut self, decl: &Decl) -> Result<Value, RuntimeError> {
+        match decl {
+            Decl::Local { name, value } => {
+                if self.state.contains_key(name) {
+                    return Err(runtime_error!(
+                        AlreadyDeclared,
+                        "a variável identificada por '{}' já foi declarada neste escopo",
+                        name
+                    ));
+                }
+
+                let value = self.interpret_expr(value)?;
+
+                self.state.insert(name.clone(), value);
+            }
+        };
+
+        Ok(Value::Nil)
+    }
+
+    pub fn interpret_expr(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
         use Expr::*;
 
         match expr {
-            Binary { lhs, op, rhs } => self.interpret_binary_op(*lhs, op, *rhs),
-            Unary { op, rhs } => self.interpret_unary_op(op, *rhs),
-            Grouping { expr } => self.interpret_expr(*expr),
-            Literal { value } => Ok(value),
+            Binary { lhs, op, rhs } => self.interpret_binary_op(lhs, *op, rhs),
+            Unary { op, rhs } => self.interpret_unary_op(*op, rhs),
+            Grouping { expr } => self.interpret_expr(expr),
+            Literal { value } => Ok(value.clone()),
+            Variable { name } => self
+                .state
+                .get(name)
+                .ok_or(runtime_error!(
+                    UndefinedReference,
+                    "a variável identificada por '{}' não está definida neste escopo",
+                    name
+                ))
+                .cloned(),
         }
     }
 
     fn interpret_binary_op(
-        &self,
-        lhs: Expr,
+        &mut self,
+        lhs: &Expr,
         op: BinaryOp,
-        rhs: Expr,
+        rhs: &Expr,
     ) -> Result<Value, RuntimeError> {
         use crate::ast::BinaryOp::*;
         use Value::*;
@@ -180,6 +233,21 @@ impl Interpreter {
                     ))
                 }
             },
+            Assignment => match (lhs, rhs) {
+                (String(lhs), rhs) => {
+                    if !self.state.contains_key(&lhs) {
+                        return Err(runtime_error!(
+                            AlreadyDeclared,
+                            "a variável identificada por '{}' precisa ser definida com `seja`",
+                            lhs
+                        ));
+                    }
+
+                    self.state.insert(lhs.clone(), rhs.clone());
+                    rhs
+                }
+                _ => unreachable!(),
+            },
         };
 
         match expr {
@@ -188,7 +256,7 @@ impl Interpreter {
         }
     }
 
-    fn interpret_unary_op(&self, op: UnaryOp, rhs: Expr) -> Result<Value, RuntimeError> {
+    fn interpret_unary_op(&mut self, op: UnaryOp, rhs: &Expr) -> Result<Value, RuntimeError> {
         use crate::ast::UnaryOp::*;
         use Value::*;
 
@@ -241,6 +309,8 @@ impl RuntimeError {
             DivisionByZero => "divisão por zero não é permitida".to_string(),
             NumberOverflow => "números muito grandes não são permitidos".to_string(),
             TypeError => "erro de tipo".to_string(),
+            UndefinedReference => "referência não encontrada".to_string(),
+            AlreadyDeclared => "variável já declarada neste escopo".to_string(),
         }
     }
 }
@@ -256,6 +326,8 @@ pub enum RuntimeErrorKind {
     DivisionByZero,
     NumberOverflow,
     TypeError,
+    UndefinedReference,
+    AlreadyDeclared,
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
-use crate::ast::{BinaryOp, Expr};
+use crate::ast::{BinaryOp, Decl, Expr, Stmt};
 use crate::token::{Token, TokenKind};
 use crate::token_list;
+use crate::value::Value;
 use peekmore::{PeekMore, PeekMoreIterator};
 use std::fmt;
 use std::slice::Iter;
@@ -26,7 +27,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expr, ParserError> {
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, ParserError> {
         let program = self.program()?;
 
         match self.tokens.peek() {
@@ -42,12 +43,70 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn program(&mut self) -> Result<Expr, ParserError> {
-        self.expression()
+    fn program(&mut self) -> Result<Vec<Stmt>, ParserError> {
+        let mut stmt_list = vec![];
+
+        while let Some(token) = self.tokens.peek() {
+            if token.kind == TokenKind::Eof {
+                break;
+            }
+
+            stmt_list.push(self.statement()?);
+        }
+
+        Ok(stmt_list)
+    }
+
+    fn statement(&mut self) -> Result<Stmt, ParserError> {
+        let token = match self.tokens.peek() {
+            Some(token) => token,
+            _ => unreachable!(),
+        };
+
+        let result = match token.kind {
+            TokenKind::Let => self.declaration()?,
+            _ => Stmt::Expr(self.expression()?),
+        };
+
+        Ok(result)
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, ParserError> {
+        self.tokens.next();
+
+        let name = self.consume_identifier()?;
+
+        match self.tokens.next() {
+            Some(token) if token.kind == TokenKind::EqualSign => (),
+            Some(token) => return parser_error!(UnexpectedToken(token.clone()), token.line).into(),
+            None => return parser_error!(UnexpectedEoi, self.get_last_line()).into(),
+        };
+
+        let value = Decl::make_local_declaration(name.to_string(), self.expression()?);
+
+        Ok(Stmt::Decl(value))
     }
 
     fn expression(&mut self) -> Result<Expr, ParserError> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, ParserError> {
+        let expr = self.equality()?;
+
+        if let Some(equal_sign) = self.match_tokens(token_list![EqualSign]) {
+            let value = self.assignment()?;
+
+            return match expr {
+                Expr::Variable { name } => {
+                    let name: Expr = Expr::make_literal(Value::String(name));
+                    Ok(Expr::make_binary(name, BinaryOp::Assignment, value))
+                }
+                _ => Err(parser_error!(InvalidAssignmentTarget, equal_sign.line)),
+            };
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr, ParserError> {
@@ -160,6 +219,14 @@ impl<'a> Parser<'a> {
 
                 Ok(Expr::make_grouping(expr))
             }
+            Identifier => {
+                let name = match token.literal.as_ref().unwrap() {
+                    Value::String(string) => string,
+                    _ => unreachable!(),
+                };
+
+                Ok(Expr::make_variable(name.clone()))
+            }
             Eof => parser_error!(UnexpectedEoi, token.line).into(),
             _ => parser_error!(UnexpectedToken(token.clone()), token.line).into(),
         }
@@ -203,6 +270,26 @@ impl<'a> Parser<'a> {
 
         true
     }
+
+    fn get_last_line(&mut self) -> usize {
+        self.tokens
+            .peek_backward_or_first(0)
+            .map(|t| t.line)
+            .unwrap_or(0)
+    }
+
+    fn consume_identifier(&mut self) -> Result<String, ParserError> {
+        match self.tokens.next() {
+            Some(token) if token.kind == TokenKind::Identifier => {
+                match token.literal.as_ref().unwrap() {
+                    Value::String(string) => Ok(string.to_string()),
+                    _ => unreachable!(),
+                }
+            }
+            Some(token) => parser_error!(UnexpectedToken(token.clone()), token.line).into(),
+            None => parser_error!(UnexpectedEoi, self.get_last_line()).into(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -219,6 +306,10 @@ impl ParserError {
             UnexpectedEoi => "fim inesperado de input".to_string(),
             MissingParentheses => "esperado ')' após a expressão".to_string(),
             UnexpectedToken(token) => format!("token inesperado: {}", token.lexeme),
+            InvalidAssignmentTarget => {
+                "o valor à direita do '=' não é um valor válido para receber atribuições"
+                    .to_string()
+            }
         }
     }
 }
@@ -240,6 +331,7 @@ pub enum ParserErrorKind {
     UnexpectedEoi,
     UnexpectedToken(Token),
     MissingParentheses,
+    InvalidAssignmentTarget,
 }
 
 #[cfg(test)]

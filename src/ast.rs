@@ -2,6 +2,26 @@ use crate::token::{Token, TokenKind};
 use crate::value::Value;
 
 #[derive(Debug, PartialEq)]
+pub enum Stmt {
+    Expr(Expr),
+    Decl(Decl),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Decl {
+    Local { name: String, value: Box<Expr> },
+}
+
+impl Decl {
+    pub fn make_local_declaration(name: String, value: Expr) -> Self {
+        Decl::Local {
+            name,
+            value: Box::new(value),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Expr {
     Binary {
         lhs: Box<Expr>,
@@ -17,6 +37,9 @@ pub enum Expr {
     },
     Literal {
         value: Value,
+    },
+    Variable {
+        name: String,
     },
 }
 
@@ -45,9 +68,13 @@ impl Expr {
             expr: Box::new(expr),
         }
     }
+
+    pub fn make_variable(value: String) -> Self {
+        Expr::Variable { name: value }
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum BinaryOp {
     Add,
     Subtract,
@@ -61,6 +88,7 @@ pub enum BinaryOp {
     GreaterOrEqual,
     Less,
     LessOrEqual,
+    Assignment,
 }
 
 impl From<Token> for BinaryOp {
@@ -79,12 +107,13 @@ impl From<Token> for BinaryOp {
             TokenKind::GreaterOrEqual => GreaterOrEqual,
             TokenKind::Less => Less,
             TokenKind::LessOrEqual => LessOrEqual,
+            TokenKind::EqualSign => Assignment,
             _ => panic!("invalid token for binary operation"),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum UnaryOp {
     Negative,
     LogicalNot,
