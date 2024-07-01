@@ -16,14 +16,25 @@ macro_rules! parser_error {
     }};
 }
 
+macro_rules! with_ignoring_newline {
+    ($self:ident, $block:block) => {{
+        $self.ignoring_newline = true;
+        let result = $block;
+        $self.ignoring_newline = false;
+        result
+    }};
+}
+
 pub struct Parser<'a> {
     tokens: PeekMoreIterator<Iter<'a, Token>>,
+    ignoring_newline: bool,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a [Token]) -> Parser<'a> {
         Parser {
             tokens: source.iter().peekmore(),
+            ignoring_newline: false,
         }
     }
 
@@ -67,6 +78,8 @@ impl<'a> Parser<'a> {
             TokenKind::Let => self.declaration()?,
             _ => Stmt::Expr(self.expression()?),
         };
+
+        self.consume_newline()?;
 
         Ok(result)
     }
@@ -210,7 +223,7 @@ impl<'a> Parser<'a> {
             Number | True | False | String | Nil => {
                 Ok(Expr::make_literal(token.literal.clone().unwrap()))
             }
-            LeftParen => {
+            LeftParen => with_ignoring_newline!(self, {
                 let expr = self.expression()?;
 
                 if self.match_tokens(token_list![RightParen]).is_none() {
@@ -218,7 +231,7 @@ impl<'a> Parser<'a> {
                 }
 
                 Ok(Expr::make_grouping(expr))
-            }
+            }),
             Identifier => {
                 let name = match token.literal.as_ref().unwrap() {
                     Value::String(string) => string,
@@ -234,7 +247,33 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    fn consume_newline(&mut self) -> Result<(), ParserError> {
+        use TokenKind::*;
+
+        if self.match_tokens(token_list![Newline]).is_some() {
+            return Ok(());
+        }
+
+        match self.tokens.peek() {
+            Some(token) if matches!(token.kind, Eof) => Ok(()),
+            Some(token) => Err(parser_error!(UnexpectedToken((*token).clone()), token.line)),
+            None => Err(parser_error!(UnexpectedEoi, self.get_last_line())),
+        }
+    }
+
+    fn ignore_newline(&mut self) -> Option<&Token> {
+        if !self.ignoring_newline {
+            None
+        } else if matches!(self.tokens.peek(), Some(token) if token.kind == TokenKind::Newline) {
+            self.tokens.next()
+        } else {
+            None
+        }
+    }
+
     fn match_tokens(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
+        self.ignore_newline();
+
         let next = self.tokens.peek();
 
         for t in token_types {
@@ -253,6 +292,10 @@ impl<'a> Parser<'a> {
         assert_eq!(self.tokens.cursor(), 0, "cursor is already in use");
 
         for token_type in token_types {
+            if self.ignore_newline().is_some() {
+                continue;
+            }
+
             let matched_sequence =
                 matches!(self.tokens.peek(), Some(token) if *token_type == token.kind);
 

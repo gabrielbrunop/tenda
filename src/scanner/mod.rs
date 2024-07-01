@@ -26,12 +26,12 @@ impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Scanner<'a> {
         Scanner {
             source: source.chars().peekable(),
-            line: 0,
+            line: 1,
         }
     }
 
     pub fn scan(&mut self) -> Result<Vec<Token>, Vec<LexicalError>> {
-        let mut tokens = Vec::new();
+        let mut tokens: Vec<Token> = Vec::new();
         let mut errors = Vec::new();
         let mut had_error = false;
 
@@ -43,6 +43,15 @@ impl<'a> Scanner<'a> {
 
         while let Some(c) = self.source.next() {
             let token: Result<Option<Token>, LexicalError> = match c {
+                '\n' => {
+                    self.line += 1;
+                    match tokens.last() {
+                        Some(token) if token.kind != TokenKind::Newline => {
+                            token!(Newline, "\n", self.line - 1).into()
+                        }
+                        _ => ignore_char!(),
+                    }
+                }
                 c if c.is_whitespace() => Ok(None),
                 '(' => token!(LeftParen, ")", self.line).into(),
                 ')' => token!(RightParen, ")", self.line).into(),
@@ -80,10 +89,6 @@ impl<'a> Scanner<'a> {
                     }
                     _ => token!(Slash, "/", self.line).into(),
                 },
-                '\n' => {
-                    self.line += 1;
-                    ignore_char!()
-                }
                 _ => lexical_error!(UnexpectedChar(c), self.line).into(),
             };
 
