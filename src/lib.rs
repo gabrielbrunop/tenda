@@ -3,10 +3,10 @@ use scanner::Scanner;
 
 use crate::parser::Parser;
 
-mod ast;
 mod interpreter;
 mod parser;
 mod scanner;
+mod stmt;
 mod token;
 mod value;
 
@@ -46,7 +46,7 @@ impl Tenda {
             Err(errs) => return print_errors!(errs, "Erro sintático"),
         };
 
-        let result = match self.interpreter.interpret(ast) {
+        let result = match self.interpreter.interpret(&ast) {
             Ok(val) => val,
             Err(err) => return format!("Erro semântico: {}", err),
         };
