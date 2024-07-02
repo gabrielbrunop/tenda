@@ -1,5 +1,4 @@
 use crate::value::Value;
-use std::fmt::Display;
 
 #[macro_export]
 macro_rules! token_list {
@@ -47,16 +46,6 @@ impl Token {
     }
 }
 
-impl Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?} {{ Token {:?}, Literal {:?}, Line {} }}",
-            self.lexeme, self.kind, self.literal, self.line
-        )
-    }
-}
-
 impl<T> From<Token> for Result<Option<Token>, T> {
     fn from(val: Token) -> Self {
         Ok(Some(val))
@@ -77,6 +66,9 @@ pub enum TokenKind {
     Less,
     LessOrEqual,
     Let,
+    If,
+    BlockStart,
+    BlockEnd,
     Identifier,
     EqualSign,
     Plus,

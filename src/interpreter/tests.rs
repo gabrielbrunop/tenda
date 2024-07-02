@@ -19,7 +19,7 @@ fn run<T: ToString>(string: T) -> Result<Value, RuntimeError> {
 
     let mut interpreter: Interpreter = Interpreter::new();
 
-    interpreter.interpret(ast)
+    interpreter.interpret(&ast)
 }
 
 #[test]

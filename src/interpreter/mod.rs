@@ -2,7 +2,7 @@ use core::fmt;
 use std::collections::HashMap;
 
 use crate::{
-    ast::{BinaryOp, Decl, Expr, Stmt, UnaryOp},
+    stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
     value::Value,
 };
 
@@ -44,22 +44,28 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&mut self, stmt_list: Vec<Stmt>) -> Result<Value, RuntimeError> {
-        use Stmt::*;
-
+    pub fn interpret(&mut self, stmt_list: &[Stmt]) -> Result<Value, RuntimeError> {
         let stmt_iter = stmt_list.iter();
         let mut last_value = Value::Nil;
 
         for stmt in stmt_iter {
-            let value = match stmt {
-                Expr(expr) => self.interpret_expr(expr)?,
-                Decl(decl) => self.interpret_decl(decl)?,
-            };
+            let value = self.interpret_stmt(stmt)?;
 
             last_value = value;
         }
 
         Ok(last_value)
+    }
+
+    pub fn interpret_stmt(&mut self, stmt: &Stmt) -> Result<Value, RuntimeError> {
+        use Stmt::*;
+
+        match stmt {
+            Expr(expr) => self.interpret_expr(expr),
+            Decl(decl) => self.interpret_decl(decl),
+            Cond(cond) => self.interpret_if(cond),
+            Block(block) => self.interpret_block(block),
+        }
     }
 
     pub fn interpret_decl(&mut self, decl: &Decl) -> Result<Value, RuntimeError> {
@@ -108,7 +114,7 @@ impl Interpreter {
         op: BinaryOp,
         rhs: &Expr,
     ) -> Result<Value, RuntimeError> {
-        use crate::ast::BinaryOp::*;
+        use crate::stmt::BinaryOp::*;
         use Value::*;
 
         let lhs = self.interpret_expr(lhs)?;
@@ -257,7 +263,7 @@ impl Interpreter {
     }
 
     fn interpret_unary_op(&mut self, op: UnaryOp, rhs: &Expr) -> Result<Value, RuntimeError> {
-        use crate::ast::UnaryOp::*;
+        use crate::stmt::UnaryOp::*;
         use Value::*;
 
         let rhs = self.interpret_expr(rhs)?;
@@ -282,6 +288,24 @@ impl Interpreter {
         };
 
         Ok(expr)
+    }
+
+    fn interpret_block(&mut self, block: &Block) -> Result<Value, RuntimeError> {
+        self.interpret(block)?;
+
+        Ok(Value::Nil)
+    }
+
+    fn interpret_if(&mut self, cond: &Cond) -> Result<Value, RuntimeError> {
+        match cond {
+            Cond::If { cond, then } => {
+                if self.interpret_expr(cond)?.to_bool() {
+                    self.interpret_stmt(then)?;
+                }
+            }
+        };
+
+        Ok(Value::Nil)
     }
 }
 

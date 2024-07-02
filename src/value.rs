@@ -36,6 +36,15 @@ impl Value {
             )),
         }
     }
+
+    pub fn to_bool(&self) -> bool {
+        match self {
+            Value::Number(value) => *value != 0.0,
+            Value::Boolean(value) => *value,
+            Value::String(_) => true,
+            Value::Nil => false,
+        }
+    }
 }
 
 impl From<f64> for Value {

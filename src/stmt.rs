@@ -5,7 +5,11 @@ use crate::value::Value;
 pub enum Stmt {
     Expr(Expr),
     Decl(Decl),
+    Cond(Cond),
+    Block(Block),
 }
+
+pub type Block = Vec<Stmt>;
 
 #[derive(Debug, PartialEq)]
 pub enum Decl {
@@ -17,6 +21,20 @@ impl Decl {
         Decl::Local {
             name,
             value: Box::new(value),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Cond {
+    If { cond: Box<Expr>, then: Box<Stmt> },
+}
+
+impl Cond {
+    pub fn make_if_statement(cond: Expr, then: Stmt) -> Self {
+        Cond::If {
+            cond: Box::new(cond),
+            then: Box::new(then),
         }
     }
 }
