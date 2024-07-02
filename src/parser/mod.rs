@@ -1,10 +1,8 @@
 use crate::stmt::{BinaryOp, Cond, Decl, Expr, Stmt};
-use crate::token::{Token, TokenKind};
-use crate::token_list;
+use crate::token::{Token, TokenIterator, TokenKind};
 use crate::value::Value;
-use peekmore::{PeekMore, PeekMoreIterator};
+use crate::{token_list, with_ignoring_newline};
 use std::fmt;
-use std::slice::Iter;
 
 macro_rules! parser_error {
     ($kind:expr, $line:expr) => {{
@@ -27,25 +25,14 @@ macro_rules! unexpected_token {
     }};
 }
 
-macro_rules! with_ignoring_newline {
-    ($self:ident, $block:block) => {{
-        $self.ignoring_newline = true;
-        let result = $block;
-        $self.ignoring_newline = false;
-        result
-    }};
-}
-
 pub struct Parser<'a> {
-    tokens: PeekMoreIterator<Iter<'a, Token>>,
-    ignoring_newline: bool,
+    tokens: TokenIterator<'a>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a [Token]) -> Parser<'a> {
         Parser {
-            tokens: source.iter().peekmore(),
-            ignoring_newline: false,
+            tokens: source.into(),
         }
     }
 
@@ -57,10 +44,7 @@ impl<'a> Parser<'a> {
             Some(token) => Err(vec![unexpected_token!((*token).clone(), self.line)]),
             None => Err(vec![parser_error!(
                 UnexpectedEoi,
-                self.tokens
-                    .peek_backward_or_first(0)
-                    .map(|t| t.line)
-                    .unwrap_or(0)
+                self.tokens.get_last_line()
             )]),
         }
     }
@@ -94,15 +78,15 @@ impl<'a> Parser<'a> {
         };
 
         let result = match token.kind {
-            TokenKind::Let => self.declaration().map_err(|err| vec![err])?,
-            TokenKind::BlockStart => self.block()?,
-            TokenKind::If => self.if_statement()?,
-            _ => Stmt::Expr(self.expression().map_err(|err| vec![err])?),
+            TokenKind::Let => self.declaration().map_err(|err| vec![err]),
+            TokenKind::BlockStart => self.block(),
+            TokenKind::If => self.if_statement(),
+            _ => self.expression().map_err(|err| vec![err]).map(Stmt::Expr),
         };
 
         self.consume_newline().map_err(|err| vec![err])?;
 
-        Ok(result)
+        result
     }
 
     fn block(&mut self) -> Result<Stmt, Vec<ParserError>> {
@@ -145,7 +129,12 @@ impl<'a> Parser<'a> {
         let body = match self.tokens.next() {
             Some(token) if token.kind == TokenKind::BlockStart => self.block()?,
             Some(token) => return Err(vec![unexpected_token!(token.clone(), token.line)]),
-            None => return Err(vec![parser_error!(UnexpectedEoi, self.get_last_line())]),
+            None => {
+                return Err(vec![parser_error!(
+                    UnexpectedEoi,
+                    self.tokens.get_last_line()
+                )])
+            }
         };
 
         let stmt = Cond::make_if_statement(condition, body);
@@ -172,7 +161,7 @@ impl<'a> Parser<'a> {
     fn assignment(&mut self) -> Result<Expr, ParserError> {
         let expr = self.equality()?;
 
-        if let Some(equal_sign) = self.match_tokens(token_list![EqualSign]) {
+        if let Some(equal_sign) = self.tokens.match_tokens(token_list![EqualSign]) {
             let value = self.assignment()?;
 
             return match expr {
@@ -192,11 +181,11 @@ impl<'a> Parser<'a> {
 
         loop {
             let op: Option<BinaryOp> = {
-                if let Some(token) = self.match_tokens(token_list![Equals]) {
+                if let Some(token) = self.tokens.match_tokens(token_list![Equals]) {
                     Some(token.into())
-                } else if self.matches_sequence(token_list![Not, Equals]) {
+                } else if self.tokens.matches_sequence(token_list![Not, Equals]) {
                     Some(BinaryOp::Inequality)
-                } else if let Some(token) = self.match_tokens(token_list![Not]) {
+                } else if let Some(token) = self.tokens.match_tokens(token_list![Not]) {
                     return unexpected_token!(token.clone(), token.line).into();
                 } else {
                     None
@@ -219,7 +208,8 @@ impl<'a> Parser<'a> {
         let mut expr = self.term()?;
 
         while let Some(op) =
-            self.match_tokens(token_list![Greater, GreaterOrEqual, Less, LessOrEqual])
+            self.tokens
+                .match_tokens(token_list![Greater, GreaterOrEqual, Less, LessOrEqual])
         {
             let lhs = expr;
             let rhs = self.term()?;
@@ -232,7 +222,7 @@ impl<'a> Parser<'a> {
     fn term(&mut self) -> Result<Expr, ParserError> {
         let mut expr = self.factor()?;
 
-        while let Some(op) = self.match_tokens(token_list![Plus, Minus]) {
+        while let Some(op) = self.tokens.match_tokens(token_list![Plus, Minus]) {
             let lhs = expr;
             let rhs = self.factor()?;
             expr = Expr::make_binary(lhs, op.into(), rhs);
@@ -244,7 +234,7 @@ impl<'a> Parser<'a> {
     fn factor(&mut self) -> Result<Expr, ParserError> {
         let mut expr = self.exponent()?;
 
-        while let Some(op) = self.match_tokens(token_list![Star, Slash, Percent]) {
+        while let Some(op) = self.tokens.match_tokens(token_list![Star, Slash, Percent]) {
             let lhs = expr;
             let rhs = self.exponent()?;
             expr = Expr::make_binary(lhs, op.into(), rhs);
@@ -256,7 +246,7 @@ impl<'a> Parser<'a> {
     fn exponent(&mut self) -> Result<Expr, ParserError> {
         let mut expr = self.unary()?;
 
-        while let Some(op) = self.match_tokens(token_list![Caret]) {
+        while let Some(op) = self.tokens.match_tokens(token_list![Caret]) {
             let lhs = expr;
             let rhs = self.unary()?;
             expr = Expr::make_binary(lhs, op.into(), rhs);
@@ -266,7 +256,7 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Result<Expr, ParserError> {
-        if let Some(op) = self.match_tokens(token_list![Minus, Not]) {
+        if let Some(op) = self.tokens.match_tokens(token_list![Minus, Not]) {
             let rhs = self.unary()?;
             let expr = Expr::make_unary(op.into(), rhs);
 
@@ -284,15 +274,17 @@ impl<'a> Parser<'a> {
             _ => unreachable!(),
         };
 
+        let line = token.line;
+
         match token.kind {
             Number | True | False | String | Nil => {
                 Ok(Expr::make_literal(token.literal.clone().unwrap()))
             }
-            LeftParen => with_ignoring_newline!(self, {
+            LeftParen => with_ignoring_newline!(self.tokens, {
                 let expr = self.expression()?;
 
-                if self.match_tokens(token_list![RightParen]).is_none() {
-                    return parser_error!(MissingParentheses, token.line).into();
+                if self.tokens.match_tokens(token_list![RightParen]).is_none() {
+                    return parser_error!(MissingParentheses, line).into();
                 }
 
                 Ok(Expr::make_grouping(expr))
@@ -305,8 +297,8 @@ impl<'a> Parser<'a> {
 
                 Ok(Expr::make_variable(name.clone()))
             }
-            Eof => parser_error!(UnexpectedEoi, token.line).into(),
-            _ => unexpected_token!(token.clone(), token.line).into(),
+            Eof => parser_error!(UnexpectedEoi, line).into(),
+            _ => unexpected_token!(token.clone(), line).into(),
         }
     }
 }
@@ -315,75 +307,15 @@ impl<'a> Parser<'a> {
     fn consume_newline(&mut self) -> Result<(), ParserError> {
         use TokenKind::*;
 
-        if self.match_tokens(token_list![Newline]).is_some() {
+        if self.tokens.match_tokens(token_list![Newline]).is_some() {
             return Ok(());
         }
 
         match self.tokens.peek() {
             Some(token) if matches!(token.kind, Eof | BlockEnd) => Ok(()),
             Some(token) => Err(unexpected_token!((*token).clone(), token.line)),
-            None => Err(parser_error!(UnexpectedEoi, self.get_last_line())),
+            None => Err(parser_error!(UnexpectedEoi, self.tokens.get_last_line())),
         }
-    }
-
-    fn ignore_newline(&mut self) -> Option<&Token> {
-        if !self.ignoring_newline {
-            None
-        } else if matches!(self.tokens.peek(), Some(token) if token.kind == TokenKind::Newline) {
-            self.tokens.next()
-        } else {
-            None
-        }
-    }
-
-    fn match_tokens(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
-        self.ignore_newline();
-
-        let next = self.tokens.peek();
-
-        for t in token_types {
-            match next {
-                Some(token) if token.kind == *t => {
-                    return Some(self.tokens.next().unwrap().clone())
-                }
-                _ => (),
-            }
-        }
-
-        None
-    }
-
-    fn matches_sequence(&mut self, token_types: Iter<TokenKind>) -> bool {
-        assert_eq!(self.tokens.cursor(), 0, "cursor is already in use");
-
-        for token_type in token_types {
-            if self.ignore_newline().is_some() {
-                continue;
-            }
-
-            let matched_sequence =
-                matches!(self.tokens.peek(), Some(token) if *token_type == token.kind);
-
-            if !matched_sequence {
-                self.tokens.reset_cursor();
-                return false;
-            }
-
-            self.tokens.advance_cursor();
-        }
-
-        for _ in 0..self.tokens.cursor() {
-            self.tokens.next();
-        }
-
-        true
-    }
-
-    fn get_last_line(&mut self) -> usize {
-        self.tokens
-            .peek_backward_or_first(0)
-            .map(|t| t.line)
-            .unwrap_or(0)
     }
 
     fn consume_identifier(&mut self) -> Result<String, ParserError> {
@@ -395,7 +327,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(token) => unexpected_token!(token.clone(), token.line).into(),
-            None => parser_error!(UnexpectedEoi, self.get_last_line()).into(),
+            None => parser_error!(UnexpectedEoi, self.tokens.get_last_line()).into(),
         }
     }
 
@@ -403,7 +335,7 @@ impl<'a> Parser<'a> {
         match self.tokens.next() {
             Some(token) if token.kind == token_kind => Ok(()),
             Some(token) => Err(unexpected_token!(token.clone(), token.line)),
-            None => Err(parser_error!(UnexpectedEoi, self.get_last_line())),
+            None => Err(parser_error!(UnexpectedEoi, self.tokens.get_last_line())),
         }
     }
 }
