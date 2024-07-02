@@ -1,3 +1,6 @@
+use peekmore::{PeekMore, PeekMoreIterator};
+use std::slice::Iter;
+
 use crate::value::Value;
 
 #[macro_export]
@@ -19,6 +22,16 @@ macro_rules! token {
     ($kind:expr, $lexeme:expr, $line:expr, $literal:expr) => {{
         use TokenKind::*;
         Token::new($kind, $lexeme.to_string(), Some($literal), $line)
+    }};
+}
+
+#[macro_export]
+macro_rules! with_ignoring_newline {
+    ($tokens:expr, $block:block) => {{
+        $tokens.set_ignoring_newline(true);
+        let result = $block;
+        $tokens.set_ignoring_newline(false);
+        result
     }};
 }
 
@@ -81,4 +94,92 @@ pub enum TokenKind {
     RightParen,
     Newline,
     Eof,
+}
+
+pub struct TokenIterator<'a> {
+    tokens: PeekMoreIterator<Iter<'a, Token>>,
+    ignoring_newline: bool,
+}
+
+impl<'a> TokenIterator<'a> {
+    pub fn peek(&mut self) -> Option<&&Token> {
+        self.tokens.peek()
+    }
+
+    pub fn next(&mut self) -> Option<&Token> {
+        self.tokens.next()
+    }
+
+    pub fn set_ignoring_newline(&mut self, value: bool) {
+        self.ignoring_newline = value;
+    }
+
+    pub fn match_tokens(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
+        self.ignore_newline();
+
+        let next = self.tokens.peek();
+
+        for t in token_types {
+            match next {
+                Some(token) if token.kind == *t => {
+                    return Some(self.tokens.next().unwrap().clone())
+                }
+                _ => (),
+            }
+        }
+
+        None
+    }
+
+    pub fn matches_sequence(&mut self, token_types: Iter<TokenKind>) -> bool {
+        assert_eq!(self.tokens.cursor(), 0, "cursor is already in use");
+
+        for token_type in token_types {
+            if self.ignore_newline().is_some() {
+                continue;
+            }
+
+            let matched_sequence =
+                matches!(self.tokens.peek(), Some(token) if *token_type == token.kind);
+
+            if !matched_sequence {
+                self.tokens.reset_cursor();
+                return false;
+            }
+
+            self.tokens.advance_cursor();
+        }
+
+        for _ in 0..self.tokens.cursor() {
+            self.tokens.next();
+        }
+
+        true
+    }
+
+    pub fn get_last_line(&mut self) -> usize {
+        self.tokens
+            .peek_backward_or_first(0)
+            .map(|t| t.line)
+            .unwrap_or(1)
+    }
+
+    fn ignore_newline(&mut self) -> Option<&Token> {
+        if !self.ignoring_newline {
+            None
+        } else if matches!(self.tokens.peek(), Some(token) if token.kind == TokenKind::Newline) {
+            self.tokens.next()
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> From<&'a [Token]> for TokenIterator<'a> {
+    fn from(value: &'a [Token]) -> Self {
+        TokenIterator {
+            tokens: value.iter().peekmore(),
+            ignoring_newline: false,
+        }
+    }
 }
