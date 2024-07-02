@@ -79,7 +79,6 @@ impl<'a> Parser<'a> {
 
         let result = match token.kind {
             TokenKind::Let => self.declaration().map_err(|err| vec![err]),
-            TokenKind::BlockStart => self.block(),
             TokenKind::If => self.if_statement(),
             _ => self.expression().map_err(|err| vec![err]).map(Stmt::Expr),
         };
@@ -127,7 +126,7 @@ impl<'a> Parser<'a> {
         let condition = self.expression().map_err(|err| vec![err])?;
 
         let body = match self.tokens.next() {
-            Some(token) if token.kind == TokenKind::BlockStart => self.block()?,
+            Some(token) if token.kind == TokenKind::Then => self.block()?,
             Some(token) => return Err(vec![unexpected_token!(token.clone(), token.line)]),
             None => {
                 return Err(vec![parser_error!(

@@ -80,7 +80,7 @@ pub enum TokenKind {
     LessOrEqual,
     Let,
     If,
-    BlockStart,
+    Then,
     BlockEnd,
     Identifier,
     EqualSign,
