@@ -1,5 +1,6 @@
 use core::fmt;
-use std::collections::HashMap;
+
+use environment::Stack;
 
 use crate::{
     stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
@@ -34,13 +35,13 @@ macro_rules! type_error {
 }
 
 pub struct Interpreter {
-    state: HashMap<String, Value>,
+    stack: Stack,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
-            state: HashMap::new(),
+            stack: Stack::new(),
         }
     }
 
@@ -71,7 +72,7 @@ impl Interpreter {
     pub fn interpret_decl(&mut self, decl: &Decl) -> Result<Value, RuntimeError> {
         match decl {
             Decl::Local { name, value } => {
-                if self.state.contains_key(name) {
+                if self.stack.local_exists(name) {
                     return Err(runtime_error!(
                         AlreadyDeclared,
                         "a variável identificada por '{}' já foi declarada neste escopo",
@@ -81,7 +82,7 @@ impl Interpreter {
 
                 let value = self.interpret_expr(value)?;
 
-                self.state.insert(name.clone(), value);
+                let _ = self.stack.define(name.clone(), value);
             }
         };
 
@@ -97,8 +98,8 @@ impl Interpreter {
             Grouping { expr } => self.interpret_expr(expr),
             Literal { value } => Ok(value.clone()),
             Variable { name } => self
-                .state
-                .get(name)
+                .stack
+                .find(name)
                 .ok_or(runtime_error!(
                     UndefinedReference,
                     "a variável identificada por '{}' não está definida neste escopo",
@@ -241,15 +242,14 @@ impl Interpreter {
             },
             Assignment => match (lhs, rhs) {
                 (String(lhs), rhs) => {
-                    if !self.state.contains_key(&lhs) {
-                        return Err(runtime_error!(
+                    self.stack.set(lhs.clone(), rhs.clone()).map_err(|_| {
+                        runtime_error!(
                             AlreadyDeclared,
                             "a variável identificada por '{}' precisa ser definida com `seja`",
                             lhs
-                        ));
-                    }
+                        )
+                    })?;
 
-                    self.state.insert(lhs.clone(), rhs.clone());
                     rhs
                 }
                 _ => unreachable!(),
@@ -291,7 +291,11 @@ impl Interpreter {
     }
 
     fn interpret_block(&mut self, block: &Block) -> Result<Value, RuntimeError> {
+        self.stack.allocate();
+
         self.interpret(block)?;
+
+        self.stack.pop();
 
         Ok(Value::Nil)
     }
@@ -354,5 +358,6 @@ pub enum RuntimeErrorKind {
     AlreadyDeclared,
 }
 
+mod environment;
 #[cfg(test)]
 mod tests;
