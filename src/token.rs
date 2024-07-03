@@ -74,6 +74,8 @@ pub enum TokenKind {
     Nil,
     Equals,
     Not,
+    Or,
+    And,
     Greater,
     GreaterOrEqual,
     Less,

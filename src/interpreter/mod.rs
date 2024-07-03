@@ -254,6 +254,20 @@ impl Interpreter {
                 }
                 _ => unreachable!(),
             },
+            LogicalAnd => {
+                if lhs.to_bool() {
+                    rhs
+                } else {
+                    lhs
+                }
+            }
+            LogicalOr => {
+                if lhs.to_bool() {
+                    lhs
+                } else {
+                    rhs
+                }
+            }
         };
 
         match expr {
@@ -273,18 +287,7 @@ impl Interpreter {
                 Number(rhs) => Number(-rhs),
                 _ => return Err(type_error!("não é possível negar '{}'", rhs)),
             },
-            LogicalNot => match rhs {
-                Number(rhs) if rhs == 0.0 => Boolean(false),
-                Number(_) => Boolean(true),
-                Boolean(rhs) => Boolean(!rhs),
-                Nil => Boolean(false),
-                _ => {
-                    return Err(type_error!(
-                        "a negação lógica não é uma operação válida para '{}'",
-                        rhs
-                    ))
-                }
-            },
+            LogicalNot => Value::Boolean(!rhs.to_bool()),
         };
 
         Ok(expr)

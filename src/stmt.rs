@@ -107,6 +107,8 @@ pub enum BinaryOp {
     Less,
     LessOrEqual,
     Assignment,
+    LogicalAnd,
+    LogicalOr,
 }
 
 impl From<Token> for BinaryOp {
@@ -126,6 +128,8 @@ impl From<Token> for BinaryOp {
             TokenKind::Less => Less,
             TokenKind::LessOrEqual => LessOrEqual,
             TokenKind::EqualSign => Assignment,
+            TokenKind::Or => LogicalOr,
+            TokenKind::And => LogicalAnd,
             _ => panic!("invalid token for binary operation"),
         }
     }
