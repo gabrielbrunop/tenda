@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> Result<Expr, ParserError> {
-        let expr = self.equality()?;
+        let expr = self.logical()?;
 
         if let Some(equal_sign) = self.tokens.match_tokens(token_list![EqualSign]) {
             let value = self.assignment()?;
@@ -170,6 +170,18 @@ impl<'a> Parser<'a> {
                 }
                 _ => Err(parser_error!(InvalidAssignmentTarget, equal_sign.line)),
             };
+        }
+
+        Ok(expr)
+    }
+
+    fn logical(&mut self) -> Result<Expr, ParserError> {
+        let mut expr = self.equality()?;
+
+        while let Some(op) = self.tokens.match_tokens(token_list![Or, And]) {
+            let lhs = expr;
+            let rhs = self.equality()?;
+            expr = Expr::make_binary(lhs, op.into(), rhs);
         }
 
         Ok(expr)

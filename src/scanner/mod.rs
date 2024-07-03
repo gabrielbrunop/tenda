@@ -209,6 +209,8 @@ impl<'a> Scanner<'a> {
             "se" => token!(If, "se", self.line),
             "então" => token!(Then, "então", self.line),
             "fim" => token!(BlockEnd, "fim", self.line),
+            "ou" => token!(Or, "ou", self.line),
+            "e" => token!(And, "e", self.line),
             identifier => token!(
                 Identifier,
                 identifier,
