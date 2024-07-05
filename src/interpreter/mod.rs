@@ -304,12 +304,16 @@ impl Interpreter {
     }
 
     fn interpret_if(&mut self, cond: &Cond) -> Result<Value, RuntimeError> {
-        match cond {
-            Cond::If { cond, then } => {
-                if self.interpret_expr(cond)?.to_bool() {
-                    self.interpret_stmt(then)?;
-                }
-            }
+        let Cond {
+            cond,
+            then,
+            or_else,
+        } = cond;
+
+        if self.interpret_expr(cond)?.to_bool() {
+            self.interpret_stmt(then)?;
+        } else if let Some(or_else) = or_else {
+            self.interpret_stmt(or_else)?;
         };
 
         Ok(Value::Nil)

@@ -26,15 +26,18 @@ impl Decl {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Cond {
-    If { cond: Box<Expr>, then: Box<Stmt> },
+pub struct Cond {
+    pub cond: Box<Expr>,
+    pub then: Box<Stmt>,
+    pub or_else: Option<Box<Stmt>>,
 }
 
 impl Cond {
-    pub fn make_if_statement(cond: Expr, then: Stmt) -> Self {
-        Cond::If {
+    pub fn make_if_statement(cond: Expr, then: Stmt, or_else: Option<Stmt>) -> Self {
+        Cond {
             cond: Box::new(cond),
             then: Box::new(then),
+            or_else: or_else.map(Box::new),
         }
     }
 }
