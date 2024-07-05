@@ -4,11 +4,21 @@ use std::slice::Iter;
 use crate::value::Value;
 
 #[macro_export]
-macro_rules! token_list {
+macro_rules! token_iter {
     ($($kind:expr),*) => {
         {
             use TokenKind::*;
             vec![$($kind),*].iter()
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! token_vec {
+    ($($kind:expr),*) => {
+        {
+            use TokenKind::*;
+            vec![$($kind),*]
         }
     };
 }
@@ -83,6 +93,7 @@ pub enum TokenKind {
     Let,
     If,
     Then,
+    Else,
     BlockEnd,
     Identifier,
     EqualSign,
@@ -101,6 +112,7 @@ pub enum TokenKind {
 pub struct TokenIterator<'a> {
     tokens: PeekMoreIterator<Iter<'a, Token>>,
     ignoring_newline: bool,
+    last_line: usize,
 }
 
 impl<'a> TokenIterator<'a> {
@@ -160,10 +172,7 @@ impl<'a> TokenIterator<'a> {
     }
 
     pub fn get_last_line(&mut self) -> usize {
-        self.tokens
-            .peek_backward_or_first(0)
-            .map(|t| t.line)
-            .unwrap_or(1)
+        self.last_line
     }
 
     fn ignore_newline(&mut self) -> Option<&Token> {
@@ -182,6 +191,7 @@ impl<'a> From<&'a [Token]> for TokenIterator<'a> {
         TokenIterator {
             tokens: value.iter().peekmore(),
             ignoring_newline: false,
+            last_line: value.last().map(|t| t.line).unwrap_or(0),
         }
     }
 }

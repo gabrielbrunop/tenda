@@ -1,7 +1,7 @@
 use crate::{
     scanner::*,
     token::{Token, TokenKind},
-    token_list,
+    token_iter,
 };
 
 fn scan<T: ToString>(string: T) -> Result<Vec<Token>, Vec<LexicalError>> {
@@ -27,7 +27,7 @@ fn extra_spacing() {
         scan_to_token_list(" 1 + 2 ")
             .unwrap()
             .iter()
-            .eq(token_list![Number, Plus, Number, Eof]),
+            .eq(token_iter![Number, Plus, Number, Eof]),
         "sum of integers with additional spacing between characters"
     )
 }
@@ -43,7 +43,7 @@ fn legal_leading_zero() {
         scan_to_token_list("0.1")
             .unwrap()
             .iter()
-            .eq(token_list![Number, Eof]),
+            .eq(token_iter![Number, Eof]),
         "legal leading zero"
     )
 }
@@ -54,7 +54,7 @@ fn boolean_lexemes() {
         scan_to_token_list("verdadeiro")
             .unwrap()
             .iter()
-            .eq(token_list![True, Eof]),
+            .eq(token_iter![True, Eof]),
         "`verdadeiro` is a lexeme"
     );
 
@@ -62,7 +62,7 @@ fn boolean_lexemes() {
         scan_to_token_list("falso")
             .unwrap()
             .iter()
-            .eq(token_list![False, Eof]),
+            .eq(token_iter![False, Eof]),
         "`falso` is a lexeme"
     );
 }
@@ -73,7 +73,7 @@ fn string_literals() {
         scan_to_token_list("\"Hello, world!\"")
             .unwrap()
             .iter()
-            .eq(token_list![String, Eof]),
+            .eq(token_iter![String, Eof]),
         "\"Hello, world!\" is a string literal lexeme"
     )
 }
@@ -84,7 +84,7 @@ fn nil_literal() {
         scan_to_token_list("Nada")
             .unwrap()
             .iter()
-            .eq(token_list![Nil, Eof]),
+            .eq(token_iter![Nil, Eof]),
         "Nada is a lexeme"
     )
 }
@@ -95,7 +95,7 @@ fn identifier_equals() {
         scan_to_token_list("for")
             .unwrap()
             .iter()
-            .eq(token_list![Equals, Eof]),
+            .eq(token_iter![Equals, Eof]),
         "`for` is a identifier"
     )
 }
@@ -106,7 +106,7 @@ fn identifier_not() {
         scan_to_token_list("não")
             .unwrap()
             .iter()
-            .eq(token_list![Not, Eof]),
+            .eq(token_iter![Not, Eof]),
         "`não` is a identifier"
     )
 }
