@@ -308,8 +308,8 @@ impl<'a> Parser<'a> {
 
             if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
                 return Err(parser_error!(
-                    MissingParentheses,
-                    self.tokens.get_last_line()
+                    MissingFunctionParentheses,
+                    self.tokens.next().unwrap().line
                 ));
             }
         }
@@ -385,6 +385,9 @@ impl<'a> Parser<'a> {
     fn skip_token(&mut self, token_kind: TokenKind) -> Result<(), ParserError> {
         match self.tokens.next() {
             Some(token) if token.kind == token_kind => Ok(()),
+            Some(token) if token.kind == TokenKind::Eof => {
+                Err(parser_error!(UnexpectedEoi, token.line))
+            }
             Some(token) => Err(unexpected_token!(token.clone(), token.line)),
             None => Err(parser_error!(UnexpectedEoi, self.tokens.get_last_line())),
         }
@@ -404,6 +407,7 @@ impl ParserError {
         match &self.kind {
             UnexpectedEoi => "fim inesperado de input".to_string(),
             MissingParentheses => "esperado ')' após a expressão".to_string(),
+            MissingFunctionParentheses => "esperado ')' ao fim da chamada de função".to_string(),
             UnexpectedToken(token) => format!("token inesperado: {}", token.lexeme),
             InvalidAssignmentTarget => {
                 "o valor à direita do '=' não é um valor válido para receber atribuições"
@@ -424,6 +428,7 @@ pub enum ParserErrorKind {
     UnexpectedEoi,
     UnexpectedToken(Token),
     MissingParentheses,
+    MissingFunctionParentheses,
     InvalidAssignmentTarget,
 }
 
