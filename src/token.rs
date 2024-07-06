@@ -105,6 +105,7 @@ pub enum TokenKind {
     Caret,
     LeftParen,
     RightParen,
+    Comma,
     Newline,
     Eof,
 }

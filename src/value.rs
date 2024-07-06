@@ -1,11 +1,17 @@
 use std::fmt;
 use std::fmt::Display;
 
+use crate::interpreter::{Interpreter, RuntimeError};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     Boolean(bool),
     String(String),
+    Function(
+        usize,
+        fn(Vec<Value>, interpreter: &mut Interpreter) -> Result<Value, RuntimeError>,
+    ),
     Nil,
 }
 
@@ -21,6 +27,7 @@ impl Value {
             Number(_) => ValueType::Number,
             Boolean(_) => ValueType::Boolean,
             String(_) => ValueType::String,
+            Function(..) => ValueType::Function,
             Nil => ValueType::Nil,
         }
     }
@@ -42,6 +49,7 @@ impl Value {
             Value::Number(value) => *value != 0.0,
             Value::Boolean(value) => *value,
             Value::String(_) => true,
+            Value::Function(..) => true,
             Value::Nil => false,
         }
     }
@@ -67,6 +75,7 @@ impl Display for Value {
                     false => Value::FALSE_LITERAL.to_string(),
                 },
                 String(value) => format!("\"{}\"", value),
+                Function(..) => "Função".to_string(),
                 Nil => Value::NIL_LITERAL.to_string(),
             }
         )
@@ -77,6 +86,7 @@ pub enum ValueType {
     Number,
     Boolean,
     String,
+    Function,
     Nil,
 }
 
@@ -88,6 +98,7 @@ impl Display for ValueType {
             Number => "número".to_string(),
             Boolean => "lógico".to_string(),
             String => "texto".to_string(),
+            Function => "função".to_string(),
             Nil => "Nada".to_string(),
         };
 

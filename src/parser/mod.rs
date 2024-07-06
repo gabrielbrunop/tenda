@@ -284,8 +284,37 @@ impl<'a> Parser<'a> {
 
             Ok(expr)
         } else {
-            self.primary()
+            self.function_call()
         }
+    }
+
+    fn function_call(&mut self) -> Result<Expr, ParserError> {
+        let name = self.primary()?;
+
+        if self.tokens.match_tokens(token_iter![LeftParen]).is_none() {
+            return Ok(name);
+        }
+
+        let mut arguments = vec![];
+
+        if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
+            loop {
+                arguments.push(self.expression()?);
+
+                if self.tokens.match_tokens(token_iter![Comma]).is_none() {
+                    break;
+                }
+            }
+
+            if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
+                return Err(parser_error!(
+                    MissingParentheses,
+                    self.tokens.get_last_line()
+                ));
+            }
+        }
+
+        Ok(Expr::make_call(name, arguments))
     }
 
     fn primary(&mut self) -> Result<Expr, ParserError> {
