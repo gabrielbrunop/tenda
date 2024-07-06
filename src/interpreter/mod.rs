@@ -39,9 +39,23 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter {
-            stack: Stack::new(),
-        }
+        let mut stack = Stack::new();
+
+        stack
+            .define(
+                "exiba".to_string(),
+                Value::Function(1, |args, _| {
+                    match &args[0] {
+                        Value::String(value) => println!("{}", value),
+                        value => println!("{}", value),
+                    }
+
+                    Ok(Value::Nil)
+                }),
+            )
+            .unwrap();
+
+        Interpreter { stack }
     }
 
     pub fn interpret(&mut self, stmt_list: &[Stmt]) -> Result<Value, RuntimeError> {
@@ -96,6 +110,7 @@ impl Interpreter {
             Unary { op, rhs } => self.interpret_unary_op(*op, rhs),
             Grouping { expr } => self.interpret_expr(expr),
             Literal { value } => Ok(value.clone()),
+            Call { callee, args } => self.interpret_call(callee, args),
             Variable { name } => self
                 .stack
                 .find(name)
@@ -290,6 +305,29 @@ impl Interpreter {
         };
 
         Ok(expr)
+    }
+
+    fn interpret_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value, RuntimeError> {
+        let callee = self.interpret_expr(callee)?;
+
+        let args = args
+            .iter()
+            .map(|arg| self.interpret_expr(arg))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        match callee {
+            Value::Function(arity, _) if args.len() != arity => Err(runtime_error!(
+                TypeError,
+                "esperado {} argumento(s) mas recebido {}",
+                arity,
+                args.len()
+            )),
+            Value::Function(_, func) => func(args, self),
+            _ => Err(type_error!(
+                "não é possível chamar '{}' como função",
+                callee
+            )),
+        }
     }
 
     fn interpret_block(&mut self, block: &Block) -> Result<Value, RuntimeError> {

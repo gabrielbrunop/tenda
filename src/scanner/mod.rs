@@ -62,6 +62,7 @@ impl<'a> Scanner<'a> {
                 '%' => token!(Percent, "%", self.line).into(),
                 '=' => token!(EqualSign, "=", self.line).into(),
                 '"' => self.consume_string(c).map(Some),
+                ',' => token!(Comma, ",", self.line).into(),
                 '>' => match self.source.peek() {
                     Some('=') => {
                         self.source.next();

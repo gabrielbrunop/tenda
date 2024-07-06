@@ -53,6 +53,10 @@ pub enum Expr {
         op: UnaryOp,
         rhs: Box<Expr>,
     },
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
     Grouping {
         expr: Box<Expr>,
     },
@@ -92,6 +96,13 @@ impl Expr {
 
     pub fn make_variable(value: String) -> Self {
         Expr::Variable { name: value }
+    }
+
+    pub fn make_call(callee: Expr, args: Vec<Expr>) -> Self {
+        Expr::Call {
+            callee: Box::new(callee),
+            args,
+        }
     }
 }
 
