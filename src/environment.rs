@@ -63,7 +63,6 @@ impl Stack {
     }
 }
 
-#[derive(Debug)]
 struct Environment {
     state: HashMap<String, Value>,
 }
