@@ -92,6 +92,7 @@ pub enum TokenKind {
     LessOrEqual,
     Let,
     If,
+    Function,
     Then,
     Else,
     BlockEnd,

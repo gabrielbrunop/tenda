@@ -1,17 +1,14 @@
-use std::fmt;
 use std::fmt::Display;
+use std::{fmt, rc::Rc};
 
-use crate::interpreter::{Interpreter, RuntimeError};
+use crate::function::Function;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     Boolean(bool),
     String(String),
-    Function(
-        usize,
-        fn(Vec<Value>, interpreter: &mut Interpreter) -> Result<Value, RuntimeError>,
-    ),
+    Function(Rc<Function>),
     Nil,
 }
 

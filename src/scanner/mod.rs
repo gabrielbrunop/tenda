@@ -204,6 +204,7 @@ impl<'a> Scanner<'a> {
                 Value::Boolean(false)
             ),
             Value::NIL_LITERAL => token!(Nil, Value::NIL_LITERAL, self.line, Value::Nil),
+            "função" => token!(Function, "função", self.line),
             "não" => token!(Not, "não", self.line),
             "for" => token!(Equals, "for", self.line),
             "seja" => token!(Let, "seja", self.line),
