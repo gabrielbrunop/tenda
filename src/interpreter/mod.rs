@@ -1,8 +1,7 @@
 use core::fmt;
 
-use environment::Stack;
-
 use crate::{
+    environment::Stack,
     stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
     value::Value,
 };
@@ -365,6 +364,5 @@ pub enum RuntimeErrorKind {
     AlreadyDeclared,
 }
 
-mod environment;
 #[cfg(test)]
 mod tests;
