@@ -83,6 +83,7 @@ impl<'a> Parser<'a> {
         let result = match token.kind {
             TokenKind::Let => self.declaration().map_err(|err| vec![err]),
             TokenKind::If => self.if_statement(),
+            TokenKind::Function => self.function_declaration(),
             _ => self.expression().map_err(|err| vec![err]).map(Stmt::Expr),
         }?;
 
@@ -150,6 +151,41 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Stmt::Cond(stmt))
+    }
+
+    fn function_declaration(&mut self) -> Result<Stmt, Vec<ParserError>> {
+        self.tokens.next();
+
+        let name = self.consume_identifier().map_err(|e| vec![e])?;
+
+        self.skip_token(TokenKind::LeftParen).map_err(|e| vec![e])?;
+
+        let mut parameters = vec![];
+
+        if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
+            loop {
+                parameters.push(self.consume_identifier().map_err(|e| vec![e])?);
+
+                if self.tokens.match_tokens(token_iter![Comma]).is_none() {
+                    break;
+                }
+            }
+
+            if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
+                return Err(vec![parser_error!(
+                    MissingFnDeclParentheses,
+                    self.tokens.next().unwrap().line
+                )]);
+            }
+        }
+
+        let (body, _) = self.block(token_vec![BlockEnd])?;
+
+        Ok(Stmt::Decl(Decl::make_function_declaration(
+            name.to_string(),
+            parameters,
+            body,
+        )))
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -308,7 +344,7 @@ impl<'a> Parser<'a> {
 
             if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
                 return Err(parser_error!(
-                    MissingFunctionParentheses,
+                    MissingFnCallParentheses,
                     self.tokens.next().unwrap().line
                 ));
             }
@@ -407,7 +443,8 @@ impl ParserError {
         match &self.kind {
             UnexpectedEoi => "fim inesperado de input".to_string(),
             MissingParentheses => "esperado ')' após a expressão".to_string(),
-            MissingFunctionParentheses => "esperado ')' ao fim da chamada de função".to_string(),
+            MissingFnCallParentheses => "esperado ')' ao fim da chamada de função".to_string(),
+            MissingFnDeclParentheses => "esperado ')' ao fim da declaração de função".to_string(),
             UnexpectedToken(token) => format!("token inesperado: {}", token.lexeme),
             InvalidAssignmentTarget => {
                 "o valor à direita do '=' não é um valor válido para receber atribuições"
@@ -428,7 +465,8 @@ pub enum ParserErrorKind {
     UnexpectedEoi,
     UnexpectedToken(Token),
     MissingParentheses,
-    MissingFunctionParentheses,
+    MissingFnCallParentheses,
+    MissingFnDeclParentheses,
     InvalidAssignmentTarget,
 }
 

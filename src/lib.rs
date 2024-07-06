@@ -4,6 +4,7 @@ use scanner::Scanner;
 use crate::parser::Parser;
 
 mod environment;
+mod function;
 mod interpreter;
 mod parser;
 mod scanner;

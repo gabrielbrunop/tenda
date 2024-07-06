@@ -1,7 +1,11 @@
 use core::fmt;
+use std::rc::Rc;
 
 use crate::{
+    add_native_fn,
     environment::Stack,
+    function::Function,
+    native_fn, param_list,
     stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
     value::Value,
 };
@@ -41,19 +45,20 @@ impl Interpreter {
     pub fn new() -> Self {
         let mut stack = Stack::new();
 
-        stack
-            .define(
-                "exiba".to_string(),
-                Value::Function(1, |args, _| {
-                    match &args[0] {
-                        Value::String(value) => println!("{}", value),
-                        value => println!("{}", value),
-                    }
+        add_native_fn!(
+            stack,
+            "exiba",
+            native_fn!(param_list!["texto"], |args, _, _| {
+                let text = match &args["texto"] {
+                    Value::String(value) => value.to_string(),
+                    value => format!("{}", value),
+                };
 
-                    Ok(Value::Nil)
-                }),
-            )
-            .unwrap();
+                println!("{}", text);
+
+                Ok(Value::Nil)
+            })
+        );
 
         Interpreter { stack }
     }
@@ -96,6 +101,31 @@ impl Interpreter {
                 let value = self.interpret_expr(value)?;
 
                 let _ = self.stack.define(name.clone(), value);
+            }
+            Decl::Function { name, params, body } => {
+                let body = (*body).clone();
+
+                let func =
+                    Function::new(params.clone(), Some(body), |params, body, interpreter| {
+                        interpreter.stack.allocate();
+
+                        for (param, arg) in params.iter() {
+                            let _ = interpreter.stack.define(param.clone(), arg.clone());
+                        }
+
+                        let value = match body {
+                            Some(body) => interpreter.interpret_stmt(&body),
+                            None => Ok(Value::Nil),
+                        };
+
+                        interpreter.stack.pop();
+
+                        value
+                    });
+
+                let _ = self
+                    .stack
+                    .define(name.clone(), Value::Function(Rc::new(func)));
             }
         };
 
@@ -316,13 +346,24 @@ impl Interpreter {
             .collect::<Result<Vec<_>, _>>()?;
 
         match callee {
-            Value::Function(arity, _) if args.len() != arity => Err(runtime_error!(
-                TypeError,
-                "esperado {} argumento(s) mas recebido {}",
-                arity,
-                args.len()
-            )),
-            Value::Function(_, func) => func(args, self),
+            Value::Function(func) if args.len() != func.context.params.len() => {
+                Err(runtime_error!(
+                    TypeError,
+                    "esperado {} argumento(s) mas recebido {}",
+                    func.context.params.len(),
+                    args.len()
+                ))
+            }
+            Value::Function(func) => (func.object)(
+                func.context
+                    .params
+                    .iter()
+                    .zip(args)
+                    .map(|(a, b)| (a.clone(), b))
+                    .collect(),
+                func.context.body.clone(),
+                self,
+            ),
             _ => Err(type_error!(
                 "não é possível chamar '{}' como função",
                 callee

@@ -1,7 +1,7 @@
 use crate::token::{Token, TokenKind};
 use crate::value::Value;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
     Expr(Expr),
     Decl(Decl),
@@ -11,9 +11,17 @@ pub enum Stmt {
 
 pub type Block = Vec<Stmt>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Decl {
-    Local { name: String, value: Box<Expr> },
+    Local {
+        name: String,
+        value: Box<Expr>,
+    },
+    Function {
+        name: String,
+        params: Vec<String>,
+        body: Box<Stmt>,
+    },
 }
 
 impl Decl {
@@ -23,9 +31,17 @@ impl Decl {
             value: Box::new(value),
         }
     }
+
+    pub fn make_function_declaration(name: String, params: Vec<String>, body: Stmt) -> Self {
+        Decl::Function {
+            name,
+            params,
+            body: Box::new(body),
+        }
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Cond {
     pub cond: Box<Expr>,
     pub then: Box<Stmt>,
@@ -42,7 +58,7 @@ impl Cond {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Binary {
         lhs: Box<Expr>,
