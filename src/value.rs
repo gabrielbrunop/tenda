@@ -55,12 +55,6 @@ impl Value {
     }
 }
 
-impl From<f64> for Value {
-    fn from(value: f64) -> Self {
-        Value::Number(value)
-    }
-}
-
 impl Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Value::*;
