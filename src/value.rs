@@ -66,7 +66,11 @@ impl Display for Value {
                     false => Value::FALSE_LITERAL.to_string(),
                 },
                 String(value) => format!("\"{}\"", value),
-                Function(..) => "Função".to_string(),
+                Function(value) => format!(
+                    "{}({})",
+                    value.context.name,
+                    value.context.params.join(", ")
+                ),
                 Nil => Value::NIL_LITERAL.to_string(),
             }
         )

@@ -47,8 +47,7 @@ impl Interpreter {
 
         add_native_fn!(
             stack,
-            "exiba",
-            native_fn!(param_list!["texto"], |args, _, _| {
+            native_fn!("exiba", param_list!["texto"], |args, _, _| {
                 let text = match &args["texto"] {
                     Value::String(value) => value.to_string(),
                     value => format!("{}", value),
@@ -105,8 +104,11 @@ impl Interpreter {
             Decl::Function { name, params, body } => {
                 let body = (*body).clone();
 
-                let func =
-                    Function::new(params.clone(), Some(body), |params, body, interpreter| {
+                let func = Function::new(
+                    name.to_string(),
+                    params.clone(),
+                    Some(body),
+                    |params, body, interpreter| {
                         interpreter.stack.allocate();
 
                         for (param, arg) in params.iter() {
@@ -121,7 +123,8 @@ impl Interpreter {
                         interpreter.stack.pop();
 
                         value
-                    });
+                    },
+                );
 
                 let _ = self
                     .stack
