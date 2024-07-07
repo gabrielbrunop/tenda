@@ -13,9 +13,14 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(params: Vec<String>, body: Option<Box<Stmt>>, object: FunctionObject) -> Self {
+    pub fn new(
+        name: String,
+        params: Vec<String>,
+        body: Option<Box<Stmt>>,
+        object: FunctionObject,
+    ) -> Self {
         Function {
-            context: FunctionContext::new(params, body),
+            context: FunctionContext::new(name, params, body),
             object,
         }
     }
@@ -23,13 +28,14 @@ impl Function {
 
 #[derive(Debug, PartialEq)]
 pub struct FunctionContext {
+    pub name: String,
     pub params: Vec<String>,
     pub body: Option<Box<Stmt>>,
 }
 
 impl FunctionContext {
-    pub fn new(params: Vec<String>, body: Option<Box<Stmt>>) -> Self {
-        FunctionContext { params, body }
+    pub fn new(name: String, params: Vec<String>, body: Option<Box<Stmt>>) -> Self {
+        FunctionContext { name, params, body }
     }
 }
 
@@ -41,15 +47,18 @@ type FunctionObject = fn(
 
 #[macro_export]
 macro_rules! add_native_fn {
-    ($stack:ident, $name:literal, $fn:expr) => {{
-        $stack.define($name.to_string(), $fn).unwrap();
+    ($stack:ident, $fn:expr) => {{
+        let func = $fn;
+        let func_name = $fn.context.name.clone();
+        let func_object = Value::Function(Rc::new(func));
+        $stack.define(func_name, func_object).unwrap();
     }};
 }
 
 #[macro_export]
 macro_rules! native_fn {
-    ($args:expr, $body:expr) => {
-        Value::Function(Rc::new(Function::new($args, None, $body)))
+    ($name:literal, $args:expr, $body:expr) => {
+        Function::new($name.to_string(), $args, None, $body)
     };
 }
 
