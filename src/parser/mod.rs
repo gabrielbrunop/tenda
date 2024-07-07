@@ -1,3 +1,5 @@
+use scope_tracker::{BlockScope, ScopeTracker};
+
 use crate::stmt::{BinaryOp, Cond, Decl, Expr, Stmt};
 use crate::token::{Token, TokenIterator, TokenKind};
 use crate::value::Value;
@@ -29,12 +31,14 @@ macro_rules! unexpected_eoi {
 
 pub struct Parser<'a> {
     tokens: TokenIterator<'a>,
+    scope: ScopeTracker,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(source: &'a [Token]) -> Parser<'a> {
         Parser {
             tokens: source.into(),
+            scope: ScopeTracker::new(),
         }
     }
 
@@ -84,6 +88,7 @@ impl<'a> Parser<'a> {
             TokenKind::Let => self.declaration().map_err(|err| vec![err]),
             TokenKind::If => self.if_statement(),
             TokenKind::Function => self.function_declaration(),
+            TokenKind::Return => self.return_statement(),
             _ => self.expression().map_err(|err| vec![err]).map(Stmt::Expr),
         }?;
 
@@ -95,9 +100,9 @@ impl<'a> Parser<'a> {
     fn block(
         &mut self,
         end_token_types: Vec<TokenKind>,
+        scope: BlockScope,
     ) -> Result<(Stmt, TokenKind), Vec<ParserError>> {
-        self.tokens.next();
-
+        let _guard = self.scope.guard(scope);
         let mut stmt_list: Vec<Stmt> = vec![];
 
         self.consume_newline().ok();
@@ -135,7 +140,8 @@ impl<'a> Parser<'a> {
 
         let (then_branch, block_end_delimiter) = match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Then => {
-                self.block(token_vec![BlockEnd, Else])?
+                self.tokens.next();
+                self.block(token_vec![BlockEnd, Else], BlockScope::If)?
             }
             Some(token) => return Err(vec![unexpected_token!(token.clone(), token.line)]),
             None => return Err(unexpected_eoi!(self)),
@@ -143,7 +149,8 @@ impl<'a> Parser<'a> {
 
         let stmt = match block_end_delimiter {
             TokenKind::Else => {
-                let (else_branch, _) = self.block(token_vec![BlockEnd])?;
+                self.tokens.next();
+                let (else_branch, _) = self.block(token_vec![BlockEnd], BlockScope::Else)?;
                 Cond::make_if_statement(condition, then_branch, Some(else_branch))
             }
             TokenKind::BlockEnd => Cond::make_if_statement(condition, then_branch, None),
@@ -179,7 +186,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let (body, _) = self.block(token_vec![BlockEnd])?;
+        let (body, _) = self.block(token_vec![BlockEnd], BlockScope::Function)?;
 
         Ok(Stmt::Decl(Decl::make_function_declaration(
             name.to_string(),
@@ -198,6 +205,23 @@ impl<'a> Parser<'a> {
         let value = Decl::make_local_declaration(name.to_string(), self.expression()?);
 
         Ok(Stmt::Decl(value))
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, Vec<ParserError>> {
+        let return_token = self.tokens.next().unwrap();
+
+        if !self.scope.has_scope(BlockScope::Function) {
+            return Err(vec![parser_error!(IllegalReturn, return_token.line)]);
+        }
+
+        let expr = match self.tokens.peek() {
+            Some(token) if token.kind != TokenKind::Newline => {
+                self.expression().map_err(|err| vec![err])
+            }
+            _ => Ok(Expr::make_literal(Value::Nil)),
+        }?;
+
+        Ok(Stmt::Return(Some(expr)))
     }
 
     fn expression(&mut self) -> Result<Expr, ParserError> {
@@ -450,6 +474,7 @@ impl ParserError {
                 "o valor à direita do '=' não é um valor válido para receber atribuições"
                     .to_string()
             }
+            IllegalReturn => "retorno fora de uma função".to_string(),
         }
     }
 }
@@ -468,7 +493,9 @@ pub enum ParserErrorKind {
     MissingFnCallParentheses,
     MissingFnDeclParentheses,
     InvalidAssignmentTarget,
+    IllegalReturn,
 }
 
+mod scope_tracker;
 #[cfg(test)]
 mod tests;

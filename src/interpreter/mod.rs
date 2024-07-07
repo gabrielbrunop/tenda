@@ -62,7 +62,11 @@ impl Interpreter {
         Interpreter { stack }
     }
 
-    pub fn interpret(&mut self, stmt_list: &[Stmt]) -> Result<Value, RuntimeError> {
+    pub fn eval(&mut self, stmt_list: &[Stmt]) -> Result<Value, RuntimeError> {
+        self.interpret(stmt_list)
+    }
+
+    fn interpret(&mut self, stmt_list: &[Stmt]) -> Result<Value, RuntimeError> {
         let stmt_iter = stmt_list.iter();
         let mut last_value = Value::Nil;
 
@@ -75,7 +79,7 @@ impl Interpreter {
         Ok(last_value)
     }
 
-    pub fn interpret_stmt(&mut self, stmt: &Stmt) -> Result<Value, RuntimeError> {
+    fn interpret_stmt(&mut self, stmt: &Stmt) -> Result<Value, RuntimeError> {
         use Stmt::*;
 
         match stmt {
@@ -83,10 +87,11 @@ impl Interpreter {
             Decl(decl) => self.interpret_decl(decl),
             Cond(cond) => self.interpret_if(cond),
             Block(block) => self.interpret_block(block),
+            Return(return_value) => self.interpret_return(return_value),
         }
     }
 
-    pub fn interpret_decl(&mut self, decl: &Decl) -> Result<Value, RuntimeError> {
+    fn interpret_decl(&mut self, decl: &Decl) -> Result<Value, RuntimeError> {
         match decl {
             Decl::Local { name, value } => {
                 if self.stack.local_exists(name) {
@@ -115,14 +120,15 @@ impl Interpreter {
                             let _ = interpreter.stack.define(param.clone(), arg.clone());
                         }
 
-                        let value = match body {
-                            Some(body) => interpreter.interpret_stmt(&body),
-                            None => Ok(Value::Nil),
-                        };
+                        if let Some(body) = body {
+                            interpreter.interpret_stmt(&body)?;
+                        }
+
+                        let value = interpreter.stack.consume_return().unwrap_or(Value::Nil);
 
                         interpreter.stack.pop();
 
-                        value
+                        Ok(value)
                     },
                 );
 
@@ -135,7 +141,7 @@ impl Interpreter {
         Ok(Value::Nil)
     }
 
-    pub fn interpret_expr(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn interpret_expr(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
         use Expr::*;
 
         match expr {
@@ -380,6 +386,15 @@ impl Interpreter {
         self.interpret(block)?;
 
         self.stack.pop();
+
+        Ok(Value::Nil)
+    }
+
+    fn interpret_return(&mut self, return_value: &Option<Expr>) -> Result<Value, RuntimeError> {
+        if let Some(expr) = return_value {
+            let value = self.interpret_expr(expr)?;
+            self.stack.set_return(value);
+        }
 
         Ok(Value::Nil)
     }

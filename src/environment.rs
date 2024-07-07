@@ -49,7 +49,21 @@ impl Stack {
     }
 
     pub fn pop(&mut self) {
+        if self.get_innermost().get_return().is_some() {
+            self.move_return_up().ok();
+        }
+
         self.scopes.pop();
+    }
+
+    pub fn set_return(&mut self, value: Value) {
+        self.get_innermost_mut().set_return(value);
+    }
+
+    pub fn consume_return(&mut self) -> Option<Value> {
+        let value = self.get_innermost().get_return().cloned();
+        self.get_innermost_mut().return_value = None;
+        value
     }
 }
 
@@ -61,16 +75,30 @@ impl Stack {
     fn get_innermost_mut(&mut self) -> &mut Environment {
         self.scopes.last_mut().unwrap_or(&mut self.global)
     }
+
+    fn move_return_up(&mut self) -> Result<(), ()> {
+        let len = self.scopes.len();
+        let return_value = self.get_innermost().get_return().ok_or(()).cloned()?;
+
+        self.scopes
+            .get_mut(len - 2)
+            .ok_or(())?
+            .set_return(return_value.clone());
+
+        Ok(())
+    }
 }
 
 struct Environment {
     state: HashMap<String, Value>,
+    return_value: Option<Value>,
 }
 
 impl Environment {
     pub fn new() -> Self {
         Environment {
             state: HashMap::new(),
+            return_value: None,
         }
     }
 
@@ -97,5 +125,13 @@ impl Environment {
         } else {
             Err(())
         }
+    }
+
+    pub fn set_return(&mut self, value: Value) {
+        self.return_value = Some(value);
+    }
+
+    pub fn get_return(&self) -> Option<&Value> {
+        self.return_value.as_ref()
     }
 }
