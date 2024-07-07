@@ -210,6 +210,7 @@ impl<'a> Scanner<'a> {
             "seja" => token!(Let, "seja", self.line),
             "se" => token!(If, "se", self.line),
             "então" => token!(Then, "então", self.line),
+            "retorne" => token!(Return, "retorne", self.line),
             "senão" => token!(Else, "senão", self.line),
             "fim" => token!(BlockEnd, "fim", self.line),
             "ou" => token!(Or, "ou", self.line),

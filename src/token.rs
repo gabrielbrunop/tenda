@@ -95,6 +95,7 @@ pub enum TokenKind {
     Function,
     Then,
     Else,
+    Return,
     BlockEnd,
     Identifier,
     EqualSign,

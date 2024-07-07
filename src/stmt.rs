@@ -7,7 +7,10 @@ pub enum Stmt {
     Decl(Decl),
     Cond(Cond),
     Block(Block),
+    Return(Return),
 }
+
+pub type Return = Option<Expr>;
 
 pub type Block = Vec<Stmt>;
 
