@@ -1,7 +1,9 @@
 use std::fmt::Display;
 use std::{fmt, rc::Rc};
 
-use crate::function::Function;
+use crate::scanner::token::Literal;
+
+use super::function::Function;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -13,10 +15,6 @@ pub enum Value {
 }
 
 impl Value {
-    pub const TRUE_LITERAL: &'static str = "verdadeiro";
-    pub const FALSE_LITERAL: &'static str = "falso";
-    pub const NIL_LITERAL: &'static str = "Nada";
-
     pub fn get_type(&self) -> ValueType {
         use Value::*;
 
@@ -26,18 +24,6 @@ impl Value {
             String(_) => ValueType::String,
             Function(..) => ValueType::Function,
             Nil => ValueType::Nil,
-        }
-    }
-
-    pub fn to_number(&self) -> Result<f64, ValueError> {
-        use Value::*;
-
-        match self {
-            Number(value) => Ok(*value),
-            _ => Err(ValueError::UnsupportedTypeConversion(
-                self.get_type(),
-                ValueType::Number,
-            )),
         }
     }
 
@@ -62,8 +48,8 @@ impl Display for Value {
             match self {
                 Number(value) => value.to_string(),
                 Boolean(value) => match *value {
-                    true => Value::TRUE_LITERAL.to_string(),
-                    false => Value::FALSE_LITERAL.to_string(),
+                    true => Literal::TRUE_LITERAL.to_string(),
+                    false => Literal::FALSE_LITERAL.to_string(),
                 },
                 String(value) => format!("\"{}\"", value),
                 Function(value) => format!(
@@ -71,9 +57,22 @@ impl Display for Value {
                     value.context.name,
                     value.context.params.join(", ")
                 ),
-                Nil => Value::NIL_LITERAL.to_string(),
+                Nil => Literal::NIL_LITERAL.to_string(),
             }
         )
+    }
+}
+
+impl From<Literal> for Value {
+    fn from(literal: Literal) -> Self {
+        use Literal::*;
+
+        match literal {
+            Number(value) => Value::Number(value),
+            String(value) => Value::String(value),
+            Boolean(value) => Value::Boolean(value),
+            Nil => Value::Nil,
+        }
     }
 }
 
@@ -99,8 +98,4 @@ impl Display for ValueType {
 
         write!(f, "{}", str)
     }
-}
-
-pub enum ValueError {
-    UnsupportedTypeConversion(ValueType, ValueType),
 }

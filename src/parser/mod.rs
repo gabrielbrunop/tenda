@@ -1,9 +1,10 @@
 use scope_tracker::{BlockScope, ScopeTracker};
+use stmt::{BinaryOp, Cond, Decl, Expr, Stmt};
 
-use crate::stmt::{BinaryOp, Cond, Decl, Expr, Stmt};
-use crate::token::{Token, TokenIterator, TokenKind};
-use crate::value::Value;
-use crate::{token_iter, token_vec, with_ignoring_newline};
+use crate::{
+    scanner::token::{Literal, Token, TokenIterator, TokenKind},
+    token_iter, token_vec, with_ignoring_newline,
+};
 use std::fmt;
 
 macro_rules! parser_error {
@@ -218,7 +219,7 @@ impl<'a> Parser<'a> {
             Some(token) if token.kind != TokenKind::Newline => {
                 self.expression().map_err(|err| vec![err])
             }
-            _ => Ok(Expr::make_literal(Value::Nil)),
+            _ => Ok(Expr::make_literal(Literal::Nil)),
         }?;
 
         Ok(Stmt::Return(Some(expr)))
@@ -236,7 +237,7 @@ impl<'a> Parser<'a> {
 
             return match expr {
                 Expr::Variable { name } => {
-                    let name: Expr = Expr::make_literal(Value::String(name));
+                    let name: Expr = Expr::make_literal(Literal::String(name));
                     Ok(Expr::make_binary(name, BinaryOp::Assignment, value))
                 }
                 _ => Err(parser_error!(InvalidAssignmentTarget, equal_sign.line)),
@@ -402,7 +403,7 @@ impl<'a> Parser<'a> {
             }),
             Identifier => {
                 let name = match token.literal.as_ref().unwrap() {
-                    Value::String(string) => string,
+                    Literal::String(string) => string,
                     _ => unreachable!(),
                 };
 
@@ -433,7 +434,7 @@ impl<'a> Parser<'a> {
         match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Identifier => {
                 match token.literal.as_ref().unwrap() {
-                    Value::String(string) => Ok(string.to_string()),
+                    Literal::String(string) => Ok(string.to_string()),
                     _ => unreachable!(),
                 }
             }
@@ -497,5 +498,6 @@ pub enum ParserErrorKind {
 }
 
 mod scope_tracker;
+pub mod stmt;
 #[cfg(test)]
 mod tests;

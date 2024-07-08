@@ -1,4 +1,4 @@
-use crate::{parser::*, scanner::Scanner, value::Value};
+use crate::{parser::*, scanner::Scanner};
 
 fn parse<T: ToString>(string: T) -> Result<Vec<Stmt>, Vec<ParserError>> {
     let input = string.to_string();
@@ -20,9 +20,9 @@ fn inequality() {
     assert_eq!(
         *parse("1 não for 1").unwrap().first().unwrap(),
         Stmt::Expr(Expr::make_binary(
-            Expr::make_literal(Value::Number(1.0)),
+            Expr::make_literal(Literal::Number(1.0)),
             BinaryOp::Inequality,
-            Expr::make_literal(Value::Number(1.0))
+            Expr::make_literal(Literal::Number(1.0))
         )),
         "parse inequality"
     )

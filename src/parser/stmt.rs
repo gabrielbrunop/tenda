@@ -1,5 +1,4 @@
-use crate::token::{Token, TokenKind};
-use crate::value::Value;
+use crate::scanner::token::{Literal, Token, TokenKind};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
@@ -80,7 +79,7 @@ pub enum Expr {
         expr: Box<Expr>,
     },
     Literal {
-        value: Value,
+        value: Literal,
     },
     Variable {
         name: String,
@@ -103,7 +102,7 @@ impl Expr {
         }
     }
 
-    pub fn make_literal(value: Value) -> Self {
+    pub fn make_literal(value: Literal) -> Self {
         Expr::Literal { value }
     }
 

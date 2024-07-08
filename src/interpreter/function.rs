@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use crate::{
     interpreter::{Interpreter, RuntimeError},
-    stmt::Stmt,
-    value::Value,
+    parser::stmt::Stmt,
 };
+
+use super::value::Value;
 
 #[derive(Debug, PartialEq)]
 pub struct Function {

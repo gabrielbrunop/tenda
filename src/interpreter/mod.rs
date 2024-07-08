@@ -1,13 +1,13 @@
 use core::fmt;
 use std::rc::Rc;
 
+use environment::Stack;
+use function::Function;
+use value::Value;
+
 use crate::{
-    add_native_fn,
-    environment::Stack,
-    function::Function,
-    native_fn, param_list,
-    stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
-    value::Value,
+    add_native_fn, native_fn, param_list,
+    parser::stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
 };
 
 macro_rules! runtime_error {
@@ -148,7 +148,7 @@ impl Interpreter {
             Binary { lhs, op, rhs } => self.interpret_binary_op(lhs, *op, rhs),
             Unary { op, rhs } => self.interpret_unary_op(*op, rhs),
             Grouping { expr } => self.interpret_expr(expr),
-            Literal { value } => Ok(value.clone()),
+            Literal { value } => Ok(value.clone().into()),
             Call { callee, args } => self.interpret_call(callee, args),
             Variable { name } => self
                 .stack
@@ -168,7 +168,7 @@ impl Interpreter {
         op: BinaryOp,
         rhs: &Expr,
     ) -> Result<Value, RuntimeError> {
-        use crate::stmt::BinaryOp::*;
+        use BinaryOp::*;
         use Value::*;
 
         let lhs = self.interpret_expr(lhs)?;
@@ -330,7 +330,7 @@ impl Interpreter {
     }
 
     fn interpret_unary_op(&mut self, op: UnaryOp, rhs: &Expr) -> Result<Value, RuntimeError> {
-        use crate::stmt::UnaryOp::*;
+        use UnaryOp::*;
         use Value::*;
 
         let rhs = self.interpret_expr(rhs)?;
@@ -461,5 +461,8 @@ pub enum RuntimeErrorKind {
     AlreadyDeclared,
 }
 
+mod environment;
+mod function;
 #[cfg(test)]
 mod tests;
+mod value;

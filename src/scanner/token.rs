@@ -1,8 +1,6 @@
 use peekmore::{PeekMore, PeekMoreIterator};
 use std::slice::Iter;
 
-use crate::value::Value;
-
 #[macro_export]
 macro_rules! token_iter {
     ($($kind:expr),*) => {
@@ -49,12 +47,12 @@ macro_rules! with_ignoring_newline {
 pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
-    pub literal: Option<Value>,
+    pub literal: Option<Literal>,
     pub line: usize,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, lexeme: String, literal: Option<Value>, line: usize) -> Token {
+    pub fn new(kind: TokenKind, lexeme: String, literal: Option<Literal>, line: usize) -> Token {
         Token {
             kind,
             lexeme,
@@ -110,6 +108,20 @@ pub enum TokenKind {
     Comma,
     Newline,
     Eof,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    Number(f64),
+    String(String),
+    Boolean(bool),
+    Nil,
+}
+
+impl Literal {
+    pub const TRUE_LITERAL: &'static str = "verdadeiro";
+    pub const FALSE_LITERAL: &'static str = "falso";
+    pub const NIL_LITERAL: &'static str = "Nada";
 }
 
 pub struct TokenIterator<'a> {
