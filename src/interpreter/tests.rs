@@ -1,4 +1,4 @@
-use crate::{interpreter::*, parser::Parser, scanner::Scanner, value::Value};
+use crate::{interpreter::*, parser::Parser, scanner::Scanner};
 
 fn run<T: ToString>(string: T) -> Result<Value, RuntimeError> {
     let input = string.to_string();

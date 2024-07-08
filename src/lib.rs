@@ -3,14 +3,9 @@ use scanner::Scanner;
 
 use crate::parser::Parser;
 
-mod environment;
-mod function;
 mod interpreter;
 mod parser;
 mod scanner;
-mod stmt;
-mod token;
-mod value;
 
 macro_rules! print_errors {
     ($errs:expr, $msg:literal) => {

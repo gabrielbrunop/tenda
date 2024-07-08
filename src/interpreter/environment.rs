@@ -1,6 +1,6 @@
 use std::collections::{hash_map::Entry, HashMap};
 
-use crate::value::Value;
+use super::value::Value;
 
 pub struct Stack {
     global: Environment,
