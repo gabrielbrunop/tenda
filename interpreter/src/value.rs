@@ -2,9 +2,9 @@ use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
 
-use crate::scanner::token::Literal;
+use scanner::token::Literal;
 
-use super::function::Function;
+use crate::function::Function;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {

@@ -3,7 +3,7 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use super::value::ValueType;
+use crate::value::ValueType;
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 
@@ -28,7 +28,8 @@ pub enum RuntimeErrorKind {
 
 #[derive(Error, Debug, PartialEq, Clone)]
 pub struct RuntimeError {
-    pub kind: RuntimeErrorKind,
+    #[source]
+    pub source: RuntimeErrorKind,
     pub context: Option<String>,
 }
 
@@ -36,7 +37,7 @@ impl Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.context {
             Some(context) => write!(f, "{}", context),
-            None => write!(f, "{}", self.kind),
+            None => write!(f, "{}", self.source),
         }
     }
 }
@@ -44,7 +45,7 @@ impl Display for RuntimeError {
 impl From<RuntimeErrorKind> for RuntimeError {
     fn from(kind: RuntimeErrorKind) -> Self {
         RuntimeError {
-            kind,
+            source: kind,
             context: None,
         }
     }
@@ -56,7 +57,7 @@ macro_rules! type_err {
         let expected: ValueType = $expected.into();
         let found: ValueType = $found.into();
         Err(RuntimeError {
-            kind: RuntimeErrorKind::TypeError {
+            source: RuntimeErrorKind::TypeError {
                 expected: expected.clone(),
                 found: found.clone(),
             },
@@ -69,7 +70,7 @@ macro_rules! type_err {
 macro_rules! runtime_err {
     ($kind:expr, $message:expr) => {{
         Err(RuntimeError {
-            kind: $kind,
+            source: $kind,
             context: Some($message),
         })?
     }};

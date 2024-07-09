@@ -1,4 +1,4 @@
-use crate::scanner::token::{Literal, Token, TokenKind};
+use scanner::token::{Literal, Token, TokenKind};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {

@@ -1,11 +1,14 @@
-use parser_error::{ParserError, ParserErrorKind};
-use scope_tracker::{BlockScope, ScopeTracker};
-use stmt::{BinaryOp, Cond, Decl, Expr, Stmt};
+use scanner::{
+    token::{Literal, Token, TokenIterator, TokenKind},
+    token_iter, token_vec, with_ignoring_newline,
+};
 
 use crate::{
     parser_err,
-    scanner::token::{Literal, Token, TokenIterator, TokenKind},
-    token_iter, token_vec, unexpected_eoi, unexpected_token, with_ignoring_newline,
+    parser_error::{ParserError, ParserErrorKind},
+    scope_tracker::{BlockScope, ScopeTracker},
+    stmt::{BinaryOp, Cond, Decl, Expr, Stmt},
+    unexpected_eoi, unexpected_token,
 };
 
 pub struct Parser<'a> {
@@ -435,9 +438,3 @@ impl<'a> Parser<'a> {
         }
     }
 }
-
-mod parser_error;
-mod scope_tracker;
-pub mod stmt;
-#[cfg(test)]
-mod tests;

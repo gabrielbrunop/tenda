@@ -1,9 +1,8 @@
 use core::fmt;
 use std::fmt::Display;
 
+use scanner::token::Token;
 use thiserror::Error;
-
-use crate::scanner::token::Token;
 
 #[derive(Error, Debug)]
 pub struct ParserError {

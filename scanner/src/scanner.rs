@@ -1,6 +1,5 @@
-use scanner_error::{LexicalError, LexicalErrorKind};
-use token::{Literal, Token, TokenKind};
-
+use crate::scanner_error::{LexicalError, LexicalErrorKind};
+use crate::token::{Literal, Token, TokenKind};
 use crate::{lexical_error, token as t};
 use std::char;
 use std::iter::Peekable;
@@ -252,8 +251,3 @@ impl<'a> Scanner<'a> {
         true
     }
 }
-
-mod scanner_error;
-#[cfg(test)]
-mod tests;
-pub mod token;
