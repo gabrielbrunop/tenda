@@ -31,7 +31,7 @@ fn inequality() {
 #[test]
 fn multiple_primaries_unexpected_token() {
     assert!(matches!(
-        parse("1 2 3").unwrap_err().first().unwrap().kind,
+        parse("1 2 3").unwrap_err().first().unwrap().source,
         ParserErrorKind::UnexpectedToken(_)
     ))
 }
@@ -39,7 +39,7 @@ fn multiple_primaries_unexpected_token() {
 #[test]
 fn binary_op_sum_eoi() {
     assert!(matches!(
-        parse("1 +").unwrap_err().first().unwrap().kind,
+        parse("1 +").unwrap_err().first().unwrap().source,
         ParserErrorKind::UnexpectedEoi
     ))
 }
@@ -47,7 +47,7 @@ fn binary_op_sum_eoi() {
 #[test]
 fn binary_op_sum_missing_parentheses() {
     assert!(matches!(
-        parse("(1 + 1").unwrap_err().first().unwrap().kind,
+        parse("(1 + 1").unwrap_err().first().unwrap().source,
         ParserErrorKind::MissingParentheses
     ))
 }

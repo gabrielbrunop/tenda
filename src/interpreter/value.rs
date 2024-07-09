@@ -1,5 +1,6 @@
+use std::fmt;
 use std::fmt::Display;
-use std::{fmt, rc::Rc};
+use std::rc::Rc;
 
 use crate::scanner::token::Literal;
 
@@ -15,7 +16,7 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn get_type(&self) -> ValueType {
+    pub fn kind(&self) -> ValueType {
         use Value::*;
 
         match self {
@@ -76,12 +77,26 @@ impl From<Literal> for Value {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum ValueType {
     Number,
     Boolean,
     String,
     Function,
     Nil,
+}
+
+impl From<Value> for ValueType {
+    fn from(value: Value) -> Self {
+        use Value::*;
+        match value {
+            Number(_) => ValueType::Number,
+            Boolean(_) => ValueType::Boolean,
+            String(_) => ValueType::String,
+            Function(_) => ValueType::Function,
+            Nil => ValueType::Nil,
+        }
+    }
 }
 
 impl Display for ValueType {

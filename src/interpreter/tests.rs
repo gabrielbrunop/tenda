@@ -1,6 +1,7 @@
 use crate::{interpreter::*, parser::Parser, scanner::Scanner};
+use runtime_error::Result;
 
-fn run<T: ToString>(string: T) -> Result<Value, RuntimeError> {
+fn run<T: ToString>(string: T) -> Result<Value> {
     let input = string.to_string();
 
     let mut scanner = Scanner::new(&input);

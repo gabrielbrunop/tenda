@@ -43,7 +43,7 @@ macro_rules! with_ignoring_newline {
     }};
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
@@ -64,6 +64,10 @@ impl Token {
     pub fn eoi(line: usize) -> Token {
         const EOT: i32 = 0x04;
         token!(Eof, EOT, line)
+    }
+
+    pub fn clone_ref(&self) -> Token {
+        (*self).clone()
     }
 }
 
