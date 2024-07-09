@@ -20,7 +20,7 @@ pub enum RuntimeErrorKind {
     },
     #[error("a variável identificada por '{0}' não está definida neste escopo")]
     UndefinedReference(String),
-    #[error("variável identifica com {0} já estpa declarada neste escopo")]
+    #[error("variável identifica com {0} já está declarada neste escopo")]
     AlreadyDeclared(String),
     #[error("número de argumentos incorreto: esperado {}, encontrado {}", .expected, .found)]
     WrongNumberOfArguments { expected: usize, found: usize },

@@ -1,6 +1,44 @@
 use scanner::token::{Literal, Token, TokenKind};
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct Ast(pub Vec<Stmt>);
+
+impl Ast {
+    pub fn new() -> Self {
+        Ast(vec![])
+    }
+
+    pub fn push(&mut self, statement: Stmt) {
+        self.get_statements_mut().push(statement);
+    }
+
+    fn get_statements_mut(&mut self) -> &mut Vec<Stmt> {
+        &mut self.0
+    }
+}
+
+impl Default for Ast {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IntoIterator for Ast {
+    type Item = Stmt;
+    type IntoIter = std::vec::IntoIter<Stmt>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl From<Vec<Stmt>> for Ast {
+    fn from(value: Vec<Stmt>) -> Self {
+        Ast(value)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
     Expr(Expr),
     Decl(Decl),
@@ -11,7 +49,7 @@ pub enum Stmt {
 
 pub type Return = Option<Expr>;
 
-pub type Block = Vec<Stmt>;
+pub type Block = Ast;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Decl {
