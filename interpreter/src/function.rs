@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use parser::stmt::Stmt;
+use parser::ast::Stmt;
 
 use crate::interpreter::Interpreter;
 

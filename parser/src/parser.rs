@@ -4,10 +4,10 @@ use scanner::{
 };
 
 use crate::{
+    ast::{Ast, BinaryOp, Cond, Decl, Expr, Stmt},
     parser_err,
     parser_error::{ParserError, ParserErrorKind},
     scope_tracker::{BlockScope, ScopeTracker},
-    stmt::{BinaryOp, Cond, Decl, Expr, Stmt},
     unexpected_eoi, unexpected_token,
 };
 
@@ -24,7 +24,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Stmt>, Vec<ParserError>> {
+    pub fn parse(&mut self) -> Result<Ast, Vec<ParserError>> {
         let program = self.program()?;
 
         match self.tokens.peek() {
@@ -34,7 +34,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn program(&mut self) -> Result<Vec<Stmt>, Vec<ParserError>> {
+    fn program(&mut self) -> Result<Ast, Vec<ParserError>> {
         let mut stmt_list = vec![];
         let mut errors: Vec<ParserError> = vec![];
 
@@ -52,7 +52,7 @@ impl<'a> Parser<'a> {
         if !errors.is_empty() {
             Err(errors)
         } else {
-            Ok(stmt_list)
+            Ok(stmt_list.into())
         }
     }
 
@@ -85,7 +85,7 @@ impl<'a> Parser<'a> {
         scope: BlockScope,
     ) -> Result<(Stmt, TokenKind), Vec<ParserError>> {
         let _guard = self.scope.guard(scope);
-        let mut stmt_list: Vec<Stmt> = vec![];
+        let mut ast = Ast::new();
 
         self.consume_newline().ok();
 
@@ -100,7 +100,7 @@ impl<'a> Parser<'a> {
             }
 
             match self.statement() {
-                Ok(stmt) => stmt_list.push(stmt),
+                Ok(stmt) => ast.push(stmt),
                 Err(e) => return Err(e),
             };
         };
@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
         self.consume_newline().ok();
         self.skip_token(block_end_delimiter).map_err(|e| vec![e])?;
 
-        Ok((Stmt::Block(stmt_list), block_end_delimiter))
+        Ok((Stmt::Block(ast), block_end_delimiter))
     }
 
     fn if_statement(&mut self) -> Result<Stmt, Vec<ParserError>> {

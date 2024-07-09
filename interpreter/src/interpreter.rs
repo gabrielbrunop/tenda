@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use parser::stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp};
+use parser::ast::{Ast, BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp};
 
 use crate::{
     add_native_fn,
@@ -37,15 +37,14 @@ impl Interpreter {
         Interpreter { stack }
     }
 
-    pub fn eval(&mut self, stmt_list: &[Stmt]) -> Result<Value> {
-        self.interpret(stmt_list)
+    pub fn eval(&mut self, ast: Ast) -> Result<Value> {
+        self.interpret(ast)
     }
 
-    fn interpret(&mut self, stmt_list: &[Stmt]) -> Result<Value> {
-        let stmt_iter = stmt_list.iter();
+    fn interpret(&mut self, ast: Ast) -> Result<Value> {
         let mut last_value = Value::Nil;
 
-        for stmt in stmt_iter {
+        for stmt in ast {
             let value = self.interpret_stmt(stmt)?;
 
             last_value = value;
@@ -54,7 +53,7 @@ impl Interpreter {
         Ok(last_value)
     }
 
-    fn interpret_stmt(&mut self, stmt: &Stmt) -> Result<Value> {
+    fn interpret_stmt(&mut self, stmt: Stmt) -> Result<Value> {
         use Stmt::*;
 
         match stmt {
@@ -66,34 +65,32 @@ impl Interpreter {
         }
     }
 
-    fn interpret_decl(&mut self, decl: &Decl) -> Result<Value> {
+    fn interpret_decl(&mut self, decl: Decl) -> Result<Value> {
         match decl {
             Decl::Local { name, value } => {
-                if self.stack.local_exists(name) {
+                if self.stack.local_exists(&name) {
                     let name = name.to_string();
                     Err(RuntimeErrorKind::AlreadyDeclared(name))?;
                 }
 
-                let value = self.interpret_expr(value)?;
+                let value = self.interpret_expr(*value)?;
 
-                let _ = self.stack.define(name.clone(), value);
+                let _ = self.stack.define(name, value);
             }
             Decl::Function { name, params, body } => {
-                let body = (*body).clone();
-
                 let func = Function::new(
                     name.to_string(),
-                    params.clone(),
+                    params,
                     Some(body),
                     |params, body, interpreter| {
                         interpreter.stack.allocate();
 
-                        for (param, arg) in params.iter() {
-                            let _ = interpreter.stack.define(param.clone(), arg.clone());
+                        for (param, arg) in params.into_iter() {
+                            let _ = interpreter.stack.define(param, arg);
                         }
 
                         if let Some(body) = body {
-                            interpreter.interpret_stmt(&body)?;
+                            interpreter.interpret_stmt(*body)?;
                         }
 
                         let value = interpreter.stack.consume_return().unwrap_or(Value::Nil);
@@ -104,34 +101,32 @@ impl Interpreter {
                     },
                 );
 
-                let _ = self
-                    .stack
-                    .define(name.clone(), Value::Function(Rc::new(func)));
+                let _ = self.stack.define(name, Value::Function(Rc::new(func)));
             }
         };
 
         Ok(Value::Nil)
     }
 
-    fn interpret_expr(&mut self, expr: &Expr) -> Result<Value> {
+    fn interpret_expr(&mut self, expr: Expr) -> Result<Value> {
         use Expr::*;
 
         match expr {
-            Binary { lhs, op, rhs } => self.interpret_binary_op(lhs, *op, rhs),
-            Unary { op, rhs } => self.interpret_unary_op(*op, rhs),
-            Grouping { expr } => self.interpret_expr(expr),
-            Literal { value } => Ok(value.clone().into()),
-            Call { callee, args } => self.interpret_call(callee, args),
+            Binary { lhs, op, rhs } => self.interpret_binary_op(*lhs, op, *rhs),
+            Unary { op, rhs } => self.interpret_unary_op(op, *rhs),
+            Grouping { expr } => self.interpret_expr(*expr),
+            Literal { value } => Ok(value.into()),
+            Call { callee, args } => self.interpret_call(*callee, args),
             Variable { name } => self
                 .stack
-                .find(name)
-                .ok_or(RuntimeErrorKind::UndefinedReference(name.clone()))
+                .find(&name)
+                .ok_or(RuntimeErrorKind::UndefinedReference(name))
                 .map_err(|e| e.into())
                 .cloned(),
         }
     }
 
-    fn interpret_binary_op(&mut self, lhs: &Expr, op: BinaryOp, rhs: &Expr) -> Result<Value> {
+    fn interpret_binary_op(&mut self, lhs: Expr, op: BinaryOp, rhs: Expr) -> Result<Value> {
         use BinaryOp::*;
         use Value::*;
 
@@ -261,7 +256,7 @@ impl Interpreter {
         }
     }
 
-    fn interpret_unary_op(&mut self, op: UnaryOp, rhs: &Expr) -> Result<Value> {
+    fn interpret_unary_op(&mut self, op: UnaryOp, rhs: Expr) -> Result<Value> {
         use UnaryOp::*;
         use Value::*;
 
@@ -282,11 +277,11 @@ impl Interpreter {
         Ok(expr)
     }
 
-    fn interpret_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value> {
+    fn interpret_call(&mut self, callee: Expr, args: Vec<Expr>) -> Result<Value> {
         let callee = self.interpret_expr(callee)?;
 
         let args = args
-            .iter()
+            .into_iter()
             .map(|arg| self.interpret_expr(arg))
             .collect::<Result<Vec<_>>>()?;
 
@@ -317,7 +312,7 @@ impl Interpreter {
         }
     }
 
-    fn interpret_block(&mut self, block: &Block) -> Result<Value> {
+    fn interpret_block(&mut self, block: Block) -> Result<Value> {
         self.stack.allocate();
 
         self.interpret(block)?;
@@ -327,7 +322,7 @@ impl Interpreter {
         Ok(Value::Nil)
     }
 
-    fn interpret_return(&mut self, return_value: &Option<Expr>) -> Result<Value> {
+    fn interpret_return(&mut self, return_value: Option<Expr>) -> Result<Value> {
         if let Some(expr) = return_value {
             let value = self.interpret_expr(expr)?;
             self.stack.set_return(value);
@@ -336,17 +331,17 @@ impl Interpreter {
         Ok(Value::Nil)
     }
 
-    fn interpret_if(&mut self, cond: &Cond) -> Result<Value> {
+    fn interpret_if(&mut self, cond: Cond) -> Result<Value> {
         let Cond {
             cond,
             then,
             or_else,
         } = cond;
 
-        if self.interpret_expr(cond)?.to_bool() {
-            self.interpret_stmt(then)?;
+        if self.interpret_expr(*cond)?.to_bool() {
+            self.interpret_stmt(*then)?;
         } else if let Some(or_else) = or_else {
-            self.interpret_stmt(or_else)?;
+            self.interpret_stmt(*or_else)?;
         };
 
         Ok(Value::Nil)

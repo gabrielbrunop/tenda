@@ -4,6 +4,7 @@ use crate::{environment::Environment, value::Value};
 
 type Result<T> = std::result::Result<T, StackError>;
 
+#[derive(Debug)]
 pub struct Stack {
     global: Environment,
     scopes: Vec<Environment>,
@@ -18,27 +19,34 @@ impl Stack {
     }
 
     pub fn local_exists(&self, name: &String) -> bool {
-        self.get_innermost().exists(name)
+        self.get_innermost().has(name)
     }
 
-    pub fn define(&mut self, name: String, value: Value) -> Result<&Value> {
-        match self.get_innermost_mut().define(name, value) {
-            Ok(value) => Ok(value),
-            Err(_) => Err(StackError::AlreadyDeclared),
+    pub fn define(&mut self, name: String, value: Value) -> Result<()> {
+        let scope = self.get_innermost_mut();
+
+        if scope.has(&name) {
+            return Err(StackError::AlreadyDeclared);
         }
+
+        scope.set(name, value);
+
+        Ok(())
     }
 
     pub fn set(&mut self, name: String, value: Value) -> Result<()> {
-        for scope in self.scopes.iter_mut().rev() {
-            if scope.exists(&name) {
-                let _ = scope.set(name, value);
-                return Ok(());
-            }
-        }
+        let scope = self
+            .scopes
+            .iter_mut()
+            .rev()
+            .find(|scope| scope.has(&name))
+            .unwrap_or(&mut self.global);
 
-        match self.global.set(name, value) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(StackError::NotFound),
+        if scope.has(&name) {
+            scope.set(name, value);
+            Ok(())
+        } else {
+            Err(StackError::AssignToUndefined(name))
         }
     }
 
@@ -109,8 +117,8 @@ impl Default for Stack {
 
 #[derive(Error, Debug, PartialEq, Clone)]
 pub enum StackError {
-    #[error("Variable already declared")]
+    #[error("variable already declared")]
     AlreadyDeclared,
-    #[error("Variable not found")]
-    NotFound,
+    #[error("assignment to undefined variable")]
+    AssignToUndefined(String),
 }

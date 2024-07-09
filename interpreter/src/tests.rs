@@ -22,7 +22,7 @@ fn run<T: ToString>(string: T) -> Result<Value> {
 
     let mut interpreter: Interpreter = Interpreter::new();
 
-    interpreter.eval(&ast)
+    interpreter.eval(ast)
 }
 
 #[test]
