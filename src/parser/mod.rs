@@ -1,34 +1,12 @@
+use parser_error::{ParserError, ParserErrorKind};
 use scope_tracker::{BlockScope, ScopeTracker};
 use stmt::{BinaryOp, Cond, Decl, Expr, Stmt};
 
 use crate::{
+    parser_err,
     scanner::token::{Literal, Token, TokenIterator, TokenKind},
-    token_iter, token_vec, with_ignoring_newline,
+    token_iter, token_vec, unexpected_eoi, unexpected_token, with_ignoring_newline,
 };
-use std::fmt;
-
-macro_rules! parser_error {
-    ($kind:expr, $line:expr) => {{
-        use ParserErrorKind::*;
-        ParserError {
-            kind: $kind,
-            line: $line,
-        }
-    }};
-}
-
-macro_rules! unexpected_token {
-    ($token:expr, $line:expr) => {{
-        let token = $token;
-        parser_error!(UnexpectedToken($token), token.line)
-    }};
-}
-
-macro_rules! unexpected_eoi {
-    ($self:ident) => {{
-        vec![parser_error!(UnexpectedEoi, $self.tokens.get_last_line())]
-    }};
-}
 
 pub struct Parser<'a> {
     tokens: TokenIterator<'a>,
@@ -48,8 +26,8 @@ impl<'a> Parser<'a> {
 
         match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Eof => Ok(program),
-            Some(token) => Err(vec![unexpected_token!((*token).clone(), self.line)]),
-            None => Err(unexpected_eoi!(self)),
+            Some(token) => Err(vec![unexpected_token!(token)]),
+            None => Err(vec![unexpected_eoi!(self)])?,
         }
     }
 
@@ -89,7 +67,7 @@ impl<'a> Parser<'a> {
             TokenKind::Let => self.declaration().map_err(|err| vec![err]),
             TokenKind::If => self.if_statement(),
             TokenKind::Function => self.function_declaration(),
-            TokenKind::Return => self.return_statement(),
+            TokenKind::Return => self.return_statement().map_err(|err| vec![err]),
             _ => self.expression().map_err(|err| vec![err]).map(Stmt::Expr),
         }?;
 
@@ -125,7 +103,7 @@ impl<'a> Parser<'a> {
         };
 
         if block_end_delimiter == TokenKind::Eof {
-            return Err(unexpected_eoi!(self));
+            return Err(vec![unexpected_eoi!(self)]);
         }
 
         self.consume_newline().ok();
@@ -144,8 +122,8 @@ impl<'a> Parser<'a> {
                 self.tokens.next();
                 self.block(token_vec![BlockEnd, Else], BlockScope::If)?
             }
-            Some(token) => return Err(vec![unexpected_token!(token.clone(), token.line)]),
-            None => return Err(unexpected_eoi!(self)),
+            Some(token) => return Err(vec![unexpected_token!(token)]),
+            None => return Err(vec![unexpected_eoi!(self)]),
         };
 
         let stmt = match block_end_delimiter {
@@ -180,10 +158,11 @@ impl<'a> Parser<'a> {
             }
 
             if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
-                return Err(vec![parser_error!(
-                    MissingFnDeclParentheses,
-                    self.tokens.next().unwrap().line
-                )]);
+                Err(vec![parser_err!(
+                    MissingParentheses,
+                    self.tokens.next().unwrap().line,
+                    "esperado ')' após declaração de função".to_string()
+                )])?;
             }
         }
 
@@ -208,17 +187,15 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Decl(value))
     }
 
-    fn return_statement(&mut self) -> Result<Stmt, Vec<ParserError>> {
+    fn return_statement(&mut self) -> Result<Stmt, ParserError> {
         let return_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Function) {
-            return Err(vec![parser_error!(IllegalReturn, return_token.line)]);
+            return Err(parser_err!(IllegalReturn, return_token.line));
         }
 
         let expr = match self.tokens.peek() {
-            Some(token) if token.kind != TokenKind::Newline => {
-                self.expression().map_err(|err| vec![err])
-            }
+            Some(token) if token.kind != TokenKind::Newline => self.expression(),
             _ => Ok(Expr::make_literal(Literal::Nil)),
         }?;
 
@@ -240,7 +217,10 @@ impl<'a> Parser<'a> {
                     let name: Expr = Expr::make_literal(Literal::String(name));
                     Ok(Expr::make_binary(name, BinaryOp::Assignment, value))
                 }
-                _ => Err(parser_error!(InvalidAssignmentTarget, equal_sign.line)),
+                _ => Err(parser_err!(
+                    InvalidAssignmentTarget(equal_sign.clone_ref()),
+                    equal_sign.line
+                )),
             };
         }
 
@@ -269,7 +249,7 @@ impl<'a> Parser<'a> {
                 } else if self.tokens.matches_sequence(token_iter![Not, Equals]) {
                     Some(BinaryOp::Inequality)
                 } else if let Some(token) = self.tokens.match_tokens(token_iter![Not]) {
-                    return Err(unexpected_token!(token.clone(), token.line));
+                    return Err(unexpected_token!(token));
                 } else {
                     None
                 }
@@ -368,10 +348,11 @@ impl<'a> Parser<'a> {
             }
 
             if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
-                return Err(parser_error!(
-                    MissingFnCallParentheses,
-                    self.tokens.next().unwrap().line
-                ));
+                Err(parser_err!(
+                    MissingParentheses,
+                    self.tokens.next().unwrap().line,
+                    "esperado ')' após chamada de função".to_string()
+                ))?;
             }
         }
 
@@ -396,7 +377,7 @@ impl<'a> Parser<'a> {
                 let expr = self.expression()?;
 
                 if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
-                    return Err(parser_error!(MissingParentheses, line));
+                    return Err(parser_err!(MissingParentheses, line));
                 }
 
                 Ok(Expr::make_grouping(expr))
@@ -409,8 +390,8 @@ impl<'a> Parser<'a> {
 
                 Ok(Expr::make_variable(name.clone()))
             }
-            Eof => Err(parser_error!(UnexpectedEoi, line)),
-            _ => Err(unexpected_token!(token.clone(), line)),
+            Eof => Err(parser_err!(UnexpectedEoi, line)),
+            _ => Err(unexpected_token!(token)),
         }
     }
 }
@@ -425,8 +406,8 @@ impl<'a> Parser<'a> {
 
         match self.tokens.peek() {
             Some(token) if matches!(token.kind, Eof | BlockEnd) => Ok(()),
-            Some(token) => Err(unexpected_token!((*token).clone(), token.line)),
-            None => Err(parser_error!(UnexpectedEoi, self.tokens.get_last_line())),
+            Some(token) => Err(unexpected_token!(token)),
+            None => Err(parser_err!(UnexpectedEoi, self.tokens.get_last_line())),
         }
     }
 
@@ -438,8 +419,8 @@ impl<'a> Parser<'a> {
                     _ => unreachable!(),
                 }
             }
-            Some(token) => Err(unexpected_token!(token.clone(), token.line)),
-            None => Err(parser_error!(UnexpectedEoi, self.tokens.get_last_line())),
+            Some(token) => Err(unexpected_token!(token)),
+            None => Err(parser_err!(UnexpectedEoi, self.tokens.get_last_line())),
         }
     }
 
@@ -447,56 +428,15 @@ impl<'a> Parser<'a> {
         match self.tokens.next() {
             Some(token) if token.kind == token_kind => Ok(()),
             Some(token) if token.kind == TokenKind::Eof => {
-                Err(parser_error!(UnexpectedEoi, token.line))
+                Err(parser_err!(UnexpectedEoi, token.line))
             }
-            Some(token) => Err(unexpected_token!(token.clone(), token.line)),
-            None => Err(parser_error!(UnexpectedEoi, self.tokens.get_last_line())),
+            Some(token) => Err(unexpected_token!(token)),
+            None => Err(parser_err!(UnexpectedEoi, self.tokens.get_last_line())),
         }
     }
 }
 
-#[derive(Debug)]
-pub struct ParserError {
-    line: usize,
-    kind: ParserErrorKind,
-}
-
-impl ParserError {
-    pub fn message(&self) -> String {
-        use ParserErrorKind::*;
-
-        match &self.kind {
-            UnexpectedEoi => "fim inesperado de input".to_string(),
-            MissingParentheses => "esperado ')' após a expressão".to_string(),
-            MissingFnCallParentheses => "esperado ')' ao fim da chamada de função".to_string(),
-            MissingFnDeclParentheses => "esperado ')' ao fim da declaração de função".to_string(),
-            UnexpectedToken(token) => format!("token inesperado: {}", token.lexeme),
-            InvalidAssignmentTarget => {
-                "o valor à direita do '=' não é um valor válido para receber atribuições"
-                    .to_string()
-            }
-            IllegalReturn => "retorno fora de uma função".to_string(),
-        }
-    }
-}
-
-impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (na linha {})", self.message(), self.line)
-    }
-}
-
-#[derive(Debug)]
-pub enum ParserErrorKind {
-    UnexpectedEoi,
-    UnexpectedToken(Token),
-    MissingParentheses,
-    MissingFnCallParentheses,
-    MissingFnDeclParentheses,
-    InvalidAssignmentTarget,
-    IllegalReturn,
-}
-
+mod parser_error;
 mod scope_tracker;
 pub mod stmt;
 #[cfg(test)]

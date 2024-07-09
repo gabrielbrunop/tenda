@@ -1,21 +1,10 @@
+use scanner_error::{LexicalError, LexicalErrorKind};
 use token::{Literal, Token, TokenKind};
 
-use crate::token as t;
-use core::fmt;
+use crate::{lexical_error, token as t};
 use std::char;
-use std::fmt::Display;
 use std::iter::Peekable;
 use std::str::Chars;
-
-macro_rules! lexical_error {
-    ($kind:expr, $line:expr) => {{
-        use LexicalErrorKind::*;
-        LexicalError {
-            kind: $kind,
-            line: $line,
-        }
-    }};
-}
 
 pub struct Scanner<'a> {
     source: Peekable<Chars<'a>>,
@@ -90,7 +79,7 @@ impl<'a> Scanner<'a> {
                     }
                     _ => t!(Slash, "/", self.line).into(),
                 },
-                _ => lexical_error!(UnexpectedChar(c), self.line).into(),
+                _ => Err(lexical_error!(UnexpectedChar(c), self.line)),
             };
 
             match token {
@@ -126,7 +115,7 @@ impl<'a> Scanner<'a> {
                     break;
                 }
                 '\n' => {
-                    return lexical_error!(UnexpectedStringEol, self.line).into();
+                    Err(lexical_error!(UnexpectedStringEol, self.line))?;
                 }
                 _ => {
                     string.push(peeked);
@@ -152,7 +141,7 @@ impl<'a> Scanner<'a> {
 
             match peeked {
                 c if is_unexpected(c) => {
-                    return lexical_error!(UnexpectedChar(c), self.line).into();
+                    Err(lexical_error!(UnexpectedChar(c), self.line))?;
                 }
                 c if c.is_numeric() || c == '.' => {
                     if c == '.' {
@@ -170,7 +159,7 @@ impl<'a> Scanner<'a> {
             number.starts_with('0') && !number.starts_with("0.") && number != "0";
 
         if illegal_leading_zero {
-            return lexical_error!(LeadingZeroNumberLiterals, self.line).into();
+            Err(lexical_error!(LeadingZeroNumberLiterals, self.line))?;
         }
 
         let number: f64 = number.parse().unwrap();
@@ -264,45 +253,7 @@ impl<'a> Scanner<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct LexicalError {
-    pub line: usize,
-    pub kind: LexicalErrorKind,
-}
-
-impl LexicalError {
-    pub fn message(&self) -> String {
-        use LexicalErrorKind::*;
-
-        match self.kind {
-            LeadingZeroNumberLiterals => {
-                "zeros à esquerda em literais numéricos não são permitidos".to_string()
-            }
-            UnexpectedChar(c) => format!("caractere inesperado: {}", c),
-            UnexpectedStringEol => "fim de linha inesperado em texto".to_string(),
-        }
-    }
-}
-
-impl<T> From<LexicalError> for Result<T, LexicalError> {
-    fn from(val: LexicalError) -> Self {
-        Err(val)
-    }
-}
-
-impl Display for LexicalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (na linha {})", self.message(), self.line)
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum LexicalErrorKind {
-    LeadingZeroNumberLiterals,
-    UnexpectedStringEol,
-    UnexpectedChar(char),
-}
-
+mod scanner_error;
 #[cfg(test)]
 mod tests;
 pub mod token;

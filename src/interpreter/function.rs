@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{
-    interpreter::{Interpreter, RuntimeError},
-    parser::stmt::Stmt,
-};
+use crate::{interpreter::Interpreter, parser::stmt::Stmt};
 
+use super::runtime_error::Result;
 use super::value::Value;
 
 #[derive(Debug, PartialEq)]
@@ -44,7 +42,7 @@ type FunctionObject = fn(
     params: HashMap<String, Value>,
     body: Option<Box<Stmt>>,
     interpreter: &mut Interpreter,
-) -> Result<Value, RuntimeError>;
+) -> Result<Value>;
 
 #[macro_export]
 macro_rules! add_native_fn {

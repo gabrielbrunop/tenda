@@ -1,41 +1,15 @@
-use core::fmt;
 use std::rc::Rc;
-
-use environment::Stack;
-use function::Function;
-use value::Value;
 
 use crate::{
     add_native_fn, native_fn, param_list,
     parser::stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
+    runtime_err, type_err,
 };
-
-macro_rules! runtime_error {
-    ($kind:expr) => {{
-        use RuntimeErrorKind::*;
-        RuntimeError {
-            kind: $kind,
-            message: None,
-        }
-    }};
-    ($kind:expr, $message:literal, $($params:expr),*) => {{
-        use RuntimeErrorKind::*;
-        RuntimeError {
-            kind: $kind,
-            message: Some(format!($message, $($params),*)),
-        }
-    }};
-}
-
-macro_rules! type_error {
-    ($message:literal, $($params:expr),*) => {
-        runtime_error!(
-            TypeError,
-            $message,
-            $($params.get_type()),*
-        )
-    };
-}
+use environment::Stack;
+use function::Function;
+use runtime_error::Result;
+use runtime_error::{RuntimeError, RuntimeErrorKind};
+use value::{Value, ValueType};
 
 pub struct Interpreter {
     stack: Stack,
@@ -62,11 +36,11 @@ impl Interpreter {
         Interpreter { stack }
     }
 
-    pub fn eval(&mut self, stmt_list: &[Stmt]) -> Result<Value, RuntimeError> {
+    pub fn eval(&mut self, stmt_list: &[Stmt]) -> Result<Value> {
         self.interpret(stmt_list)
     }
 
-    fn interpret(&mut self, stmt_list: &[Stmt]) -> Result<Value, RuntimeError> {
+    fn interpret(&mut self, stmt_list: &[Stmt]) -> Result<Value> {
         let stmt_iter = stmt_list.iter();
         let mut last_value = Value::Nil;
 
@@ -79,7 +53,7 @@ impl Interpreter {
         Ok(last_value)
     }
 
-    fn interpret_stmt(&mut self, stmt: &Stmt) -> Result<Value, RuntimeError> {
+    fn interpret_stmt(&mut self, stmt: &Stmt) -> Result<Value> {
         use Stmt::*;
 
         match stmt {
@@ -91,15 +65,12 @@ impl Interpreter {
         }
     }
 
-    fn interpret_decl(&mut self, decl: &Decl) -> Result<Value, RuntimeError> {
+    fn interpret_decl(&mut self, decl: &Decl) -> Result<Value> {
         match decl {
             Decl::Local { name, value } => {
                 if self.stack.local_exists(name) {
-                    return Err(runtime_error!(
-                        AlreadyDeclared,
-                        "a variável identificada por '{}' já foi declarada neste escopo",
-                        name
-                    ));
+                    let name = name.to_string();
+                    Err(RuntimeErrorKind::AlreadyDeclared(name))?;
                 }
 
                 let value = self.interpret_expr(value)?;
@@ -141,7 +112,7 @@ impl Interpreter {
         Ok(Value::Nil)
     }
 
-    fn interpret_expr(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
+    fn interpret_expr(&mut self, expr: &Expr) -> Result<Value> {
         use Expr::*;
 
         match expr {
@@ -153,21 +124,13 @@ impl Interpreter {
             Variable { name } => self
                 .stack
                 .find(name)
-                .ok_or(runtime_error!(
-                    UndefinedReference,
-                    "a variável identificada por '{}' não está definida neste escopo",
-                    name
-                ))
+                .ok_or(RuntimeErrorKind::UndefinedReference(name.clone()))
+                .map_err(|e| e.into())
                 .cloned(),
         }
     }
 
-    fn interpret_binary_op(
-        &mut self,
-        lhs: &Expr,
-        op: BinaryOp,
-        rhs: &Expr,
-    ) -> Result<Value, RuntimeError> {
+    fn interpret_binary_op(&mut self, lhs: &Expr, op: BinaryOp, rhs: &Expr) -> Result<Value> {
         use BinaryOp::*;
         use Value::*;
 
@@ -180,62 +143,36 @@ impl Interpreter {
                 (String(lhs), String(rhs)) => String(format!("{}{}", lhs, rhs)),
                 (String(lhs), rhs) => String(format!("{}{}", lhs, rhs)),
                 (lhs, String(rhs)) => String(format!("{}{}", lhs, rhs)),
-                (lhs, rhs) => {
-                    return Err(type_error!("não é possível somar '{}' e '{}'", lhs, rhs))
-                }
+                (lhs, rhs) => type_err!("não é possível somar '{}' e '{}'", lhs, rhs),
             },
             Subtract => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs - rhs),
-                (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível subtrair '{}' de '{}'",
-                        rhs,
-                        lhs
-                    ))
-                }
+                (lhs, rhs) => type_err!("não é possível subtrair '{}' de '{}'", rhs, lhs),
             },
             Multiply => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs * rhs),
                 (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível multiplicar '{}' por '{}'",
-                        lhs,
-                        rhs
-                    ))
+                    type_err!("não é possível multiplicar '{}' por '{}'", lhs, rhs)
                 }
             },
             Divide => match (lhs, rhs) {
-                (Number(_), Number(rhs)) if rhs == 0.0 => {
-                    return Err(runtime_error!(DivisionByZero))
-                }
+                (Number(_), Number(rhs)) if rhs == 0.0 => Err(RuntimeErrorKind::DivisionByZero)?,
                 (Number(lhs), Number(rhs)) => Number(lhs / rhs),
-                (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível dividir '{}' por '{}'",
-                        lhs,
-                        rhs
-                    ))
-                }
+                (lhs, rhs) => type_err!("não é possível dividir '{}' por '{}'", lhs, rhs),
             },
             Exponentiation => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs.powf(rhs)),
                 (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível elevar '{}' à potência de '{}'",
-                        lhs,
-                        rhs
-                    ))
+                    type_err!("não é possível elevar '{}' à potência de '{}'", lhs, rhs)
                 }
             },
             Modulo => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs % rhs),
-                (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível encontrar o resto da divisão de '{}' por '{}'",
-                        lhs,
-                        rhs
-                    ))
-                }
+                (lhs, rhs) => type_err!(
+                    "não é possível encontrar o resto da divisão de '{}' por '{}'",
+                    lhs,
+                    rhs
+                ),
             },
             Equality => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs == rhs),
@@ -252,56 +189,50 @@ impl Interpreter {
             Greater => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs > rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs > rhs),
-                (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
-                        lhs,
-                        rhs
-                    ))
-                }
+                (lhs, rhs) => type_err!(
+                    "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
+                    lhs,
+                    rhs
+                ),
             },
             GreaterOrEqual => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs >= rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs >= rhs),
-                (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
-                        lhs,
-                        rhs
-                    ))
-                }
+                (lhs, rhs) => type_err!(
+                    "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
+                    lhs,
+                    rhs
+                ),
             },
             Less => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs < rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs < rhs),
-                (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
-                        lhs,
-                        rhs
-                    ))
-                }
+                (lhs, rhs) => type_err!(
+                    "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
+                    lhs,
+                    rhs
+                ),
             },
             LessOrEqual => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs <= rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs <= rhs),
-                (lhs, rhs) => {
-                    return Err(type_error!(
-                        "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
-                        lhs,
-                        rhs
-                    ))
-                }
+                (lhs, rhs) => type_err!(
+                    "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
+                    lhs,
+                    rhs
+                ),
             },
             Assignment => match (lhs, rhs) {
                 (String(lhs), rhs) => {
-                    self.stack.set(lhs.clone(), rhs.clone()).map_err(|_| {
-                        runtime_error!(
-                            AlreadyDeclared,
-                            "a variável identificada por '{}' precisa ser definida com `seja`",
-                            lhs
+                    if self.stack.set(lhs.clone(), rhs.clone()).is_err() {
+                        runtime_err!(
+                            RuntimeErrorKind::AlreadyDeclared(lhs.clone()),
+                            format!(
+                                "a variável identificada por '{}' precisa ser definida com `seja`",
+                                lhs
+                            )
                         )
-                    })?;
+                    }
 
                     rhs
                 }
@@ -324,12 +255,12 @@ impl Interpreter {
         };
 
         match expr {
-            Number(value) if value.abs() == f64::INFINITY => Err(runtime_error!(NumberOverflow)),
+            Number(value) if value.abs() == f64::INFINITY => Err(RuntimeErrorKind::NumberOverflow)?,
             _ => Ok(expr),
         }
     }
 
-    fn interpret_unary_op(&mut self, op: UnaryOp, rhs: &Expr) -> Result<Value, RuntimeError> {
+    fn interpret_unary_op(&mut self, op: UnaryOp, rhs: &Expr) -> Result<Value> {
         use UnaryOp::*;
         use Value::*;
 
@@ -338,7 +269,11 @@ impl Interpreter {
         let expr = match op {
             Negative => match rhs {
                 Number(rhs) => Number(-rhs),
-                _ => return Err(type_error!("não é possível negar '{}'", rhs)),
+                _ => type_err!(
+                    "não é possível negar valor de tipo '{1}'; esperado '{0}'",
+                    ValueType::Number,
+                    rhs
+                ),
             },
             LogicalNot => Value::Boolean(!rhs.to_bool()),
         };
@@ -346,22 +281,20 @@ impl Interpreter {
         Ok(expr)
     }
 
-    fn interpret_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value, RuntimeError> {
+    fn interpret_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value> {
         let callee = self.interpret_expr(callee)?;
 
         let args = args
             .iter()
             .map(|arg| self.interpret_expr(arg))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         match callee {
             Value::Function(func) if args.len() != func.context.params.len() => {
-                Err(runtime_error!(
-                    TypeError,
-                    "esperado {} argumento(s) mas recebido {}",
-                    func.context.params.len(),
-                    args.len()
-                ))
+                Err(RuntimeErrorKind::WrongNumberOfArguments {
+                    expected: func.context.params.len(),
+                    found: args.len(),
+                })?
             }
             Value::Function(func) => (func.object)(
                 func.context
@@ -373,14 +306,17 @@ impl Interpreter {
                 func.context.body.clone(),
                 self,
             ),
-            _ => Err(type_error!(
-                "não é possível chamar '{}' como função",
-                callee
-            )),
+            _ => runtime_err!(
+                RuntimeErrorKind::TypeError {
+                    expected: ValueType::Function,
+                    found: callee.kind()
+                },
+                format!("não é possível chamar '{}' como função", callee.kind())
+            ),
         }
     }
 
-    fn interpret_block(&mut self, block: &Block) -> Result<Value, RuntimeError> {
+    fn interpret_block(&mut self, block: &Block) -> Result<Value> {
         self.stack.allocate();
 
         self.interpret(block)?;
@@ -390,7 +326,7 @@ impl Interpreter {
         Ok(Value::Nil)
     }
 
-    fn interpret_return(&mut self, return_value: &Option<Expr>) -> Result<Value, RuntimeError> {
+    fn interpret_return(&mut self, return_value: &Option<Expr>) -> Result<Value> {
         if let Some(expr) = return_value {
             let value = self.interpret_expr(expr)?;
             self.stack.set_return(value);
@@ -399,7 +335,7 @@ impl Interpreter {
         Ok(Value::Nil)
     }
 
-    fn interpret_if(&mut self, cond: &Cond) -> Result<Value, RuntimeError> {
+    fn interpret_if(&mut self, cond: &Cond) -> Result<Value> {
         let Cond {
             cond,
             then,
@@ -422,47 +358,9 @@ impl Default for Interpreter {
     }
 }
 
-#[derive(Debug)]
-pub struct RuntimeError {
-    kind: RuntimeErrorKind,
-    message: Option<String>,
-}
-
-impl RuntimeError {
-    pub fn message(&self) -> String {
-        use RuntimeErrorKind::*;
-
-        if let Some(message) = &self.message {
-            return message.to_string();
-        }
-
-        match &self.kind {
-            DivisionByZero => "divisão por zero não é permitida".to_string(),
-            NumberOverflow => "números muito grandes não são permitidos".to_string(),
-            TypeError => "erro de tipo".to_string(),
-            UndefinedReference => "referência não encontrada".to_string(),
-            AlreadyDeclared => "variável já declarada neste escopo".to_string(),
-        }
-    }
-}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message())
-    }
-}
-
-#[derive(Debug)]
-pub enum RuntimeErrorKind {
-    DivisionByZero,
-    NumberOverflow,
-    TypeError,
-    UndefinedReference,
-    AlreadyDeclared,
-}
-
 mod environment;
 mod function;
+mod runtime_error;
 #[cfg(test)]
 mod tests;
 mod value;
