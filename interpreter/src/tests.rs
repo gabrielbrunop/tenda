@@ -1,5 +1,7 @@
-use crate::{interpreter::*, parser::Parser, scanner::Scanner};
-use runtime_error::Result;
+use parser::parser::Parser;
+use scanner::scanner::Scanner;
+
+use crate::{interpreter::Interpreter, runtime_error::Result, value::Value};
 
 fn run<T: ToString>(string: T) -> Result<Value> {
     let input = string.to_string();
@@ -20,7 +22,7 @@ fn run<T: ToString>(string: T) -> Result<Value> {
 
     let mut interpreter: Interpreter = Interpreter::new();
 
-    interpreter.interpret(&ast)
+    interpreter.eval(&ast)
 }
 
 #[test]

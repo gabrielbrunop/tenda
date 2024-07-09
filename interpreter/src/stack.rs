@@ -1,0 +1,116 @@
+use thiserror::Error;
+
+use crate::{environment::Environment, value::Value};
+
+type Result<T> = std::result::Result<T, StackError>;
+
+pub struct Stack {
+    global: Environment,
+    scopes: Vec<Environment>,
+}
+
+impl Stack {
+    pub fn new() -> Self {
+        Stack {
+            global: Environment::new(),
+            scopes: vec![],
+        }
+    }
+
+    pub fn local_exists(&self, name: &String) -> bool {
+        self.get_innermost().exists(name)
+    }
+
+    pub fn define(&mut self, name: String, value: Value) -> Result<&Value> {
+        match self.get_innermost_mut().define(name, value) {
+            Ok(value) => Ok(value),
+            Err(_) => Err(StackError::AlreadyDeclared),
+        }
+    }
+
+    pub fn set(&mut self, name: String, value: Value) -> Result<()> {
+        for scope in self.scopes.iter_mut().rev() {
+            if scope.exists(&name) {
+                let _ = scope.set(name, value);
+                return Ok(());
+            }
+        }
+
+        match self.global.set(name, value) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(StackError::NotFound),
+        }
+    }
+
+    pub fn find(&mut self, name: &String) -> Option<&Value> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(var) = scope.get(name) {
+                return Some(var);
+            }
+        }
+
+        self.global.get(name)
+    }
+
+    pub fn allocate(&mut self) {
+        self.scopes.push(Environment::new());
+    }
+
+    pub fn pop(&mut self) {
+        if self.get_innermost().get_return().is_some() {
+            self.move_return_up();
+        }
+
+        self.scopes.pop();
+    }
+
+    pub fn set_return(&mut self, value: Value) {
+        self.get_innermost_mut().set_return(value);
+    }
+
+    pub fn consume_return(&mut self) -> Option<Value> {
+        let value = self.get_innermost().get_return().cloned();
+        self.get_innermost_mut().clear_return();
+        value
+    }
+}
+
+impl Stack {
+    fn get_innermost(&self) -> &Environment {
+        self.scopes.last().unwrap_or(&self.global)
+    }
+
+    fn get_innermost_mut(&mut self) -> &mut Environment {
+        self.scopes.last_mut().unwrap_or(&mut self.global)
+    }
+
+    fn move_return_up(&mut self) {
+        let len = self.scopes.len();
+
+        let return_value = match self.get_innermost().get_return().cloned() {
+            Some(value) => value,
+            None => return,
+        };
+
+        let scope_above = match self.scopes.get_mut(len - 2) {
+            Some(scope) => scope,
+            None => return,
+        };
+
+        scope_above.set_return(return_value.clone());
+    }
+}
+
+impl Default for Stack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Clone)]
+pub enum StackError {
+    #[error("Variable already declared")]
+    AlreadyDeclared,
+    #[error("Variable not found")]
+    NotFound,
+}

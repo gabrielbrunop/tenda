@@ -1,0 +1,10 @@
+[package]
+name = "main"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+interpreter = { path = "../interpreter" }
+parser = { path = "../parser" }
+scanner = { path = "../scanner" }
+rustyline = "14.0.0"

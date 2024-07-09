@@ -32,6 +32,12 @@ impl ScopeTracker {
     }
 }
 
+impl Default for ScopeTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct ScopeGuard {
     stack: ScopeTracker,
 }

@@ -139,10 +139,6 @@ impl<'a> TokenIterator<'a> {
         self.tokens.peek()
     }
 
-    pub fn next(&mut self) -> Option<&Token> {
-        self.tokens.next()
-    }
-
     pub fn set_ignoring_newline(&mut self, value: bool) {
         self.ignoring_newline = value;
     }
@@ -202,6 +198,14 @@ impl<'a> TokenIterator<'a> {
         } else {
             None
         }
+    }
+}
+
+impl<'a> Iterator for TokenIterator<'a> {
+    type Item = &'a Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.tokens.next()
     }
 }
 

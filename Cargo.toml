@@ -1,11 +1,7 @@
-[package]
-name = "tenda"
-version = "0.1.0"
-edition = "2021"
-authors = ["Gabriel Bruno <gabrielbrunoes@gmail.com>"]
-license = "MIT"
+[workspace]
+members = ["interpreter", "parser", "scanner", "main"]
+resolver = "2"
 
-[dependencies]
-rustyline = "14.0.0"
+[workspace.dependencies]
 peekmore = "1.3.0"
 thiserror = "1.0"

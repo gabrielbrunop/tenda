@@ -1,15 +1,16 @@
 use std::rc::Rc;
 
+use parser::stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp};
+
 use crate::{
-    add_native_fn, native_fn, param_list,
-    parser::stmt::{BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp},
-    runtime_err, type_err,
+    add_native_fn,
+    function::Function,
+    native_fn, param_list, runtime_err,
+    runtime_error::{Result, RuntimeError, RuntimeErrorKind},
+    stack::Stack,
+    type_err,
+    value::{Value, ValueType},
 };
-use environment::Stack;
-use function::Function;
-use runtime_error::Result;
-use runtime_error::{RuntimeError, RuntimeErrorKind};
-use value::{Value, ValueType};
 
 pub struct Interpreter {
     stack: Stack,
@@ -357,10 +358,3 @@ impl Default for Interpreter {
         Self::new()
     }
 }
-
-mod environment;
-mod function;
-mod runtime_error;
-#[cfg(test)]
-mod tests;
-mod value;

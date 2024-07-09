@@ -1,11 +1,6 @@
-use interpreter::Interpreter;
-use scanner::Scanner;
-
-use crate::parser::Parser;
-
-mod interpreter;
-mod parser;
-mod scanner;
+use interpreter::interpreter::Interpreter;
+use parser::parser::Parser;
+use scanner::scanner::Scanner;
 
 macro_rules! print_errors {
     ($errs:expr, $msg:literal) => {

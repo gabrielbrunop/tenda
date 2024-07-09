@@ -1,4 +1,9 @@
-use crate::{scanner::*, token_iter};
+use crate::{
+    scanner::*,
+    scanner_error::LexicalError,
+    token::{Token, TokenKind},
+    token_iter,
+};
 
 fn scan<T: ToString>(string: T) -> Result<Vec<Token>, Vec<LexicalError>> {
     let input = string.to_string();

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{interpreter::Interpreter, parser::stmt::Stmt};
+use parser::stmt::Stmt;
+
+use crate::interpreter::Interpreter;
 
 use super::runtime_error::Result;
 use super::value::Value;

@@ -1,4 +1,10 @@
-use crate::{parser::*, scanner::Scanner};
+use scanner::{scanner::Scanner, token::Literal};
+
+use crate::{
+    parser::Parser,
+    parser_error::{ParserError, ParserErrorKind},
+    stmt::{BinaryOp, Expr, Stmt},
+};
 
 fn parse<T: ToString>(string: T) -> Result<Vec<Stmt>, Vec<ParserError>> {
     let input = string.to_string();
