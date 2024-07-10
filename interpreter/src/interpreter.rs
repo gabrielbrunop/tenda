@@ -20,19 +20,7 @@ impl Interpreter {
     pub fn new() -> Self {
         let mut stack = Stack::new();
 
-        add_native_fn!(
-            stack,
-            native_fn!("exiba", param_list!["texto"], |args, _, _| {
-                let text = match &args["texto"] {
-                    Value::String(value) => value.to_string(),
-                    value => format!("{}", value),
-                };
-
-                println!("{}", text);
-
-                Ok(Value::Nil)
-            })
-        );
+        Self::setup_native_bindings(&mut stack);
 
         Interpreter { stack }
     }
@@ -345,6 +333,24 @@ impl Interpreter {
         };
 
         Ok(Value::Nil)
+    }
+}
+
+impl Interpreter {
+    fn setup_native_bindings(stack: &mut Stack) {
+        add_native_fn!(
+            stack,
+            native_fn!("exiba", param_list!["texto"], |args, _, _| {
+                let text = match &args["texto"] {
+                    Value::String(value) => value.to_string(),
+                    value => format!("{}", value),
+                };
+
+                println!("{}", text);
+
+                Ok(Value::Nil)
+            })
+        );
     }
 }
 
