@@ -33,6 +33,8 @@ pub enum ParserErrorKind {
     InvalidAssignmentTarget(Token),
     #[error("retorno fora de uma função")]
     IllegalReturn,
+    #[error("parâmetro '{0}' duplicado na função")]
+    DuplicateParameter(String),
 }
 
 #[macro_export]
