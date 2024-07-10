@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use scanner::{
     token::{Literal, Token, TokenIterator, TokenKind},
     token_iter, token_vec, with_ignoring_newline,
@@ -149,25 +151,22 @@ impl<'a> Parser<'a> {
 
         self.skip_token(TokenKind::LeftParen).map_err(|e| vec![e])?;
 
-        let mut parameters = vec![];
+        let parameters = match self.tokens.match_tokens(token_iter![RightParen]) {
+            Some(_) => vec![],
+            None => {
+                let parameters = self.function_parameters(&name).map_err(|e| vec![e])?;
 
-        if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
-            loop {
-                parameters.push(self.consume_identifier().map_err(|e| vec![e])?);
-
-                if self.tokens.match_tokens(token_iter![Comma]).is_none() {
-                    break;
+                if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
+                    Err(vec![parser_err!(
+                        MissingParentheses,
+                        self.tokens.next().unwrap().line,
+                        "esperado ')' após declaração de função".to_string()
+                    )])?;
                 }
-            }
 
-            if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
-                Err(vec![parser_err!(
-                    MissingParentheses,
-                    self.tokens.next().unwrap().line,
-                    "esperado ')' após declaração de função".to_string()
-                )])?;
+                parameters
             }
-        }
+        };
 
         let (body, _) = self.block(token_vec![BlockEnd], BlockScope::Function)?;
 
@@ -176,6 +175,33 @@ impl<'a> Parser<'a> {
             parameters,
             body,
         )))
+    }
+
+    fn function_parameters(&mut self, function_name: &str) -> Result<Vec<String>, ParserError> {
+        let mut parameters = HashSet::new();
+
+        loop {
+            let parameter = self.consume_identifier()?;
+
+            if parameters.contains(&parameter) {
+                Err(parser_err!(
+                    DuplicateParameter(parameter.clone()),
+                    self.tokens.get_last_line(),
+                    format!(
+                        "parâmetro '{}' duplicado na função '{}'",
+                        parameter, function_name
+                    )
+                ))?;
+            }
+
+            parameters.insert(parameter);
+
+            if self.tokens.match_tokens(token_iter![Comma]).is_none() {
+                break;
+            }
+        }
+
+        Ok(parameters.into_iter().collect())
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParserError> {
