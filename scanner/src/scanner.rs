@@ -1,6 +1,6 @@
+use crate::lexical_error;
 use crate::scanner_error::{LexicalError, LexicalErrorKind};
-use crate::token::{Literal, Token, TokenKind};
-use crate::{lexical_error, token as t};
+use crate::token::{token, Literal, Token, TokenKind};
 use std::char;
 use std::iter::Peekable;
 use std::str::Chars;
@@ -35,35 +35,35 @@ impl<'a> Scanner<'a> {
                     self.line += 1;
                     match tokens.last() {
                         Some(token) if token.kind != TokenKind::Newline => {
-                            t!(Newline, "\n", self.line - 1).into()
+                            token!(Newline, "\n", self.line - 1).into()
                         }
                         _ => ignore_char!(),
                     }
                 }
                 c if c.is_whitespace() => Ok(None),
-                '(' => t!(LeftParen, ")", self.line).into(),
-                ')' => t!(RightParen, ")", self.line).into(),
-                '+' => t!(Plus, "+", self.line).into(),
-                '-' => t!(Minus, "-", self.line).into(),
-                '*' => t!(Star, "*", self.line).into(),
-                '^' => t!(Caret, "^", self.line).into(),
-                '%' => t!(Percent, "%", self.line).into(),
-                '=' => t!(EqualSign, "=", self.line).into(),
+                '(' => token!(LeftParen, ")", self.line).into(),
+                ')' => token!(RightParen, ")", self.line).into(),
+                '+' => token!(Plus, "+", self.line).into(),
+                '-' => token!(Minus, "-", self.line).into(),
+                '*' => token!(Star, "*", self.line).into(),
+                '^' => token!(Caret, "^", self.line).into(),
+                '%' => token!(Percent, "%", self.line).into(),
+                '=' => token!(EqualSign, "=", self.line).into(),
                 '"' => self.consume_string(c).map(Some),
-                ',' => t!(Comma, ",", self.line).into(),
+                ',' => token!(Comma, ",", self.line).into(),
                 '>' => match self.source.peek() {
                     Some('=') => {
                         self.source.next();
-                        t!(GreaterOrEqual, ">", self.line).into()
+                        token!(GreaterOrEqual, ">", self.line).into()
                     }
-                    _ => t!(Greater, ">", self.line).into(),
+                    _ => token!(Greater, ">", self.line).into(),
                 },
                 '<' => match self.source.peek() {
                     Some('=') => {
                         self.source.next();
-                        t!(LessOrEqual, ">", self.line).into()
+                        token!(LessOrEqual, ">", self.line).into()
                     }
-                    _ => t!(Less, ">", self.line).into(),
+                    _ => token!(Less, ">", self.line).into(),
                 },
                 c if c.is_ascii_digit() => self.consume_number(c).map(Some),
                 c if c.is_alphabetic() || c == '_' => self.consume_identifier(c).map(Some),
@@ -76,7 +76,7 @@ impl<'a> Scanner<'a> {
                         self.consume_multiline_comment();
                         ignore_char!()
                     }
-                    _ => t!(Slash, "/", self.line).into(),
+                    _ => token!(Slash, "/", self.line).into(),
                 },
                 _ => Err(lexical_error!(UnexpectedChar(c), self.line)),
             };
@@ -124,7 +124,7 @@ impl<'a> Scanner<'a> {
         }
 
         let string = string[1..].to_string();
-        let token = t!(String, &string, self.line, Literal::String(string));
+        let token = token!(String, &string, self.line, Literal::String(string));
 
         Ok(token)
     }
@@ -162,7 +162,7 @@ impl<'a> Scanner<'a> {
         }
 
         let number: f64 = number.parse().unwrap();
-        let token = t!(Number, &number, self.line, Literal::Number(number));
+        let token = token!(Number, &number, self.line, Literal::Number(number));
 
         Ok(token)
     }
@@ -183,32 +183,32 @@ impl<'a> Scanner<'a> {
 
         let token = match identifier.as_str() {
             Literal::TRUE_LITERAL => {
-                t!(
+                token!(
                     True,
                     Literal::TRUE_LITERAL,
                     self.line,
                     Literal::Boolean(true)
                 )
             }
-            Literal::FALSE_LITERAL => t!(
+            Literal::FALSE_LITERAL => token!(
                 False,
                 Literal::FALSE_LITERAL,
                 self.line,
                 Literal::Boolean(false)
             ),
-            Literal::NIL_LITERAL => t!(Nil, Literal::NIL_LITERAL, self.line, Literal::Nil),
-            "função" => t!(Function, "função", self.line),
-            "não" => t!(Not, "não", self.line),
-            "for" => t!(Equals, "for", self.line),
-            "seja" => t!(Let, "seja", self.line),
-            "se" => t!(If, "se", self.line),
-            "então" => t!(Then, "então", self.line),
-            "retorne" => t!(Return, "retorne", self.line),
-            "senão" => t!(Else, "senão", self.line),
-            "fim" => t!(BlockEnd, "fim", self.line),
-            "ou" => t!(Or, "ou", self.line),
-            "e" => t!(And, "e", self.line),
-            identifier => t!(
+            Literal::NIL_LITERAL => token!(Nil, Literal::NIL_LITERAL, self.line, Literal::Nil),
+            "função" => token!(Function, "função", self.line),
+            "não" => token!(Not, "não", self.line),
+            "for" => token!(Equals, "for", self.line),
+            "seja" => token!(Let, "seja", self.line),
+            "se" => token!(If, "se", self.line),
+            "então" => token!(Then, "então", self.line),
+            "retorne" => token!(Return, "retorne", self.line),
+            "senão" => token!(Else, "senão", self.line),
+            "fim" => token!(BlockEnd, "fim", self.line),
+            "ou" => token!(Or, "ou", self.line),
+            "e" => token!(And, "e", self.line),
+            identifier => token!(
                 Identifier,
                 identifier,
                 self.line,

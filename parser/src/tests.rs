@@ -1,12 +1,12 @@
-use scanner::{scanner::Scanner, token::Literal};
+use scanner::scanner::Scanner;
 
 use crate::{
-    ast::{Ast, BinaryOp, Expr, Stmt},
+    ast,
     parser::Parser,
     parser_error::{ParserError, ParserErrorKind},
 };
 
-fn parse<T: ToString>(string: T) -> Result<Ast, Vec<ParserError>> {
+fn parse<T: ToString>(string: T) -> Result<ast::Ast, Vec<ParserError>> {
     let input = string.to_string();
 
     let mut scanner = Scanner::new(&input);
@@ -25,10 +25,10 @@ fn parse<T: ToString>(string: T) -> Result<Ast, Vec<ParserError>> {
 fn inequality() {
     assert_eq!(
         parse("1 não for 1").unwrap().into_iter().next().unwrap(),
-        Stmt::Expr(Expr::make_binary(
-            Expr::make_literal(Literal::Number(1.0)),
-            BinaryOp::Inequality,
-            Expr::make_literal(Literal::Number(1.0))
+        ast::Stmt::Expr(ast::make_binary_expr!(
+            ast::make_literal_expr!(Number(1.0)),
+            ast::BinaryOperator::Inequality,
+            ast::make_literal_expr!(Number(1.0))
         )),
         "parse inequality"
     )

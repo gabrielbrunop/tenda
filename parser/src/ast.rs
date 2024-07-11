@@ -1,4 +1,4 @@
-use scanner::token::{Literal, Token, TokenKind};
+use scanner::token::{Token, TokenKind};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Ast(pub Vec<Stmt>);
@@ -6,14 +6,6 @@ pub struct Ast(pub Vec<Stmt>);
 impl Ast {
     pub fn new() -> Self {
         Ast(vec![])
-    }
-
-    pub fn push(&mut self, statement: Stmt) {
-        self.get_statements_mut().push(statement);
-    }
-
-    fn get_statements_mut(&mut self) -> &mut Vec<Stmt> {
-        &mut self.0
     }
 }
 
@@ -47,33 +39,53 @@ pub enum Stmt {
     Return(Return),
 }
 
-pub type Return = Option<Expr>;
+pub trait StmtVisitor<T> {
+    fn visit_expr(&mut self, expr: &Expr) -> T;
+    fn visit_decl(&mut self, decl: &Decl) -> T;
+    fn visit_cond(&mut self, cond: &Cond) -> T;
+    fn visit_block(&mut self, block: &Block) -> T;
+    fn visit_return(&mut self, return_stmt: &Return) -> T;
+}
 
-pub type Block = Ast;
+#[derive(Debug, PartialEq, Clone)]
+pub struct Return(pub Option<Expr>);
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Block(pub Ast);
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Decl {
-    Local {
-        name: String,
-        value: Box<Expr>,
-    },
-    Function {
-        name: String,
-        params: Vec<String>,
-        body: Box<Stmt>,
-    },
+    Local(LocalDecl),
+    Function(FunctionDecl),
 }
 
-impl Decl {
-    pub fn make_local_declaration(name: String, value: Expr) -> Self {
-        Decl::Local {
-            name,
-            value: Box::new(value),
-        }
-    }
+pub trait DeclVisitor<T> {
+    fn visit_local(&mut self, local: &LocalDecl) -> T;
+    fn visit_function(&mut self, function: &FunctionDecl) -> T;
+}
 
-    pub fn make_function_declaration(name: String, params: Vec<String>, body: Stmt) -> Self {
-        Decl::Function {
+#[derive(Debug, PartialEq, Clone)]
+pub struct LocalDecl {
+    pub name: String,
+    pub value: Expr,
+}
+
+impl LocalDecl {
+    pub fn new(name: String, value: Expr) -> Self {
+        LocalDecl { name, value }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionDecl {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body: Box<Stmt>,
+}
+
+impl FunctionDecl {
+    pub fn new(name: String, params: Vec<String>, body: Stmt) -> Self {
+        FunctionDecl {
             name,
             params,
             body: Box::new(body),
@@ -83,87 +95,114 @@ impl Decl {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Cond {
-    pub cond: Box<Expr>,
+    pub cond: Expr,
     pub then: Box<Stmt>,
     pub or_else: Option<Box<Stmt>>,
 }
 
-impl Cond {
-    pub fn make_if_statement(cond: Expr, then: Stmt, or_else: Option<Stmt>) -> Self {
-        Cond {
-            cond: Box::new(cond),
-            then: Box::new(then),
-            or_else: or_else.map(Box::new),
-        }
-    }
+#[derive(Debug, PartialEq, Clone)]
+pub enum Expr {
+    Binary(BinaryOp),
+    Unary(UnaryOp),
+    Call(Call),
+    Grouping(Grouping),
+    Literal(Literal),
+    Variable(Variable),
+}
+
+pub trait ExprVisitor<T> {
+    fn visit_binary(&mut self, binary: &BinaryOp) -> T;
+    fn visit_unary(&mut self, unary: &UnaryOp) -> T;
+    fn visit_call(&mut self, call: &Call) -> T;
+    fn visit_grouping(&mut self, grouping: &Grouping) -> T;
+    fn visit_literal(&mut self, literal: &Literal) -> T;
+    fn visit_variable(&mut self, variable: &Variable) -> T;
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Expr {
-    Binary {
-        lhs: Box<Expr>,
-        op: BinaryOp,
-        rhs: Box<Expr>,
-    },
-    Unary {
-        op: UnaryOp,
-        rhs: Box<Expr>,
-    },
-    Call {
-        callee: Box<Expr>,
-        args: Vec<Expr>,
-    },
-    Grouping {
-        expr: Box<Expr>,
-    },
-    Literal {
-        value: Literal,
-    },
-    Variable {
-        name: String,
-    },
+pub struct BinaryOp {
+    pub lhs: Box<Expr>,
+    pub op: BinaryOperator,
+    pub rhs: Box<Expr>,
 }
 
-impl Expr {
-    pub fn make_binary(lhs: Expr, op: BinaryOp, rhs: Expr) -> Self {
-        Expr::Binary {
+impl BinaryOp {
+    pub fn new(lhs: Expr, op: BinaryOperator, rhs: Expr) -> Self {
+        BinaryOp {
             lhs: Box::new(lhs),
             op,
             rhs: Box::new(rhs),
         }
     }
+}
 
-    pub fn make_unary(op: UnaryOp, rhs: Expr) -> Self {
-        Expr::Unary {
+#[derive(Debug, PartialEq, Clone)]
+pub struct UnaryOp {
+    pub op: UnaryOperator,
+    pub rhs: Box<Expr>,
+}
+
+impl UnaryOp {
+    pub fn new(op: UnaryOperator, rhs: Expr) -> Self {
+        UnaryOp {
             op,
             rhs: Box::new(rhs),
         }
     }
+}
 
-    pub fn make_literal(value: Literal) -> Self {
-        Expr::Literal { value }
-    }
+#[derive(Debug, PartialEq, Clone)]
+pub struct Call {
+    pub callee: Box<Expr>,
+    pub args: Vec<Expr>,
+}
 
-    pub fn make_grouping(expr: Expr) -> Self {
-        Expr::Grouping {
-            expr: Box::new(expr),
-        }
-    }
-
-    pub fn make_variable(value: String) -> Self {
-        Expr::Variable { name: value }
-    }
-
-    pub fn make_call(callee: Expr, args: Vec<Expr>) -> Self {
-        Expr::Call {
+impl Call {
+    pub fn new(callee: Expr, args: Vec<Expr>) -> Self {
+        Call {
             callee: Box::new(callee),
             args,
         }
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct Grouping {
+    pub expr: Box<Expr>,
+}
+
+impl Grouping {
+    pub fn new(expr: Expr) -> Self {
+        Grouping {
+            expr: Box::new(expr),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Literal {
+    pub value: scanner::token::Literal,
+}
+
+impl Literal {
+    pub fn new(value: scanner::token::Literal) -> Self {
+        Literal { value }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Variable {
+    pub name: String,
+}
+
+impl Variable {
+    pub fn new(name: String) -> Self {
+        Variable { name }
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum BinaryOp {
+pub enum BinaryOperator {
     Add,
     Subtract,
     Multiply,
@@ -181,9 +220,9 @@ pub enum BinaryOp {
     LogicalOr,
 }
 
-impl From<Token> for BinaryOp {
+impl From<Token> for BinaryOperator {
     fn from(value: Token) -> Self {
-        use BinaryOp::*;
+        use BinaryOperator::*;
 
         match value.kind {
             TokenKind::Plus => Add,
@@ -206,14 +245,14 @@ impl From<Token> for BinaryOp {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum UnaryOp {
+pub enum UnaryOperator {
     Negative,
     LogicalNot,
 }
 
-impl From<Token> for UnaryOp {
+impl From<Token> for UnaryOperator {
     fn from(value: Token) -> Self {
-        use UnaryOp::*;
+        use UnaryOperator::*;
 
         match value.kind {
             TokenKind::Minus => Negative,
@@ -222,3 +261,101 @@ impl From<Token> for UnaryOp {
         }
     }
 }
+
+macro_rules! make_function_decl {
+    ($name:expr, $parameters:expr, $body:expr) => {{
+        use $crate::ast::{Decl, FunctionDecl, Stmt};
+        Stmt::Decl(Decl::Function(FunctionDecl::new(
+            $name.to_string(),
+            $parameters,
+            $body,
+        )))
+    }};
+}
+
+macro_rules! make_local_decl {
+    ($name:expr, $value:expr) => {{
+        use $crate::ast::{Decl, LocalDecl, Stmt};
+        Stmt::Decl(Decl::Local(LocalDecl::new($name.to_string(), $value)))
+    }};
+}
+
+macro_rules! make_literal_expr {
+    ($value:expr) => {{
+        #[allow(unused_imports)]
+        use scanner::token::Literal::*;
+        $crate::ast::Expr::Literal($crate::ast::Literal::new($value))
+    }};
+}
+
+macro_rules! make_return_stmt {
+    ($value:expr) => {{
+        use $crate::ast::Stmt;
+        Stmt::Return($crate::ast::Return($value))
+    }};
+}
+
+macro_rules! make_binary_expr {
+    ($lhs:expr, $op:expr, $rhs:expr) => {{
+        use $crate::ast::Expr;
+        Expr::Binary($crate::ast::BinaryOp::new($lhs, $op, $rhs))
+    }};
+}
+
+macro_rules! make_unary_expr {
+    ($op:expr, $rhs:expr) => {{
+        use $crate::ast::Expr;
+        Expr::Unary($crate::ast::UnaryOp::new($op, $rhs))
+    }};
+}
+
+macro_rules! make_call_expr {
+    ($callee:expr, $args:expr) => {{
+        use $crate::ast::Expr;
+        Expr::Call($crate::ast::Call::new($callee, $args))
+    }};
+}
+
+macro_rules! make_grouping_expr {
+    ($expr:expr) => {{
+        use $crate::ast::Expr;
+        Expr::Grouping($crate::ast::Grouping::new($expr))
+    }};
+}
+
+macro_rules! make_variable_expr {
+    ($name:expr) => {{
+        use $crate::ast::Expr;
+        Expr::Variable($crate::ast::Variable::new($name.to_string()))
+    }};
+}
+
+macro_rules! make_cond_stmt {
+    ($cond:expr, $then:expr, $or_else:expr) => {{
+        use $crate::ast::{Cond, Stmt};
+        Stmt::Cond(Cond {
+            cond: $cond,
+            then: Box::new($then),
+            or_else: $or_else.map(Box::new),
+        })
+    }};
+}
+
+macro_rules! make_block_stmt {
+    ($statements:expr) => {{
+        use $crate::ast::{Block, Stmt};
+        Stmt::Block(Block($statements))
+    }};
+}
+
+pub(crate) use make_binary_expr;
+pub(crate) use make_block_stmt;
+pub(crate) use make_call_expr;
+pub(crate) use make_cond_stmt;
+pub(crate) use make_function_decl;
+pub(crate) use make_grouping_expr;
+pub(crate) use make_literal_expr;
+pub(crate) use make_local_decl;
+pub(crate) use make_return_stmt;
+pub(crate) use make_unary_expr;
+pub(crate) use make_variable_expr;

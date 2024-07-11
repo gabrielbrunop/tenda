@@ -57,7 +57,6 @@ macro_rules! parser_err {
     }};
 }
 
-#[macro_export]
 macro_rules! unexpected_token {
     ($token:expr) => {{
         let token = $token;
@@ -65,9 +64,11 @@ macro_rules! unexpected_token {
     }};
 }
 
-#[macro_export]
 macro_rules! unexpected_eoi {
     ($self:ident) => {
         parser_err!(UnexpectedEoi, $self.tokens.get_last_line())
     };
 }
+
+pub(crate) use unexpected_eoi;
+pub(crate) use unexpected_token;

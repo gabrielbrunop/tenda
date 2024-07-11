@@ -1,48 +1,6 @@
 use peekmore::{PeekMore, PeekMoreIterator};
 use std::slice::Iter;
 
-#[macro_export]
-macro_rules! token_iter {
-    ($($kind:expr),*) => {
-        {
-            use TokenKind::*;
-            vec![$($kind),*].iter()
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! token_vec {
-    ($($kind:expr),*) => {
-        {
-            use TokenKind::*;
-            vec![$($kind),*]
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! token {
-    ($kind:expr, $lexeme:expr, $line:expr) => {{
-        use TokenKind::*;
-        Token::new($kind, $lexeme.to_string(), None, $line)
-    }};
-    ($kind:expr, $lexeme:expr, $line:expr, $literal:expr) => {{
-        use TokenKind::*;
-        Token::new($kind, $lexeme.to_string(), Some($literal), $line)
-    }};
-}
-
-#[macro_export]
-macro_rules! with_ignoring_newline {
-    ($tokens:expr, $block:block) => {{
-        $tokens.set_ignoring_newline(true);
-        let result = $block;
-        $tokens.set_ignoring_newline(false);
-        result
-    }};
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
@@ -218,3 +176,46 @@ impl<'a> From<&'a [Token]> for TokenIterator<'a> {
         }
     }
 }
+
+#[macro_export]
+macro_rules! token_iter {
+    ($($kind:expr),*) => {
+        {
+            use $crate::token::TokenKind::*;
+            vec![$($kind),*].iter()
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! token_vec {
+    ($($kind:expr),*) => {
+        {
+            use $crate::token::TokenKind::*;
+            vec![$($kind),*]
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! with_ignoring_newline {
+    ($tokens:expr, $block:block) => {{
+        $tokens.set_ignoring_newline(true);
+        let result = $block;
+        $tokens.set_ignoring_newline(false);
+        result
+    }};
+}
+
+macro_rules! token {
+    ($kind:expr, $lexeme:expr, $line:expr) => {{
+        use TokenKind::*;
+        Token::new($kind, $lexeme.to_string(), None, $line)
+    }};
+    ($kind:expr, $lexeme:expr, $line:expr, $literal:expr) => {{
+        use TokenKind::*;
+        Token::new($kind, $lexeme.to_string(), Some($literal), $line)
+    }};
+}
+
+pub(crate) use token;

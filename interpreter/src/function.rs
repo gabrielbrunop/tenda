@@ -46,7 +46,6 @@ type FunctionObject = fn(
     interpreter: &mut Interpreter,
 ) -> Result<Value>;
 
-#[macro_export]
 macro_rules! add_native_fn {
     ($stack:ident, $fn:expr) => {{
         let func = $fn;
@@ -56,14 +55,12 @@ macro_rules! add_native_fn {
     }};
 }
 
-#[macro_export]
 macro_rules! native_fn {
     ($name:literal, $args:expr, $body:expr) => {
         Function::new($name.to_string(), $args, None, $body)
     };
 }
 
-#[macro_export]
 macro_rules! param_list {
     ($($kind:expr),*) => {
         {
@@ -71,3 +68,7 @@ macro_rules! param_list {
         }
     };
 }
+
+pub(crate) use add_native_fn;
+pub(crate) use native_fn;
+pub(crate) use param_list;

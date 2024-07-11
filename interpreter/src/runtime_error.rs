@@ -51,7 +51,6 @@ impl From<RuntimeErrorKind> for RuntimeError {
     }
 }
 
-#[macro_export]
 macro_rules! type_err {
     ($message:literal, $expected:expr, $found: expr) => {{
         let expected: ValueType = $expected.into();
@@ -66,7 +65,6 @@ macro_rules! type_err {
     }};
 }
 
-#[macro_export]
 macro_rules! runtime_err {
     ($kind:expr, $message:expr) => {{
         Err(RuntimeError {
@@ -75,3 +73,6 @@ macro_rules! runtime_err {
         })?
     }};
 }
+
+pub(crate) use runtime_err;
+pub(crate) use type_err;
