@@ -1,14 +1,11 @@
 use std::rc::Rc;
 
-use parser::ast::{Ast, BinaryOp, Block, Cond, Decl, Expr, Stmt, UnaryOp};
+use parser::ast::{self, DeclVisitor, ExprVisitor, StmtVisitor};
 
 use crate::{
-    add_native_fn,
-    function::Function,
-    native_fn, param_list, runtime_err,
-    runtime_error::{Result, RuntimeError, RuntimeErrorKind},
+    function::{add_native_fn, native_fn, param_list, Function},
+    runtime_error::{runtime_err, type_err, Result, RuntimeError, RuntimeErrorKind},
     stack::Stack,
-    type_err,
     value::{Value, ValueType},
 };
 
@@ -25,12 +22,9 @@ impl Interpreter {
         Interpreter { stack }
     }
 
-    pub fn eval(&mut self, ast: Ast) -> Result<Value> {
-        self.interpret(ast)
-    }
-
-    fn interpret(&mut self, ast: Ast) -> Result<Value> {
+    pub fn eval(&mut self, ast: &ast::Ast) -> Result<Value> {
         let mut last_value = Value::Nil;
+        let ast::Ast(ast) = ast;
 
         for stmt in ast {
             let value = self.interpret_stmt(stmt)?;
@@ -41,85 +35,143 @@ impl Interpreter {
         Ok(last_value)
     }
 
-    fn interpret_stmt(&mut self, stmt: Stmt) -> Result<Value> {
-        use Stmt::*;
+    fn interpret_stmt(&mut self, stmt: &ast::Stmt) -> Result<Value> {
+        use ast::Stmt::*;
 
         match stmt {
-            Expr(expr) => self.interpret_expr(expr),
-            Decl(decl) => self.interpret_decl(decl),
-            Cond(cond) => self.interpret_if(cond),
-            Block(block) => self.interpret_block(block),
-            Return(return_value) => self.interpret_return(return_value),
+            Expr(expr) => self.visit_expr(expr),
+            Decl(decl) => self.visit_decl(decl),
+            Cond(cond) => self.visit_cond(cond),
+            Block(block) => self.visit_block(block),
+            Return(return_value) => self.visit_return(return_value),
         }
     }
+}
 
-    fn interpret_decl(&mut self, decl: Decl) -> Result<Value> {
-        match decl {
-            Decl::Local { name, value } => {
-                if self.stack.local_exists(&name) {
-                    let name = name.to_string();
-                    Err(RuntimeErrorKind::AlreadyDeclared(name))?;
-                }
+impl StmtVisitor<Result<Value>> for Interpreter {
+    fn visit_decl(&mut self, decl: &ast::Decl) -> Result<Value> {
+        use ast::Decl::*;
 
-                let value = self.interpret_expr(*value)?;
-
-                let _ = self.stack.define(name, value);
-            }
-            Decl::Function { name, params, body } => {
-                let func = Function::new(
-                    name.to_string(),
-                    params,
-                    Some(body),
-                    |params, body, interpreter| {
-                        interpreter.stack.allocate();
-
-                        for (param, arg) in params.into_iter() {
-                            let _ = interpreter.stack.define(param, arg);
-                        }
-
-                        if let Some(body) = body {
-                            interpreter.interpret_stmt(*body)?;
-                        }
-
-                        let value = interpreter.stack.consume_return().unwrap_or(Value::Nil);
-
-                        interpreter.stack.pop();
-
-                        Ok(value)
-                    },
-                );
-
-                let _ = self.stack.define(name, Value::Function(Rc::new(func)));
-            }
+        let _ = match decl {
+            Local(local) => self.visit_local(local),
+            Function(function) => self.visit_function(function),
         };
 
         Ok(Value::Nil)
     }
 
-    fn interpret_expr(&mut self, expr: Expr) -> Result<Value> {
-        use Expr::*;
+    fn visit_expr(&mut self, expr: &ast::Expr) -> Result<Value> {
+        use ast::Expr::*;
 
         match expr {
-            Binary { lhs, op, rhs } => self.interpret_binary_op(*lhs, op, *rhs),
-            Unary { op, rhs } => self.interpret_unary_op(op, *rhs),
-            Grouping { expr } => self.interpret_expr(*expr),
-            Literal { value } => Ok(value.into()),
-            Call { callee, args } => self.interpret_call(*callee, args),
-            Variable { name } => self
-                .stack
-                .find(&name)
-                .ok_or(RuntimeErrorKind::UndefinedReference(name))
-                .map_err(|e| e.into())
-                .cloned(),
+            Binary(binary) => self.visit_binary(binary),
+            Unary(unary) => self.visit_unary(unary),
+            Grouping(grouping) => self.visit_grouping(grouping),
+            Literal(literal) => self.visit_literal(literal),
+            Call(call) => self.visit_call(call),
+            Variable(variable) => self.visit_variable(variable),
         }
     }
 
-    fn interpret_binary_op(&mut self, lhs: Expr, op: BinaryOp, rhs: Expr) -> Result<Value> {
-        use BinaryOp::*;
+    fn visit_block(&mut self, block: &ast::Block) -> Result<Value> {
+        let ast::Block(ast) = block;
+
+        self.stack.allocate();
+
+        self.eval(ast)?;
+
+        self.stack.pop();
+
+        Ok(Value::Nil)
+    }
+
+    fn visit_return(&mut self, return_stmt: &ast::Return) -> Result<Value> {
+        let ast::Return(value) = return_stmt;
+
+        if let Some(expr) = value {
+            let value = self.visit_expr(expr)?;
+            self.stack.set_return(value);
+        }
+
+        Ok(Value::Nil)
+    }
+
+    fn visit_cond(&mut self, cond: &ast::Cond) -> Result<Value> {
+        let ast::Cond {
+            cond,
+            then,
+            or_else,
+        } = cond;
+
+        if self.visit_expr(cond)?.to_bool() {
+            self.interpret_stmt(then)?;
+        } else if let Some(or_else) = or_else {
+            self.interpret_stmt(or_else)?;
+        };
+
+        Ok(Value::Nil)
+    }
+}
+
+impl DeclVisitor<Result<Value>> for Interpreter {
+    fn visit_local(&mut self, local: &ast::LocalDecl) -> Result<Value> {
+        let ast::LocalDecl { name, value } = local;
+
+        if self.stack.local_exists(name) {
+            let name = name.to_string();
+            Err(RuntimeErrorKind::AlreadyDeclared(name))?;
+        }
+
+        let value = self.visit_expr(value)?;
+
+        let _ = self.stack.define(name.clone(), value);
+
+        Ok(Value::Nil)
+    }
+
+    fn visit_function(&mut self, function: &ast::FunctionDecl) -> Result<Value> {
+        let ast::FunctionDecl { name, params, body } = function;
+
+        let func = Function::new(
+            name.to_string(),
+            params.clone(),
+            Some(body.clone()),
+            |params, body, interpreter| {
+                interpreter.stack.allocate();
+
+                for (param, arg) in params.into_iter() {
+                    let _ = interpreter.stack.define(param, arg);
+                }
+
+                if let Some(body) = body {
+                    interpreter.interpret_stmt(&body)?;
+                }
+
+                let value = interpreter.stack.consume_return().unwrap_or(Value::Nil);
+
+                interpreter.stack.pop();
+
+                Ok(value)
+            },
+        );
+
+        let _ = self
+            .stack
+            .define(name.clone(), Value::Function(Rc::new(func)));
+
+        Ok(Value::Nil)
+    }
+}
+
+impl ExprVisitor<Result<Value>> for Interpreter {
+    fn visit_binary(&mut self, binary: &ast::BinaryOp) -> Result<Value> {
+        let ast::BinaryOp { lhs, op, rhs } = binary;
+
+        use ast::BinaryOperator::*;
         use Value::*;
 
-        let lhs = self.interpret_expr(lhs)?;
-        let rhs = self.interpret_expr(rhs)?;
+        let lhs = self.visit_expr(lhs)?;
+        let rhs = self.visit_expr(rhs)?;
 
         let expr = match op {
             Add => match (lhs, rhs) {
@@ -244,11 +296,13 @@ impl Interpreter {
         }
     }
 
-    fn interpret_unary_op(&mut self, op: UnaryOp, rhs: Expr) -> Result<Value> {
-        use UnaryOp::*;
+    fn visit_unary(&mut self, unary: &ast::UnaryOp) -> Result<Value> {
+        let ast::UnaryOp { op, rhs } = unary;
+
+        use ast::UnaryOperator::*;
         use Value::*;
 
-        let rhs = self.interpret_expr(rhs)?;
+        let rhs = self.visit_expr(rhs)?;
 
         let expr = match op {
             Negative => match rhs {
@@ -265,12 +319,14 @@ impl Interpreter {
         Ok(expr)
     }
 
-    fn interpret_call(&mut self, callee: Expr, args: Vec<Expr>) -> Result<Value> {
-        let callee = self.interpret_expr(callee)?;
+    fn visit_call(&mut self, call: &ast::Call) -> Result<Value> {
+        let ast::Call { callee, args } = call;
+
+        let callee = self.visit_expr(callee)?;
 
         let args = args
-            .into_iter()
-            .map(|arg| self.interpret_expr(arg))
+            .iter()
+            .map(|arg| self.visit_expr(arg))
             .collect::<Result<Vec<_>>>()?;
 
         match callee {
@@ -300,39 +356,24 @@ impl Interpreter {
         }
     }
 
-    fn interpret_block(&mut self, block: Block) -> Result<Value> {
-        self.stack.allocate();
-
-        self.interpret(block)?;
-
-        self.stack.pop();
-
-        Ok(Value::Nil)
+    fn visit_grouping(&mut self, grouping: &ast::Grouping) -> Result<Value> {
+        let ast::Grouping { expr } = grouping;
+        self.visit_expr(expr)
     }
 
-    fn interpret_return(&mut self, return_value: Option<Expr>) -> Result<Value> {
-        if let Some(expr) = return_value {
-            let value = self.interpret_expr(expr)?;
-            self.stack.set_return(value);
-        }
-
-        Ok(Value::Nil)
+    fn visit_literal(&mut self, literal: &ast::Literal) -> Result<Value> {
+        let ast::Literal { value } = literal;
+        Ok(value.clone().into())
     }
 
-    fn interpret_if(&mut self, cond: Cond) -> Result<Value> {
-        let Cond {
-            cond,
-            then,
-            or_else,
-        } = cond;
+    fn visit_variable(&mut self, variable: &ast::Variable) -> Result<Value> {
+        let ast::Variable { name } = variable;
 
-        if self.interpret_expr(*cond)?.to_bool() {
-            self.interpret_stmt(*then)?;
-        } else if let Some(or_else) = or_else {
-            self.interpret_stmt(*or_else)?;
-        };
-
-        Ok(Value::Nil)
+        self.stack
+            .find(name)
+            .ok_or(RuntimeErrorKind::UndefinedReference(name.clone()))
+            .map_err(|e| e.into())
+            .cloned()
     }
 }
 
