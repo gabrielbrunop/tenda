@@ -76,7 +76,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
     fn visit_block(&mut self, block: &ast::Block) -> Result<Value> {
         let ast::Block(ast) = block;
 
-        self.stack.allocate();
+        self.stack.push();
 
         self.eval(ast)?;
 
@@ -137,7 +137,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             params.clone(),
             Some(body.clone()),
             |params, body, interpreter| {
-                interpreter.stack.allocate();
+                interpreter.stack.push();
 
                 for (param, arg) in params.into_iter() {
                     let _ = interpreter.stack.define(param, arg);
