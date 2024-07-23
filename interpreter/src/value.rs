@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fmt::Display;
-use std::rc::Rc;
 
 use scanner::token::Literal;
 
@@ -11,7 +10,7 @@ pub enum Value {
     Number(f64),
     Boolean(bool),
     String(String),
-    Function(Rc<Function>),
+    Function(Function),
     Nil,
 }
 

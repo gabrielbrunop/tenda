@@ -1,8 +1,7 @@
-use std::rc::Rc;
-
 use parser::ast::{self, DeclVisitor, ExprVisitor, StmtVisitor};
 
 use crate::{
+    environment::Environment,
     function::{add_native_fn, native_fn, param_list, Function},
     runtime_error::{runtime_err, type_err, Result, RuntimeError, RuntimeErrorKind},
     stack::Stack,
@@ -24,6 +23,7 @@ impl Interpreter {
 
     pub fn eval(&mut self, ast: &ast::Ast) -> Result<Value> {
         let mut last_value = Value::Nil;
+
         let ast::Ast(ast) = ast;
 
         for stmt in ast {
@@ -76,7 +76,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
     fn visit_block(&mut self, block: &ast::Block) -> Result<Value> {
         let ast::Block(ast) = block;
 
-        self.stack.push();
+        self.stack.push(Environment::new());
 
         self.eval(ast)?;
 
@@ -115,7 +115,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
 impl DeclVisitor<Result<Value>> for Interpreter {
     fn visit_local(&mut self, local: &ast::LocalDecl) -> Result<Value> {
-        let ast::LocalDecl { name, value } = local;
+        let ast::LocalDecl { name, value, .. } = local;
 
         if self.stack.local_exists(name) {
             let name = name.to_string();
@@ -130,14 +130,25 @@ impl DeclVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_function(&mut self, function: &ast::FunctionDecl) -> Result<Value> {
-        let ast::FunctionDecl { name, params, body } = function;
+        let ast::FunctionDecl {
+            name, params, body, ..
+        } = function;
+
+        let mut env = Environment::new();
+
+        function.captured_vars.iter().for_each(|name| {
+            if let Some(var) = self.stack.find(name) {
+                env.set(name.clone(), var.clone());
+            }
+        });
 
         let func = Function::new(
             name.to_string(),
             params.clone(),
+            Box::new(env),
             Some(body.clone()),
-            |params, body, interpreter| {
-                interpreter.stack.push();
+            |params, body, interpreter, captured_env| {
+                interpreter.stack.push(*captured_env.clone());
 
                 for (param, arg) in params.into_iter() {
                     let _ = interpreter.stack.define(param, arg);
@@ -155,9 +166,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             },
         );
 
-        let _ = self
-            .stack
-            .define(name.clone(), Value::Function(Rc::new(func)));
+        let _ = self.stack.define(name.clone(), Value::Function(func));
 
         Ok(Value::Nil)
     }
@@ -345,6 +354,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     .collect(),
                 func.context.body.clone(),
                 self,
+                &func.context.captured_env,
             ),
             _ => runtime_err!(
                 RuntimeErrorKind::TypeError {
@@ -367,7 +377,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_variable(&mut self, variable: &ast::Variable) -> Result<Value> {
-        let ast::Variable { name } = variable;
+        let ast::Variable { name, .. } = variable;
 
         self.stack
             .find(name)
@@ -381,7 +391,7 @@ impl Interpreter {
     fn setup_native_bindings(stack: &mut Stack) {
         add_native_fn!(
             stack,
-            native_fn!("exiba", param_list!["texto"], |args, _, _| {
+            native_fn!("exiba", param_list!["texto"], |args, _, _, _| {
                 let text = match &args["texto"] {
                     Value::String(value) => value.to_string(),
                     value => format!("{}", value),

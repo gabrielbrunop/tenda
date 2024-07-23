@@ -6,7 +6,7 @@ use scanner::{
 };
 
 use crate::{
-    ast, parser_err,
+    ast, closures, parser_err,
     parser_error::{unexpected_eoi, unexpected_token, ParserError, ParserErrorKind},
     scope_tracker::{BlockScope, ScopeTracker},
 };
@@ -14,6 +14,7 @@ use crate::{
 pub struct Parser<'a> {
     tokens: TokenIterator<'a>,
     scope: ScopeTracker,
+    uid_counter: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -21,17 +22,22 @@ impl<'a> Parser<'a> {
         Parser {
             tokens: source.into(),
             scope: ScopeTracker::new(),
+            uid_counter: 0,
         }
     }
 
     pub fn parse(&mut self) -> Result<ast::Ast, Vec<ParserError>> {
         let program = self.program()?;
 
-        match self.tokens.peek() {
-            Some(token) if token.kind == TokenKind::Eof => Ok(program),
-            Some(token) => Err(vec![unexpected_token!(token)]),
+        let mut ast = match self.tokens.peek() {
+            Some(token) if token.kind == TokenKind::Eof => program,
+            Some(token) => Err(vec![unexpected_token!(token)])?,
             None => Err(vec![unexpected_eoi!(self)])?,
-        }
+        };
+
+        closures::apply_closures_in_ast(&mut ast);
+
+        Ok(ast)
     }
 
     fn program(&mut self) -> Result<ast::Ast, Vec<ParserError>> {
@@ -174,7 +180,12 @@ impl<'a> Parser<'a> {
 
         let (body, _) = self.block(token_vec![BlockEnd], BlockScope::Function)?;
 
-        Ok(ast::make_function_decl!(name.to_string(), parameters, body))
+        Ok(ast::make_function_decl!(
+            name.to_string(),
+            parameters,
+            body,
+            self.gen_uid()
+        ))
     }
 
     fn function_parameters(&mut self, function_name: &str) -> Result<Vec<String>, ParserError> {
@@ -211,7 +222,11 @@ impl<'a> Parser<'a> {
 
         self.skip_token(TokenKind::EqualSign)?;
 
-        Ok(ast::make_local_decl!(name.to_string(), self.expression()?))
+        Ok(ast::make_local_decl!(
+            name.to_string(),
+            self.expression()?,
+            self.gen_uid()
+        ))
     }
 
     fn return_statement(&mut self) -> Result<ast::Stmt, ParserError> {
@@ -240,7 +255,7 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
 
             return match expr {
-                ast::Expr::Variable(ast::Variable { name }) => {
+                ast::Expr::Variable(ast::Variable { name, .. }) => {
                     let name: ast::Expr = ast::make_literal_expr!(String(name));
 
                     Ok(ast::make_binary_expr!(
@@ -420,7 +435,7 @@ impl<'a> Parser<'a> {
                     _ => unreachable!(),
                 };
 
-                Ok(ast::make_variable_expr!(name.clone()))
+                Ok(ast::make_variable_expr!(name.clone(), self.gen_uid()))
             }
             Eof => Err(parser_err!(UnexpectedEoi, line)),
             _ => Err(unexpected_token!(token)),
@@ -465,5 +480,10 @@ impl<'a> Parser<'a> {
             Some(token) => Err(unexpected_token!(token)),
             None => Err(parser_err!(UnexpectedEoi, self.tokens.get_last_line())),
         }
+    }
+
+    fn gen_uid(&mut self) -> usize {
+        self.uid_counter += 1;
+        self.uid_counter
     }
 }

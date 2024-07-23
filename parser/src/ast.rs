@@ -59,6 +59,22 @@ pub enum Decl {
     Function(FunctionDecl),
 }
 
+impl Decl {
+    pub fn get_name(&self) -> &str {
+        match self {
+            Decl::Local(local) => &local.name,
+            Decl::Function(function) => &function.name,
+        }
+    }
+
+    pub fn get_uid(&self) -> usize {
+        match self {
+            Decl::Local(local) => local.uid,
+            Decl::Function(function) => function.uid,
+        }
+    }
+}
+
 pub trait DeclVisitor<T> {
     fn visit_local(&mut self, local: &LocalDecl) -> T;
     fn visit_function(&mut self, function: &FunctionDecl) -> T;
@@ -68,11 +84,18 @@ pub trait DeclVisitor<T> {
 pub struct LocalDecl {
     pub name: String,
     pub value: Expr,
+    pub is_captured_var: bool,
+    pub uid: usize,
 }
 
 impl LocalDecl {
-    pub fn new(name: String, value: Expr) -> Self {
-        LocalDecl { name, value }
+    pub fn new(name: String, value: Expr, uid: usize) -> Self {
+        LocalDecl {
+            name,
+            value,
+            is_captured_var: false,
+            uid,
+        }
     }
 }
 
@@ -81,14 +104,20 @@ pub struct FunctionDecl {
     pub name: String,
     pub params: Vec<String>,
     pub body: Box<Stmt>,
+    pub captured_vars: Vec<String>,
+    pub is_captured_var: bool,
+    pub uid: usize,
 }
 
 impl FunctionDecl {
-    pub fn new(name: String, params: Vec<String>, body: Stmt) -> Self {
+    pub fn new(name: String, params: Vec<String>, body: Stmt, uid: usize) -> Self {
         FunctionDecl {
             name,
             params,
             body: Box::new(body),
+            captured_vars: vec![],
+            is_captured_var: false,
+            uid,
         }
     }
 }
@@ -193,11 +222,17 @@ impl Literal {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Variable {
     pub name: String,
+    pub uid: usize,
+    pub is_captured_var: bool,
 }
 
 impl Variable {
-    pub fn new(name: String) -> Self {
-        Variable { name }
+    pub fn new(name: String, id: usize) -> Self {
+        Variable {
+            name,
+            uid: id,
+            is_captured_var: false,
+        }
     }
 }
 
@@ -263,20 +298,21 @@ impl From<Token> for UnaryOperator {
 }
 
 macro_rules! make_function_decl {
-    ($name:expr, $parameters:expr, $body:expr) => {{
+    ($name:expr, $parameters:expr, $body:expr, $uid:expr) => {{
         use $crate::ast::{Decl, FunctionDecl, Stmt};
         Stmt::Decl(Decl::Function(FunctionDecl::new(
             $name.to_string(),
             $parameters,
             $body,
+            $uid,
         )))
     }};
 }
 
 macro_rules! make_local_decl {
-    ($name:expr, $value:expr) => {{
+    ($name:expr, $value:expr, $uid:expr) => {{
         use $crate::ast::{Decl, LocalDecl, Stmt};
-        Stmt::Decl(Decl::Local(LocalDecl::new($name.to_string(), $value)))
+        Stmt::Decl(Decl::Local(LocalDecl::new($name.to_string(), $value, $uid)))
     }};
 }
 
@@ -324,9 +360,9 @@ macro_rules! make_grouping_expr {
 }
 
 macro_rules! make_variable_expr {
-    ($name:expr) => {{
+    ($name:expr, $uid:expr) => {{
         use $crate::ast::Expr;
-        Expr::Variable($crate::ast::Variable::new($name.to_string()))
+        Expr::Variable($crate::ast::Variable::new($name.to_string(), $uid))
     }};
 }
 
