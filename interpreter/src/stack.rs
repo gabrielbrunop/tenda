@@ -60,8 +60,8 @@ impl Stack {
         self.global.get(name)
     }
 
-    pub fn push(&mut self) {
-        self.scopes.push(Environment::new());
+    pub fn push(&mut self, environment: Environment) {
+        self.scopes.push(environment);
     }
 
     pub fn pop(&mut self) {
