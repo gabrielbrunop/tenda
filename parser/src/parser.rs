@@ -420,6 +420,7 @@ impl<'a> Parser<'a> {
             Number | True | False | String | Nil => {
                 Ok(ast::make_literal_expr!(token.literal.clone().unwrap()))
             }
+            LeftBracket => with_ignoring_newline!(self.tokens, { self.list() }),
             LeftParen => with_ignoring_newline!(self.tokens, {
                 let expr = self.expression()?;
 
@@ -440,6 +441,37 @@ impl<'a> Parser<'a> {
             Eof => Err(parser_err!(UnexpectedEoi, line)),
             _ => Err(unexpected_token!(token)),
         }
+    }
+
+    fn list(&mut self) -> Result<ast::Expr, ParserError> {
+        if let Some(_) = self.tokens.match_tokens(token_iter![RightBracket]) {
+            return Ok(ast::make_list_expr!(vec![]));
+        }
+
+        let mut elements = vec![];
+
+        loop {
+            elements.push(self.expression()?);
+
+            if self.tokens.match_tokens(token_iter![Comma]).is_none() {
+                break;
+            }
+        }
+
+        let next_token_is_bracket = self
+            .tokens
+            .match_tokens(token_iter![RightBracket])
+            .is_some();
+
+        if !next_token_is_bracket {
+            Err(parser_err!(
+                MissingBrackets,
+                self.tokens.next().unwrap().line,
+                "esperado ']' ao final de lista".to_string()
+            ))?
+        }
+
+        Ok(ast::make_list_expr!(elements))
     }
 }
 

@@ -127,6 +127,11 @@ fn apply_closures_in_expr(stmt: &mut ast::Expr, closure_list: &ClosureList) {
                 .for_each(|arg| apply_closures_in_expr(arg, closure_list));
             apply_closures_in_expr(callee, closure_list);
         }
+        Expr::List(List { elements }) => {
+            elements
+                .iter_mut()
+                .for_each(|e| apply_closures_in_expr(e, closure_list));
+        }
         Expr::Binary(BinaryOp { lhs, rhs, .. }) => {
             apply_closures_in_expr(lhs, closure_list);
             apply_closures_in_expr(rhs, closure_list);
@@ -273,6 +278,10 @@ fn get_expr_var_refs(expr: &ast::Expr, name: &str) -> Vec<usize> {
             .flat_map(|arg| get_expr_var_refs(arg, name))
             .chain(get_expr_var_refs(callee, name))
             .collect::<Vec<_>>(),
+        List(ast::List { elements }) => elements
+            .iter()
+            .flat_map(|e| get_expr_var_refs(e, name))
+            .collect(),
         Grouping(ast::Grouping { expr }) => get_expr_var_refs(expr, name),
         Literal(_) => vec![],
         Variable(ast::Variable {

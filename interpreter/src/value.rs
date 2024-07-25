@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
+use std::rc::Rc;
 
 use scanner::token::Literal;
 
@@ -11,6 +13,7 @@ pub enum Value {
     Boolean(bool),
     String(String),
     Function(Function),
+    List(Rc<RefCell<Vec<Value>>>),
     Nil,
 }
 
@@ -22,7 +25,8 @@ impl Value {
             Number(_) => ValueType::Number,
             Boolean(_) => ValueType::Boolean,
             String(_) => ValueType::String,
-            Function(..) => ValueType::Function,
+            Function(_) => ValueType::Function,
+            List(_) => ValueType::List,
             Nil => ValueType::Nil,
         }
     }
@@ -32,7 +36,8 @@ impl Value {
             Value::Number(value) => *value != 0.0,
             Value::Boolean(value) => *value,
             Value::String(_) => true,
-            Value::Function(..) => true,
+            Value::Function(_) => true,
+            Value::List(_) => true,
             Value::Nil => false,
         }
     }
@@ -56,6 +61,15 @@ impl Display for Value {
                     "{}({})",
                     value.context.name,
                     value.context.params.join(", ")
+                ),
+                List(value) => format!(
+                    "[{}]",
+                    value
+                        .borrow()
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
                 Nil => Literal::NIL_LITERAL.to_string(),
             }
@@ -82,19 +96,13 @@ pub enum ValueType {
     Boolean,
     String,
     Function,
+    List,
     Nil,
 }
 
 impl From<Value> for ValueType {
     fn from(value: Value) -> Self {
-        use Value::*;
-        match value {
-            Number(_) => ValueType::Number,
-            Boolean(_) => ValueType::Boolean,
-            String(_) => ValueType::String,
-            Function(_) => ValueType::Function,
-            Nil => ValueType::Nil,
-        }
+        value.kind()
     }
 }
 
@@ -107,6 +115,7 @@ impl Display for ValueType {
             Boolean => "lógico".to_string(),
             String => "texto".to_string(),
             Function => "função".to_string(),
+            List => "lista".to_string(),
             Nil => "Nada".to_string(),
         };
 
