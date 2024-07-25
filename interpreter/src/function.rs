@@ -71,7 +71,9 @@ macro_rules! add_native_fn {
         let func = $fn;
         let func_name = $fn.context.name.clone();
         let func_object = Value::Function(func);
-        $stack.define(func_name, func_object).unwrap();
+        $stack
+            .define(func_name, StoredValue::Unique(func_object))
+            .unwrap();
     }};
 }
 

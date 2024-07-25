@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{environment::Environment, value::Value};
+use crate::environment::{Environment, StoredValue};
 
 type Result<T> = std::result::Result<T, StackError>;
 
@@ -22,7 +22,7 @@ impl Stack {
         self.get_innermost().has(name)
     }
 
-    pub fn define(&mut self, name: String, value: Value) -> Result<()> {
+    pub fn define(&mut self, name: String, value: StoredValue) -> Result<()> {
         let scope = self.get_innermost_mut();
 
         if scope.has(&name) {
@@ -34,7 +34,7 @@ impl Stack {
         Ok(())
     }
 
-    pub fn set(&mut self, name: String, value: Value) -> Result<()> {
+    pub fn set(&mut self, name: String, value: StoredValue) -> Result<()> {
         let scope = self
             .scopes
             .iter_mut()
@@ -50,7 +50,7 @@ impl Stack {
         }
     }
 
-    pub fn find(&mut self, name: &String) -> Option<&Value> {
+    pub fn find(&mut self, name: &String) -> Option<&StoredValue> {
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.get(name) {
                 return Some(var);
@@ -72,11 +72,11 @@ impl Stack {
         self.scopes.pop();
     }
 
-    pub fn set_return(&mut self, value: Value) {
+    pub fn set_return(&mut self, value: StoredValue) {
         self.get_innermost_mut().set_return(value);
     }
 
-    pub fn consume_return(&mut self) -> Option<Value> {
+    pub fn consume_return(&mut self) -> Option<StoredValue> {
         let value = self.get_innermost().get_return().cloned();
         self.get_innermost_mut().clear_return();
         value
