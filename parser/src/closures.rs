@@ -202,7 +202,7 @@ fn get_closures_from_stmt(stmt: &ast::Stmt, name: &str) -> Vec<ClosureVarRef> {
             references
         }
         Stmt::Block(ast::Block(ast::Ast(block))) => block
-            .into_iter()
+            .iter()
             .flat_map(|stmt| get_closures_from_stmt(stmt, name))
             .collect::<Vec<_>>(),
         _ => vec![],
@@ -242,12 +242,12 @@ fn get_stmt_var_refs(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> Vec<Clo
             };
 
             cond_references
-                .chain(then_references.into_iter())
-                .chain(or_else_references.into_iter())
+                .chain(then_references)
+                .chain(or_else_references)
                 .collect::<Vec<_>>()
         }
         Stmt::Block(ast::Block(ast::Ast(block))) => block
-            .into_iter()
+            .iter()
             .take_while(|stmt| !matches!(stmt, Stmt::Decl(decl) if decl.get_name() == name))
             .flat_map(|stmt| get_stmt_var_refs(stmt, name, closure_fn))
             .collect::<Vec<_>>(),
