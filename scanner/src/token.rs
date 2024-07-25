@@ -1,5 +1,5 @@
 use peekmore::{PeekMore, PeekMoreIterator};
-use std::slice::Iter;
+use std::{cell::RefCell, rc::Rc, slice::Iter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -90,7 +90,7 @@ impl Literal {
 
 pub struct TokenIterator<'a> {
     tokens: PeekMoreIterator<Iter<'a, Token>>,
-    ignoring_newline: bool,
+    ignoring_newline_counter: Rc<RefCell<usize>>,
     last_line: usize,
 }
 
@@ -99,8 +99,8 @@ impl<'a> TokenIterator<'a> {
         self.tokens.peek()
     }
 
-    pub fn set_ignoring_newline(&mut self, value: bool) {
-        self.ignoring_newline = value;
+    pub fn set_ignoring_newline(&mut self) -> NewlineGuard {
+        NewlineGuard::new(self.ignoring_newline_counter.clone())
     }
 
     pub fn match_tokens(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
@@ -151,7 +151,7 @@ impl<'a> TokenIterator<'a> {
     }
 
     fn ignore_newline(&mut self) -> Option<&Token> {
-        if !self.ignoring_newline {
+        if *self.ignoring_newline_counter.borrow() == 0 {
             None
         } else if matches!(self.tokens.peek(), Some(token) if token.kind == TokenKind::Newline) {
             self.tokens.next()
@@ -173,9 +173,24 @@ impl<'a> From<&'a [Token]> for TokenIterator<'a> {
     fn from(value: &'a [Token]) -> Self {
         TokenIterator {
             tokens: value.iter().peekmore(),
-            ignoring_newline: false,
+            ignoring_newline_counter: Rc::new(RefCell::new(0)),
             last_line: value.last().map(|t| t.line).unwrap_or(0),
         }
+    }
+}
+
+pub struct NewlineGuard(Rc<RefCell<usize>>);
+
+impl NewlineGuard {
+    pub fn new(counter: Rc<RefCell<usize>>) -> Self {
+        *counter.borrow_mut() += 1;
+        NewlineGuard(counter)
+    }
+}
+
+impl Drop for NewlineGuard {
+    fn drop(&mut self) {
+        *self.0.borrow_mut() -= 1;
     }
 }
 
@@ -197,16 +212,6 @@ macro_rules! token_vec {
             vec![$($kind),*]
         }
     };
-}
-
-#[macro_export]
-macro_rules! with_ignoring_newline {
-    ($tokens:expr, $block:block) => {{
-        $tokens.set_ignoring_newline(true);
-        let result = $block;
-        $tokens.set_ignoring_newline(false);
-        result
-    }};
 }
 
 macro_rules! token {
