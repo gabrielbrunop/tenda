@@ -43,6 +43,8 @@ impl<'a> Scanner<'a> {
                 c if c.is_whitespace() => Ok(None),
                 '(' => token!(LeftParen, ")", self.line).into(),
                 ')' => token!(RightParen, ")", self.line).into(),
+                '[' => token!(LeftBracket, "[", self.line).into(),
+                ']' => token!(RightBracket, "]", self.line).into(),
                 '+' => token!(Plus, "+", self.line).into(),
                 '-' => token!(Minus, "-", self.line).into(),
                 '*' => token!(Star, "*", self.line).into(),

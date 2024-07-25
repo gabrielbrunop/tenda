@@ -27,6 +27,8 @@ pub enum ParserErrorKind {
     UnexpectedEoi,
     #[error("esperado ')'")]
     MissingParentheses,
+    #[error("esperado ']'")]
+    MissingBrackets,
     #[error("token inesperado: {}", .0.lexeme)]
     UnexpectedToken(Token),
     #[error("o valor à direita do '=' não é um valor válido para receber atribuições")]

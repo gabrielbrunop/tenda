@@ -69,6 +69,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             Binary(binary) => self.visit_binary(binary),
             Unary(unary) => self.visit_unary(unary),
             Grouping(grouping) => self.visit_grouping(grouping),
+            List(list) => self.visit_list(list),
             Literal(literal) => self.visit_literal(literal),
             Call(call) => self.visit_call(call),
             Variable(variable) => self.visit_variable(variable),
@@ -380,6 +381,16 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 format!("não é possível chamar '{}' como função", callee.kind())
             ),
         }
+    }
+
+    fn visit_list(&mut self, list: &ast::List) -> Result<Value> {
+        let mut elements = Vec::with_capacity(list.elements.len());
+
+        for e in &list.elements {
+            elements.push(self.visit_expr(e)?);
+        }
+
+        Ok(Value::List(Rc::new(RefCell::new(elements))))
     }
 
     fn visit_grouping(&mut self, grouping: &ast::Grouping) -> Result<Value> {

@@ -134,6 +134,7 @@ pub enum Expr {
     Binary(BinaryOp),
     Unary(UnaryOp),
     Call(Call),
+    List(List),
     Grouping(Grouping),
     Literal(Literal),
     Variable(Variable),
@@ -143,6 +144,7 @@ pub trait ExprVisitor<T> {
     fn visit_binary(&mut self, binary: &BinaryOp) -> T;
     fn visit_unary(&mut self, unary: &UnaryOp) -> T;
     fn visit_call(&mut self, call: &Call) -> T;
+    fn visit_list(&mut self, list: &List) -> T;
     fn visit_grouping(&mut self, grouping: &Grouping) -> T;
     fn visit_literal(&mut self, literal: &Literal) -> T;
     fn visit_variable(&mut self, variable: &Variable) -> T;
@@ -192,6 +194,17 @@ impl Call {
             callee: Box::new(callee),
             args,
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct List {
+    pub elements: Vec<Expr>,
+}
+
+impl List {
+    pub fn new(elements: Vec<Expr>) -> Self {
+        List { elements }
     }
 }
 
@@ -366,6 +379,13 @@ macro_rules! make_variable_expr {
     }};
 }
 
+macro_rules! make_list_expr {
+    ($elements:expr) => {{
+        use $crate::ast::Expr;
+        Expr::List($crate::ast::List::new($elements))
+    }};
+}
+
 macro_rules! make_cond_stmt {
     ($cond:expr, $then:expr, $or_else:expr) => {{
         use $crate::ast::{Cond, Stmt};
@@ -390,6 +410,7 @@ pub(crate) use make_call_expr;
 pub(crate) use make_cond_stmt;
 pub(crate) use make_function_decl;
 pub(crate) use make_grouping_expr;
+pub(crate) use make_list_expr;
 pub(crate) use make_literal_expr;
 pub(crate) use make_local_decl;
 pub(crate) use make_return_stmt;

@@ -67,6 +67,8 @@ pub enum TokenKind {
     Caret,
     LeftParen,
     RightParen,
+    LeftBracket,
+    RightBracket,
     Comma,
     Newline,
     Eof,
