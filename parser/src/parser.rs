@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use scanner::{
     token::{self, Token, TokenIterator, TokenKind},
-    token_iter, token_vec, with_ignoring_newline,
+    token_iter, token_vec,
 };
 
 use crate::{
@@ -420,8 +420,12 @@ impl<'a> Parser<'a> {
             Number | True | False | String | Nil => {
                 Ok(ast::make_literal_expr!(token.literal.clone().unwrap()))
             }
-            LeftBracket => with_ignoring_newline!(self.tokens, { self.list() }),
-            LeftParen => with_ignoring_newline!(self.tokens, {
+            LeftBracket => {
+                let _guard = self.tokens.set_ignoring_newline();
+                self.list()
+            }
+            LeftParen => {
+                let _guard = self.tokens.set_ignoring_newline();
                 let expr = self.expression()?;
 
                 if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
@@ -429,7 +433,7 @@ impl<'a> Parser<'a> {
                 }
 
                 Ok(ast::make_grouping_expr!(expr))
-            }),
+            }
             Identifier => {
                 let name = match token.literal.as_ref().unwrap() {
                     token::Literal::String(string) => string,
