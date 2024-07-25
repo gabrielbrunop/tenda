@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::value::Value;
 
 #[derive(Debug, Clone)]
 pub struct Environment {
-    state: HashMap<String, Value>,
-    return_value: Option<Value>,
+    state: HashMap<String, StoredValue>,
+    return_value: Option<StoredValue>,
 }
 
 impl Environment {
@@ -16,7 +16,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, name: &String) -> Option<&Value> {
+    pub fn get(&self, name: &String) -> Option<&StoredValue> {
         self.state.get(name)
     }
 
@@ -24,15 +24,27 @@ impl Environment {
         self.state.contains_key(name)
     }
 
-    pub fn set(&mut self, name: String, value: Value) {
-        self.state.insert(name, value);
+    pub fn set(&mut self, name: String, value: StoredValue) {
+        match self.state.get_mut(&name) {
+            Some(val) => match val {
+                StoredValue::Shared(val) => {
+                    *val.borrow_mut() = value.clone_value();
+                }
+                StoredValue::Unique(_) => {
+                    self.state.insert(name, value);
+                }
+            },
+            None => {
+                self.state.insert(name, value);
+            }
+        }
     }
 
-    pub fn set_return(&mut self, value: Value) {
+    pub fn set_return(&mut self, value: StoredValue) {
         self.return_value = Some(value);
     }
 
-    pub fn get_return(&self) -> Option<&Value> {
+    pub fn get_return(&self) -> Option<&StoredValue> {
         self.return_value.as_ref()
     }
 
@@ -44,5 +56,20 @@ impl Environment {
 impl Default for Environment {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum StoredValue {
+    Unique(Value),
+    Shared(Rc<RefCell<Value>>),
+}
+
+impl StoredValue {
+    pub fn clone_value(&self) -> Value {
+        match self {
+            StoredValue::Unique(val) => val.clone(),
+            StoredValue::Shared(val) => val.borrow().clone(),
+        }
     }
 }

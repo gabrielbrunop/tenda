@@ -1,7 +1,9 @@
+use std::{cell::RefCell, rc::Rc};
+
 use parser::ast::{self, DeclVisitor, ExprVisitor, StmtVisitor};
 
 use crate::{
-    environment::Environment,
+    environment::{Environment, StoredValue},
     function::{add_native_fn, native_fn, param_list, Function},
     runtime_error::{runtime_err, type_err, Result, RuntimeError, RuntimeErrorKind},
     stack::Stack,
@@ -90,7 +92,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
         if let Some(expr) = value {
             let value = self.visit_expr(expr)?;
-            self.stack.set_return(value);
+            self.stack.set_return(StoredValue::Unique(value));
         }
 
         Ok(Value::Nil)
@@ -123,6 +125,10 @@ impl DeclVisitor<Result<Value>> for Interpreter {
         }
 
         let value = self.visit_expr(value)?;
+        let value = match local.is_captured_var {
+            true => StoredValue::Shared(Rc::new(RefCell::new(value))),
+            false => StoredValue::Unique(value),
+        };
 
         let _ = self.stack.define(name.clone(), value);
 
@@ -151,14 +157,18 @@ impl DeclVisitor<Result<Value>> for Interpreter {
                 interpreter.stack.push(*captured_env.clone());
 
                 for (param, arg) in params.into_iter() {
-                    let _ = interpreter.stack.define(param, arg);
+                    let _ = interpreter.stack.define(param, StoredValue::Unique(arg));
                 }
 
                 if let Some(body) = body {
                     interpreter.interpret_stmt(&body)?;
                 }
 
-                let value = interpreter.stack.consume_return().unwrap_or(Value::Nil);
+                let value = interpreter
+                    .stack
+                    .consume_return()
+                    .map(|v| v.clone_value())
+                    .unwrap_or(Value::Nil);
 
                 interpreter.stack.pop();
 
@@ -166,7 +176,9 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             },
         );
 
-        let _ = self.stack.define(name.clone(), Value::Function(func));
+        let _ = self
+            .stack
+            .define(name.clone(), StoredValue::Unique(Value::Function(func)));
 
         Ok(Value::Nil)
     }
@@ -269,7 +281,11 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             },
             Assignment => match (lhs, rhs) {
                 (String(lhs), rhs) => {
-                    if self.stack.set(lhs.clone(), rhs.clone()).is_err() {
+                    if self
+                        .stack
+                        .set(lhs.clone(), StoredValue::Unique(rhs.clone()))
+                        .is_err()
+                    {
                         runtime_err!(
                             RuntimeErrorKind::AlreadyDeclared(lhs.clone()),
                             format!(
@@ -381,9 +397,9 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
         self.stack
             .find(name)
+            .map(|v| v.clone_value())
             .ok_or(RuntimeErrorKind::UndefinedReference(name.clone()))
             .map_err(|e| e.into())
-            .cloned()
     }
 }
 
