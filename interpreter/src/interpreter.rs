@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use parser::ast::{self, DeclVisitor, ExprVisitor, StmtVisitor};
+use parser::ast::{self, Access, DeclVisitor, ExprVisitor, StmtVisitor};
 
 use crate::{
     environment::{Environment, StoredValue},
@@ -72,6 +72,8 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             List(list) => self.visit_list(list),
             Literal(literal) => self.visit_literal(literal),
             Call(call) => self.visit_call(call),
+            Assign(assign) => self.visit_assign(assign),
+            Access(indexing) => self.visit_access(indexing),
             Variable(variable) => self.visit_variable(variable),
         }
     }
@@ -280,26 +282,6 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     rhs
                 ),
             },
-            Assignment => match (lhs, rhs) {
-                (String(lhs), rhs) => {
-                    if self
-                        .stack
-                        .set(lhs.clone(), StoredValue::Unique(rhs.clone()))
-                        .is_err()
-                    {
-                        runtime_err!(
-                            RuntimeErrorKind::AlreadyDeclared(lhs.clone()),
-                            format!(
-                                "a variável identificada por '{}' precisa ser definida com `seja`",
-                                lhs
-                            )
-                        )
-                    }
-
-                    rhs
-                }
-                _ => unreachable!(),
-            },
             LogicalAnd => {
                 if lhs.to_bool() {
                     rhs
@@ -383,6 +365,31 @@ impl ExprVisitor<Result<Value>> for Interpreter {
         }
     }
 
+    fn visit_access(&mut self, index: &ast::Access) -> Result<Value> {
+        let Access { subscripted, index } = index;
+
+        let subscripted = match self.visit_expr(subscripted)? {
+            Value::List(list) => list,
+            val => type_err!(
+                "não é possível indexar '{}'; esperado {}",
+                val.kind(),
+                ValueType::List
+            ),
+        };
+
+        let index = match self.visit_expr(index)? {
+            Value::Number(num) => num as usize,
+            val => type_err!(
+                "{} não é um tipo válido para indexação; esperado {}",
+                val,
+                ValueType::Number
+            ),
+        };
+
+        let list = &*subscripted.borrow();
+        Ok(list[index].clone())
+    }
+
     fn visit_list(&mut self, list: &ast::List) -> Result<Value> {
         let mut elements = Vec::with_capacity(list.elements.len());
 
@@ -411,6 +418,36 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             .map(|v| v.clone_value())
             .ok_or(RuntimeErrorKind::UndefinedReference(name.clone()))
             .map_err(|e| e.into())
+    }
+
+    fn visit_assign(&mut self, assign: &ast::Assign) -> Result<Value> {
+        let ast::Assign {
+            name: variable,
+            value,
+        } = assign;
+
+        match &**variable {
+            ast::Expr::Variable(ast::Variable { name, .. }) => {
+                let value = self.visit_expr(value)?;
+
+                let result = self
+                    .stack
+                    .set(name.clone(), StoredValue::Unique(value.clone()));
+
+                match result {
+                    Ok(_) => Ok(value),
+                    Err(_) => runtime_err!(
+                        RuntimeErrorKind::UndefinedReference(name.clone()),
+                        format!(
+                            "a variável identificada por '{}' precisa ser definida com `seja`",
+                            name
+                        )
+                    ),
+                }
+            }
+            ast::Expr::Access(ast::Access { index, subscripted }) => todo!("Access here"),
+            _ => unreachable!(),
+        }
     }
 }
 
