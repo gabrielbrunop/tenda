@@ -255,15 +255,8 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
 
             return match expr {
-                ast::Expr::Variable(ast::Variable { name, .. }) => {
-                    let name: ast::Expr = ast::make_literal_expr!(String(name));
-
-                    Ok(ast::make_binary_expr!(
-                        name,
-                        ast::BinaryOperator::Assignment,
-                        value
-                    ))
-                }
+                ast::Expr::Variable(_) => Ok(ast::make_assign_expr!(expr, value)),
+                ast::Expr::Access(_) => Ok(ast::make_access_expr!(expr, value)),
                 _ => Err(parser_err!(
                     InvalidAssignmentTarget(equal_sign.clone_ref()),
                     equal_sign.line
@@ -372,17 +365,25 @@ impl<'a> Parser<'a> {
 
             Ok(expr)
         } else {
-            self.function_call()
+            self.call()
         }
     }
 
-    fn function_call(&mut self) -> Result<ast::Expr, ParserError> {
+    fn call(&mut self) -> Result<ast::Expr, ParserError> {
         let name = self.primary()?;
 
-        if self.tokens.match_tokens(token_iter![LeftParen]).is_none() {
-            return Ok(name);
+        match self
+            .tokens
+            .match_tokens(token_iter![LeftParen, LeftBracket])
+        {
+            Some(token) if token.kind == TokenKind::LeftParen => self.function_call(name),
+            Some(token) if token.kind == TokenKind::LeftBracket => self.access(name),
+            Some(_) => unreachable!(),
+            None => Ok(name),
         }
+    }
 
+    fn function_call(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
         let mut arguments = vec![];
 
         if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
@@ -404,6 +405,25 @@ impl<'a> Parser<'a> {
         }
 
         Ok(ast::make_call_expr!(name, arguments))
+    }
+
+    fn access(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
+        let index = self.expression()?;
+
+        let next_token_is_bracket = self
+            .tokens
+            .match_tokens(token_iter![RightBracket])
+            .is_some();
+
+        if !next_token_is_bracket {
+            Err(parser_err!(
+                MissingBrackets,
+                self.tokens.next().unwrap().line,
+                "esperado ']' em indexação".to_string()
+            ))?;
+        }
+
+        Ok(ast::make_access_expr!(name, index))
     }
 
     fn primary(&mut self) -> Result<ast::Expr, ParserError> {

@@ -134,6 +134,8 @@ pub enum Expr {
     Binary(BinaryOp),
     Unary(UnaryOp),
     Call(Call),
+    Assign(Assign),
+    Access(Access),
     List(List),
     Grouping(Grouping),
     Literal(Literal),
@@ -144,6 +146,8 @@ pub trait ExprVisitor<T> {
     fn visit_binary(&mut self, binary: &BinaryOp) -> T;
     fn visit_unary(&mut self, unary: &UnaryOp) -> T;
     fn visit_call(&mut self, call: &Call) -> T;
+    fn visit_access(&mut self, index: &Access) -> T;
+    fn visit_assign(&mut self, assign: &Assign) -> T;
     fn visit_list(&mut self, list: &List) -> T;
     fn visit_grouping(&mut self, grouping: &Grouping) -> T;
     fn visit_literal(&mut self, literal: &Literal) -> T;
@@ -193,6 +197,36 @@ impl Call {
         Call {
             callee: Box::new(callee),
             args,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Assign {
+    pub name: Box<Expr>,
+    pub value: Box<Expr>,
+}
+
+impl Assign {
+    pub fn new(name: Expr, value: Expr) -> Self {
+        Assign {
+            name: Box::new(name),
+            value: Box::new(value),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Access {
+    pub subscripted: Box<Expr>,
+    pub index: Box<Expr>,
+}
+
+impl Access {
+    pub fn new(subscripted: Expr, index: Expr) -> Self {
+        Access {
+            subscripted: Box::new(subscripted),
+            index: Box::new(index),
         }
     }
 }
@@ -263,7 +297,6 @@ pub enum BinaryOperator {
     GreaterOrEqual,
     Less,
     LessOrEqual,
-    Assignment,
     LogicalAnd,
     LogicalOr,
 }
@@ -284,7 +317,6 @@ impl From<Token> for BinaryOperator {
             TokenKind::GreaterOrEqual => GreaterOrEqual,
             TokenKind::Less => Less,
             TokenKind::LessOrEqual => LessOrEqual,
-            TokenKind::EqualSign => Assignment,
             TokenKind::Or => LogicalOr,
             TokenKind::And => LogicalAnd,
             _ => panic!("invalid token for binary operation"),
@@ -365,6 +397,20 @@ macro_rules! make_call_expr {
     }};
 }
 
+macro_rules! make_assign_expr {
+    ($name:expr, $value:expr) => {{
+        use $crate::ast::Expr;
+        Expr::Assign($crate::ast::Assign::new($name, $value))
+    }};
+}
+
+macro_rules! make_access_expr {
+    ($subscripted:expr, $index:expr) => {{
+        use $crate::ast::Expr;
+        Expr::Access($crate::ast::Access::new($subscripted, $index))
+    }};
+}
+
 macro_rules! make_grouping_expr {
     ($expr:expr) => {{
         use $crate::ast::Expr;
@@ -404,6 +450,8 @@ macro_rules! make_block_stmt {
     }};
 }
 
+pub(crate) use make_access_expr;
+pub(crate) use make_assign_expr;
 pub(crate) use make_binary_expr;
 pub(crate) use make_block_stmt;
 pub(crate) use make_call_expr;

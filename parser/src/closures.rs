@@ -127,6 +127,14 @@ fn apply_closures_in_expr(stmt: &mut ast::Expr, closure_list: &ClosureList) {
                 .for_each(|arg| apply_closures_in_expr(arg, closure_list));
             apply_closures_in_expr(callee, closure_list);
         }
+        Expr::Access(Access { index, subscripted }) => {
+            apply_closures_in_expr(index, closure_list);
+            apply_closures_in_expr(subscripted, closure_list);
+        }
+        Expr::Assign(Assign { name, value }) => {
+            apply_closures_in_expr(name, closure_list);
+            apply_closures_in_expr(value, closure_list);
+        }
         Expr::List(List { elements }) => {
             elements
                 .iter_mut()
@@ -278,6 +286,17 @@ fn get_expr_var_refs(expr: &ast::Expr, name: &str) -> Vec<usize> {
             .flat_map(|arg| get_expr_var_refs(arg, name))
             .chain(get_expr_var_refs(callee, name))
             .collect::<Vec<_>>(),
+        Access(ast::Access { index, subscripted }) => get_expr_var_refs(index, name)
+            .into_iter()
+            .chain(get_expr_var_refs(subscripted, name))
+            .collect(),
+        Assign(ast::Assign {
+            name: var_name,
+            value,
+        }) => get_expr_var_refs(var_name, name)
+            .into_iter()
+            .chain(get_expr_var_refs(value, name))
+            .collect(),
         List(ast::List { elements }) => elements
             .iter()
             .flat_map(|e| get_expr_var_refs(e, name))
