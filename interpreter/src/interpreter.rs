@@ -399,7 +399,15 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             ),
         };
 
-        let list = &*subscripted.borrow();
+        let list = subscripted.borrow_mut();
+
+        if index >= list.len() {
+            Err(RuntimeErrorKind::IndexOutOfBounds {
+                index,
+                len: list.len(),
+            })?;
+        }
+
         Ok(list[index].clone())
     }
 
@@ -458,7 +466,42 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     ),
                 }
             }
-            ast::Expr::Access(ast::Access { index, subscripted }) => todo!("Access here"),
+            ast::Expr::Access(ast::Access { index, subscripted }) => {
+                let index = self.visit_expr(index)?;
+                let subscripted = self.visit_expr(subscripted)?;
+                let value = self.visit_expr(value)?;
+
+                let subscripted = match subscripted {
+                    Value::List(list) => list,
+                    val => type_err!(
+                        "não é possível indexar '{}'; esperado {}",
+                        val.kind(),
+                        ValueType::List
+                    ),
+                };
+
+                let index = match index {
+                    Value::Number(num) => num as usize,
+                    val => type_err!(
+                        "{} não é um tipo válido para indexação; esperado {}",
+                        val,
+                        ValueType::Number
+                    ),
+                };
+
+                let mut list = subscripted.borrow_mut();
+
+                if index >= list.len() {
+                    Err(RuntimeErrorKind::IndexOutOfBounds {
+                        index,
+                        len: list.len(),
+                    })?;
+                }
+
+                list[index] = value.clone();
+
+                Ok(value)
+            }
             _ => unreachable!(),
         }
     }

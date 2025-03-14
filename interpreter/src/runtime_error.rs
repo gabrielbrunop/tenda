@@ -24,6 +24,8 @@ pub enum RuntimeErrorKind {
     AlreadyDeclared(String),
     #[error("número de argumentos incorreto: esperado {}, encontrado {}", .expected, .found)]
     WrongNumberOfArguments { expected: usize, found: usize },
+    #[error("índice fora dos limites: índice {}, tamanho {}", .index, .len)]
+    IndexOutOfBounds { index: usize, len: usize },
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]

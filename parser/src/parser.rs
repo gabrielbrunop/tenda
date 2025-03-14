@@ -255,8 +255,9 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
 
             return match expr {
-                ast::Expr::Variable(_) => Ok(ast::make_assign_expr!(expr, value)),
-                ast::Expr::Access(_) => Ok(ast::make_access_expr!(expr, value)),
+                ast::Expr::Variable(_) | ast::Expr::Access(_) => {
+                    Ok(ast::make_assign_expr!(expr, value))
+                }
                 _ => Err(parser_err!(
                     InvalidAssignmentTarget(equal_sign.clone_ref()),
                     equal_sign.line
@@ -468,7 +469,11 @@ impl<'a> Parser<'a> {
     }
 
     fn list(&mut self) -> Result<ast::Expr, ParserError> {
-        if let Some(_) = self.tokens.match_tokens(token_iter![RightBracket]) {
+        if self
+            .tokens
+            .match_tokens(token_iter![RightBracket])
+            .is_some()
+        {
             return Ok(ast::make_list_expr!(vec![]));
         }
 
