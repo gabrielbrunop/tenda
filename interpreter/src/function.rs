@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use parser::ast::Stmt;
 
 use crate::environment::Environment;
@@ -6,8 +8,11 @@ use crate::interpreter::Interpreter;
 use super::runtime_error::Result;
 use super::value::Value;
 
+static FUNCTION_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
+
 #[derive(Debug, Clone)]
 pub struct Function {
+    pub id: usize,
     pub context: FunctionContext,
     pub object: FunctionObject,
 }
@@ -20,7 +25,10 @@ impl Function {
         body: Option<Box<Stmt>>,
         object: FunctionObject,
     ) -> Self {
+        let unique_id = FUNCTION_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+
         Function {
+            id: unique_id,
             context: FunctionContext::new(name, params, captured_env, body),
             object,
         }
@@ -29,7 +37,7 @@ impl Function {
 
 impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.object == other.object
+        self.id == other.id
     }
 }
 
