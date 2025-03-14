@@ -160,11 +160,24 @@ fn get_closures_from_ast(ast: &Ast) -> Vec<Closure> {
         Stmt::Decl(decl) => {
             let name = decl.get_name();
 
-            let this = match decl {
+            let closures_from_fn_body = match decl {
                 Decl::Function(FunctionDecl { body, .. }) => match body.as_ref() {
                     Stmt::Block(Block(block)) => get_closures_from_ast(block),
                     _ => unreachable!(),
                 },
+                _ => vec![],
+            };
+
+            let closures_from_fn_args = match decl {
+                Decl::Function(FunctionDecl { body, params, .. }) => params
+                    .iter()
+                    .map(|param| (param, get_closures_from_stmt(body, param)))
+                    .flat_map(|(param, closures)| {
+                        closures.into_iter().map(|(var_ref, fn_decl)| {
+                            Closure::new(fn_decl, var_ref, decl.get_uid(), param.to_string())
+                        })
+                    })
+                    .collect(),
                 _ => vec![],
             };
 
@@ -174,7 +187,8 @@ fn get_closures_from_ast(ast: &Ast) -> Vec<Closure> {
                 .map(|(var_ref, fn_decl)| {
                     Closure::new(fn_decl, var_ref, decl.get_uid(), name.to_string())
                 })
-                .chain(this)
+                .chain(closures_from_fn_body)
+                .chain(closures_from_fn_args)
                 .collect()
         }
         Stmt::Cond(Cond { then, or_else, .. }) => {
