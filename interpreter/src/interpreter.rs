@@ -140,16 +140,27 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
     fn visit_function(&mut self, function: &ast::FunctionDecl) -> Result<Value> {
         let ast::FunctionDecl {
-            name, params, body, ..
+            name,
+            params,
+            body,
+            captured_vars,
+            ..
         } = function;
 
         let mut env = Environment::new();
 
-        function.captured_vars.iter().for_each(|name| {
-            if let Some(var) = self.stack.find(name) {
-                env.set(name.clone(), var.clone());
+        for var_name in captured_vars {
+            if let Some(value_in_parent) = self.stack.find(var_name) {
+                env.set(var_name.clone(), value_in_parent.clone());
             }
-        });
+        }
+
+        for param in params {
+            env.set(
+                param.clone(),
+                StoredValue::Shared(Rc::new(RefCell::new(Value::Nil))),
+            );
+        }
 
         let func = Function::new(
             name.to_string(),
@@ -159,8 +170,10 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             |params, body, interpreter, captured_env| {
                 interpreter.stack.push(*captured_env.clone());
 
-                for (param, arg) in params.into_iter() {
-                    let _ = interpreter.stack.define(param, StoredValue::Unique(arg));
+                for (param_name, arg_value) in params.into_iter() {
+                    let _ = interpreter
+                        .stack
+                        .set(param_name.clone(), StoredValue::Unique(arg_value));
                 }
 
                 if let Some(body) = body {
