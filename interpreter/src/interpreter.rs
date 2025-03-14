@@ -229,7 +229,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 }
             },
             Divide => match (lhs, rhs) {
-                (Number(_), Number(rhs)) if rhs == 0.0 => Err(RuntimeErrorKind::DivisionByZero)?,
+                (Number(_), Number(0.0)) => Err(RuntimeErrorKind::DivisionByZero)?,
                 (Number(lhs), Number(rhs)) => Number(lhs / rhs),
                 (lhs, rhs) => type_err!("não é possível dividir '{}' por '{}'", lhs, rhs),
             },
