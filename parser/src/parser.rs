@@ -502,7 +502,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl<'a> Parser<'a> {
+impl Parser<'_> {
     fn consume_newline(&mut self) -> Result<(), ParserError> {
         use TokenKind::*;
 
