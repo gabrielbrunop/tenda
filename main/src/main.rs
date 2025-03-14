@@ -35,7 +35,7 @@ fn start_repl() {
                 rl.add_history_entry(line.as_str()).unwrap();
 
                 let output = tenda.run(line);
-                println!("{}", output);
+                println!("{}", output.unwrap_or_else(|err| err));
             }
             Err(ReadlineError::Interrupted) if exiting => break,
             Err(ReadlineError::Interrupted) => {
@@ -60,7 +60,9 @@ fn run_string(string: String) {
     let mut tenda = Tenda::new();
     let output = tenda.run(string);
 
-    println!("{}", output);
+    if let Err(err) = output {
+        eprintln!("{}", err)
+    };
 }
 
 mod tenda;
