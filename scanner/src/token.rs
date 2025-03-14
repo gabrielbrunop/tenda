@@ -94,7 +94,7 @@ pub struct TokenIterator<'a> {
     last_line: usize,
 }
 
-impl<'a> TokenIterator<'a> {
+impl TokenIterator<'_> {
     pub fn peek(&mut self) -> Option<&&Token> {
         self.tokens.peek()
     }
