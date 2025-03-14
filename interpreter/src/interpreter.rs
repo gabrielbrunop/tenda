@@ -512,7 +512,7 @@ impl Interpreter {
         add_native_fn!(
             stack,
             native_fn!("exiba", param_list!["texto"], |args, _, _, _| {
-                let text = match &args["texto"] {
+                let text = match &args[0].1 {
                     Value::String(value) => value.to_string(),
                     value => format!("{}", value),
                 };

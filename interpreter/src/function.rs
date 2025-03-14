@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use parser::ast::Stmt;
 
 use crate::environment::Environment;
@@ -60,7 +58,7 @@ impl FunctionContext {
 }
 
 type FunctionObject = fn(
-    params: HashMap<String, Value>,
+    params: Vec<(String, Value)>,
     body: Option<Box<Stmt>>,
     interpreter: &mut Interpreter,
     captured_env: &Box<Environment>,

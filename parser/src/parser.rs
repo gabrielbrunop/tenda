@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use scanner::{
     token::{self, Token, TokenIterator, TokenKind},
     token_iter, token_vec,
@@ -189,7 +187,7 @@ impl<'a> Parser<'a> {
     }
 
     fn function_parameters(&mut self, function_name: &str) -> Result<Vec<String>, ParserError> {
-        let mut parameters = HashSet::new();
+        let mut parameters: Vec<String> = vec![];
 
         loop {
             let parameter = self.consume_identifier()?;
@@ -205,7 +203,7 @@ impl<'a> Parser<'a> {
                 ))?;
             }
 
-            parameters.insert(parameter);
+            parameters.push(parameter);
 
             if self.tokens.match_tokens(token_iter![Comma]).is_none() {
                 break;
