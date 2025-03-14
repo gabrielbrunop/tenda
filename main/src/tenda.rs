@@ -23,27 +23,27 @@ impl Tenda {
         }
     }
 
-    pub fn run(&mut self, string: String) -> String {
+    pub fn run(&mut self, string: String) -> Result<String, String> {
         let mut scanner = Scanner::new(&string);
 
         let tokens = match scanner.scan() {
             Ok(token) => token,
-            Err(errs) => return print_errors!(errs, "Erro léxico"),
+            Err(errs) => return Err(print_errors!(errs, "Erro léxico")),
         };
 
         let mut parser = Parser::new(&tokens);
 
         let ast = match parser.parse() {
             Ok(expr) => expr,
-            Err(errs) => return print_errors!(errs, "Erro sintático"),
+            Err(errs) => return Err(print_errors!(errs, "Erro sintático")),
         };
 
         let result = match self.interpreter.eval(&ast) {
             Ok(val) => val,
-            Err(err) => return format!("Erro semântico: {}", err),
+            Err(err) => return Err(format!("Erro semântico: {}", err)),
         };
 
-        format!("{}", result)
+        Ok(format!("{}", result))
     }
 }
 
