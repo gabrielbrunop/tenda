@@ -101,6 +101,10 @@ fn apply_closures_in_stmt(stmt: &mut ast::Stmt, closure_list: &ClosureList) {
                 apply_closures_in_stmt(or_else, closure_list);
             }
         }
+        Stmt::While(ast::While { cond, body }) => {
+            apply_closures_in_expr(cond, closure_list);
+            apply_closures_in_stmt(body, closure_list);
+        }
         Stmt::Block(Block(Ast(block))) => block
             .iter_mut()
             .for_each(|stmt| apply_closures_in_stmt(stmt, closure_list)),
@@ -272,6 +276,15 @@ fn get_stmt_var_refs(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> Vec<Clo
                 .chain(then_references)
                 .chain(or_else_references)
                 .collect::<Vec<_>>()
+        }
+        Stmt::While(ast::While { cond, body }) => {
+            let cond_references = get_expr_var_refs(cond, name)
+                .into_iter()
+                .map(|expr| (expr, closure_fn));
+
+            let body_references = get_stmt_var_refs(body, name, closure_fn);
+
+            cond_references.chain(body_references).collect::<Vec<_>>()
         }
         Stmt::Block(ast::Block(ast::Ast(block))) => block
             .iter()
