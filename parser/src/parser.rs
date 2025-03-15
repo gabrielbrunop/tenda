@@ -159,6 +159,8 @@ impl<'a> Parser<'a> {
 
         self.skip_token(TokenKind::LeftParen).map_err(|e| vec![e])?;
 
+        let guard = self.tokens.set_ignoring_newline();
+
         let parameters = match self.tokens.match_tokens(token_iter![RightParen]) {
             Some(_) => vec![],
             None => {
@@ -175,6 +177,8 @@ impl<'a> Parser<'a> {
                 parameters
             }
         };
+
+        drop(guard);
 
         let (body, _) = self.block(token_vec![BlockEnd], BlockScope::Function)?;
 
@@ -369,21 +373,22 @@ impl<'a> Parser<'a> {
     }
 
     fn call(&mut self) -> Result<ast::Expr, ParserError> {
-        let name = self.primary()?;
+        let lhs = self.primary()?;
 
         match self
             .tokens
             .match_tokens(token_iter![LeftParen, LeftBracket])
         {
-            Some(token) if token.kind == TokenKind::LeftParen => self.function_call(name),
-            Some(token) if token.kind == TokenKind::LeftBracket => self.access(name),
+            Some(token) if token.kind == TokenKind::LeftParen => self.function_call(lhs),
+            Some(token) if token.kind == TokenKind::LeftBracket => self.access(lhs),
             Some(_) => unreachable!(),
-            None => Ok(name),
+            None => Ok(lhs),
         }
     }
 
     fn function_call(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
         let mut arguments = vec![];
+        let _guard = self.tokens.set_ignoring_newline();
 
         if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
             loop {
@@ -407,6 +412,7 @@ impl<'a> Parser<'a> {
     }
 
     fn access(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
+        let _guard = self.tokens.set_ignoring_newline();
         let index = self.expression()?;
 
         let next_token_is_bracket = self
