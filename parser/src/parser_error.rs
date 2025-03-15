@@ -37,6 +37,8 @@ pub enum ParserErrorKind {
     IllegalReturn,
     #[error("'pare' fora de uma estrutura de repetição")]
     IllegalBreak,
+    #[error("'continue' fora de uma estrutura de repetição")]
+    IllegalContinue,
     #[error("parâmetro '{0}' duplicado na função")]
     DuplicateParameter(String),
 }
