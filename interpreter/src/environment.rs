@@ -66,6 +66,14 @@ pub enum StoredValue {
 }
 
 impl StoredValue {
+    pub fn new_unique(value: Value) -> Self {
+        StoredValue::Unique(value)
+    }
+
+    pub fn new_shared(value: Value) -> Self {
+        StoredValue::Shared(Rc::new(RefCell::new(value)))
+    }
+
     pub fn clone_value(&self) -> Value {
         match self {
             StoredValue::Unique(val) => val.clone(),
