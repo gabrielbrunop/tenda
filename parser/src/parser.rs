@@ -408,17 +408,20 @@ impl<'a> Parser<'a> {
     }
 
     fn call(&mut self) -> Result<ast::Expr, ParserError> {
-        let lhs = self.primary()?;
+        let mut lhs = self.primary()?;
 
-        match self
+        while let Some(token) = self
             .tokens
             .match_tokens(token_iter![LeftParen, LeftBracket])
         {
-            Some(token) if token.kind == TokenKind::LeftParen => self.function_call(lhs),
-            Some(token) if token.kind == TokenKind::LeftBracket => self.access(lhs),
-            Some(_) => unreachable!(),
-            None => Ok(lhs),
+            match token.kind {
+                TokenKind::LeftParen => lhs = self.function_call(lhs)?,
+                TokenKind::LeftBracket => lhs = self.access(lhs)?,
+                _ => unreachable!(),
+            }
         }
+
+        Ok(lhs)
     }
 
     fn function_call(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
