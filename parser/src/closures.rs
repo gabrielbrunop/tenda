@@ -110,6 +110,7 @@ fn apply_closures_in_stmt(stmt: &mut ast::Stmt, closure_list: &ClosureList) {
             .for_each(|stmt| apply_closures_in_stmt(stmt, closure_list)),
         Stmt::Return(Return(Some(expr))) => apply_closures_in_expr(expr, closure_list),
         Stmt::Return(Return(None)) => {}
+        Stmt::Break(_) => {}
     }
 }
 
@@ -296,6 +297,7 @@ fn get_stmt_var_refs(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> Vec<Clo
             .map(|expr| (*expr, closure_fn))
             .collect::<Vec<_>>(),
         Stmt::Return(ast::Return(None)) => vec![],
+        Stmt::Break(_) => vec![],
     }
 }
 

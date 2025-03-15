@@ -212,6 +212,7 @@ impl<'a> Scanner<'a> {
             "e" => token!(And, "e", self.line),
             "enquanto" => token!(While, "enquanto", self.line),
             "faça" => token!(Do, "faça", self.line),
+            "pare" => token!(Break, "pare", self.line),
             identifier => token!(
                 Identifier,
                 identifier,
