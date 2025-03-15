@@ -32,6 +32,10 @@ impl Interpreter {
             let value = self.interpret_stmt(stmt)?;
 
             last_value = value;
+
+            if self.stack.has_return() || self.stack.has_break() {
+                break;
+            }
         }
 
         Ok(last_value)
@@ -47,6 +51,7 @@ impl Interpreter {
             Block(block) => self.visit_block(block),
             Return(return_value) => self.visit_return(return_value),
             While(while_stmt) => self.visit_while(while_stmt),
+            Break(break_stmt) => self.visit_break(break_stmt),
         }
     }
 }
@@ -121,9 +126,17 @@ impl StmtVisitor<Result<Value>> for Interpreter {
     fn visit_while(&mut self, while_stmt: &ast::While) -> Result<Value> {
         let ast::While { cond, body } = while_stmt;
 
-        while self.visit_expr(cond)?.to_bool() {
+        while self.visit_expr(cond)?.to_bool() && !self.stack.has_break() {
             self.interpret_stmt(body)?;
         }
+
+        self.stack.set_break(false);
+
+        Ok(Value::Nil)
+    }
+
+    fn visit_break(&mut self, _break_stmt: &ast::Break) -> Result<Value> {
+        self.stack.set_break(true);
 
         Ok(Value::Nil)
     }

@@ -76,6 +76,7 @@ impl<'a> Parser<'a> {
             TokenKind::While => self.while_statement(),
             TokenKind::Function => self.function_declaration(),
             TokenKind::Return => self.return_statement().map_err(|err| vec![err]),
+            TokenKind::Break => self.break_statement().map_err(|err| vec![err]),
             _ => self
                 .expression()
                 .map_err(|err| vec![err])
@@ -160,7 +161,7 @@ impl<'a> Parser<'a> {
 
         self.skip_token(TokenKind::Do).map_err(|e| vec![e])?;
 
-        let (body, _) = self.block(token_vec![BlockEnd], BlockScope::While)?;
+        let (body, _) = self.block(token_vec![BlockEnd], BlockScope::Loop)?;
 
         Ok(ast::make_while_stmt!(condition, body))
     }
@@ -257,6 +258,16 @@ impl<'a> Parser<'a> {
         }?;
 
         Ok(ast::make_return_stmt!(Some(expr)))
+    }
+
+    fn break_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+        let break_token = self.tokens.next().unwrap();
+
+        if !self.scope.has_scope(BlockScope::Loop) {
+            return Err(parser_err!(IllegalBreak, break_token.line));
+        }
+
+        Ok(ast::make_break_stmt!())
     }
 
     fn expression(&mut self) -> Result<ast::Expr, ParserError> {

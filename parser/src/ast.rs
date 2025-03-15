@@ -38,6 +38,7 @@ pub enum Stmt {
     While(While),
     Block(Block),
     Return(Return),
+    Break(Break),
 }
 
 pub trait StmtVisitor<T> {
@@ -47,10 +48,14 @@ pub trait StmtVisitor<T> {
     fn visit_block(&mut self, block: &Block) -> T;
     fn visit_return(&mut self, return_stmt: &Return) -> T;
     fn visit_while(&mut self, while_stmt: &While) -> T;
+    fn visit_break(&mut self, break_stmt: &Break) -> T;
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Return(pub Option<Expr>);
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Break;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Block(pub Ast);
@@ -403,6 +408,13 @@ macro_rules! make_return_stmt {
     }};
 }
 
+macro_rules! make_break_stmt {
+    () => {{
+        use $crate::ast::Stmt;
+        Stmt::Break($crate::ast::Break)
+    }};
+}
+
 macro_rules! make_binary_expr {
     ($lhs:expr, $op:expr, $rhs:expr) => {{
         use $crate::ast::Expr;
@@ -484,6 +496,7 @@ pub(crate) use make_access_expr;
 pub(crate) use make_assign_expr;
 pub(crate) use make_binary_expr;
 pub(crate) use make_block_stmt;
+pub(crate) use make_break_stmt;
 pub(crate) use make_call_expr;
 pub(crate) use make_cond_stmt;
 pub(crate) use make_function_decl;

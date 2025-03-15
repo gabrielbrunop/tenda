@@ -8,6 +8,7 @@ type Result<T> = std::result::Result<T, StackError>;
 pub struct Stack {
     global: Environment,
     scopes: Vec<Environment>,
+    has_break: bool,
 }
 
 impl Stack {
@@ -15,6 +16,7 @@ impl Stack {
         Stack {
             global: Environment::new(),
             scopes: vec![],
+            has_break: false,
         }
     }
 
@@ -76,10 +78,22 @@ impl Stack {
         self.get_innermost_mut().set_return(value);
     }
 
+    pub fn has_return(&self) -> bool {
+        self.get_innermost().get_return().is_some()
+    }
+
     pub fn consume_return(&mut self) -> Option<StoredValue> {
         let value = self.get_innermost().get_return().cloned();
         self.get_innermost_mut().clear_return();
         value
+    }
+
+    pub fn set_break(&mut self, value: bool) {
+        self.has_break = value;
+    }
+
+    pub fn has_break(&self) -> bool {
+        self.has_break
     }
 }
 
@@ -100,7 +114,10 @@ impl Stack {
             None => return,
         };
 
-        let scope_above = match self.scopes.get_mut(len - 2) {
+        let last_index = len - 1;
+        let decremented_index = last_index - 1;
+
+        let scope_above = match self.scopes.get_mut(decremented_index) {
             Some(scope) => scope,
             None => return,
         };
