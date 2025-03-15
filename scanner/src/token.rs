@@ -57,6 +57,8 @@ pub enum TokenKind {
     Else,
     Return,
     BlockEnd,
+    While,
+    Do,
     Identifier,
     EqualSign,
     Plus,

@@ -73,6 +73,7 @@ impl<'a> Parser<'a> {
         let result = match token.kind {
             TokenKind::Let => self.declaration().map_err(|err| vec![err]),
             TokenKind::If => self.if_statement(),
+            TokenKind::While => self.while_statement(),
             TokenKind::Function => self.function_declaration(),
             TokenKind::Return => self.return_statement().map_err(|err| vec![err]),
             _ => self
@@ -150,6 +151,18 @@ impl<'a> Parser<'a> {
         };
 
         Ok(stmt)
+    }
+
+    fn while_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+        self.tokens.next();
+
+        let condition = self.expression().map_err(|err| vec![err])?;
+
+        self.skip_token(TokenKind::Do).map_err(|e| vec![e])?;
+
+        let (body, _) = self.block(token_vec![BlockEnd], BlockScope::While)?;
+
+        Ok(ast::make_while_stmt!(condition, body))
     }
 
     fn function_declaration(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {

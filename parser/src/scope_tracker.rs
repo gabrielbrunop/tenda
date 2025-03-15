@@ -7,6 +7,7 @@ use std::{
 pub enum BlockScope {
     If,
     Else,
+    While,
     Function,
     Global,
 }

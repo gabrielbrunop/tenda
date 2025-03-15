@@ -35,6 +35,7 @@ pub enum Stmt {
     Expr(Expr),
     Decl(Decl),
     Cond(Cond),
+    While(While),
     Block(Block),
     Return(Return),
 }
@@ -45,6 +46,7 @@ pub trait StmtVisitor<T> {
     fn visit_cond(&mut self, cond: &Cond) -> T;
     fn visit_block(&mut self, block: &Block) -> T;
     fn visit_return(&mut self, return_stmt: &Return) -> T;
+    fn visit_while(&mut self, while_stmt: &While) -> T;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -127,6 +129,31 @@ pub struct Cond {
     pub cond: Expr,
     pub then: Box<Stmt>,
     pub or_else: Option<Box<Stmt>>,
+}
+
+impl Cond {
+    pub fn new(cond: Expr, then: Stmt, or_else: Option<Stmt>) -> Self {
+        Cond {
+            cond,
+            then: Box::new(then),
+            or_else: or_else.map(Box::new),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct While {
+    pub cond: Expr,
+    pub body: Box<Stmt>,
+}
+
+impl While {
+    pub fn new(cond: Expr, body: Stmt) -> Self {
+        While {
+            cond,
+            body: Box::new(body),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -435,11 +462,14 @@ macro_rules! make_list_expr {
 macro_rules! make_cond_stmt {
     ($cond:expr, $then:expr, $or_else:expr) => {{
         use $crate::ast::{Cond, Stmt};
-        Stmt::Cond(Cond {
-            cond: $cond,
-            then: Box::new($then),
-            or_else: $or_else.map(Box::new),
-        })
+        Stmt::Cond(Cond::new($cond, $then, $or_else))
+    }};
+}
+
+macro_rules! make_while_stmt {
+    ($cond:expr, $body:expr) => {{
+        use $crate::ast::{Stmt, While};
+        Stmt::While(While::new($cond, $body))
     }};
 }
 
@@ -464,3 +494,4 @@ pub(crate) use make_local_decl;
 pub(crate) use make_return_stmt;
 pub(crate) use make_unary_expr;
 pub(crate) use make_variable_expr;
+pub(crate) use make_while_stmt;

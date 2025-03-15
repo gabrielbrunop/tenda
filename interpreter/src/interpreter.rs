@@ -46,6 +46,7 @@ impl Interpreter {
             Cond(cond) => self.visit_cond(cond),
             Block(block) => self.visit_block(block),
             Return(return_value) => self.visit_return(return_value),
+            While(while_stmt) => self.visit_while(while_stmt),
         }
     }
 }
@@ -113,6 +114,16 @@ impl StmtVisitor<Result<Value>> for Interpreter {
         } else if let Some(or_else) = or_else {
             self.interpret_stmt(or_else)?;
         };
+
+        Ok(Value::Nil)
+    }
+
+    fn visit_while(&mut self, while_stmt: &ast::While) -> Result<Value> {
+        let ast::While { cond, body } = while_stmt;
+
+        while self.visit_expr(cond)?.to_bool() {
+            self.interpret_stmt(body)?;
+        }
 
         Ok(Value::Nil)
     }
