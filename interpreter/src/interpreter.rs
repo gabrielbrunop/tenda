@@ -33,7 +33,7 @@ impl Interpreter {
 
             last_value = value;
 
-            if self.stack.has_return() || self.stack.has_break() {
+            if self.stack.has_return() || self.stack.has_break() || self.stack.has_continue() {
                 break;
             }
         }
@@ -52,6 +52,7 @@ impl Interpreter {
             Return(return_value) => self.visit_return(return_value),
             While(while_stmt) => self.visit_while(while_stmt),
             Break(break_stmt) => self.visit_break(break_stmt),
+            Continue(continue_stmt) => self.visit_continue(continue_stmt),
         }
     }
 }
@@ -128,6 +129,8 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
         while self.visit_expr(cond)?.to_bool() && !self.stack.has_break() {
             self.interpret_stmt(body)?;
+
+            self.stack.set_continue(false);
         }
 
         self.stack.set_break(false);
@@ -137,6 +140,12 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
     fn visit_break(&mut self, _break_stmt: &ast::Break) -> Result<Value> {
         self.stack.set_break(true);
+
+        Ok(Value::Nil)
+    }
+
+    fn visit_continue(&mut self, _continue_stmt: &ast::Continue) -> Result<Value> {
+        self.stack.set_continue(true);
 
         Ok(Value::Nil)
     }

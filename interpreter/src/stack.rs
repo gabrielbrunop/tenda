@@ -9,6 +9,7 @@ pub struct Stack {
     global: Environment,
     scopes: Vec<Environment>,
     has_break: bool,
+    has_continue: bool,
 }
 
 impl Stack {
@@ -17,6 +18,7 @@ impl Stack {
             global: Environment::new(),
             scopes: vec![],
             has_break: false,
+            has_continue: false,
         }
     }
 
@@ -94,6 +96,14 @@ impl Stack {
 
     pub fn has_break(&self) -> bool {
         self.has_break
+    }
+
+    pub fn set_continue(&mut self, value: bool) {
+        self.has_continue = value;
+    }
+
+    pub fn has_continue(&self) -> bool {
+        self.has_continue
     }
 }
 

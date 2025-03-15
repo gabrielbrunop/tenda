@@ -76,6 +76,7 @@ impl<'a> Parser<'a> {
             TokenKind::While => self.while_statement(),
             TokenKind::Function => self.function_declaration(),
             TokenKind::Return => self.return_statement().map_err(|err| vec![err]),
+            TokenKind::Continue => self.continue_statement().map_err(|err| vec![err]),
             TokenKind::Break => self.break_statement().map_err(|err| vec![err]),
             _ => self
                 .expression()
@@ -268,6 +269,16 @@ impl<'a> Parser<'a> {
         }
 
         Ok(ast::make_break_stmt!())
+    }
+
+    fn continue_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+        let continue_token = self.tokens.next().unwrap();
+
+        if !self.scope.has_scope(BlockScope::Loop) {
+            return Err(parser_err!(IllegalContinue, continue_token.line));
+        }
+
+        Ok(ast::make_continue_stmt!())
     }
 
     fn expression(&mut self) -> Result<ast::Expr, ParserError> {

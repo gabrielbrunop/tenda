@@ -60,6 +60,7 @@ pub enum TokenKind {
     While,
     Do,
     Break,
+    Continue,
     Identifier,
     EqualSign,
     Plus,
