@@ -102,7 +102,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
         if let Some(expr) = value {
             let value = self.visit_expr(expr)?;
-            self.stack.set_return(StoredValue::Unique(value));
+            self.stack.set_return(StoredValue::new_unique(value));
         }
 
         Ok(Value::Nil)
@@ -162,8 +162,8 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
         let value = self.visit_expr(value)?;
         let value = match local.is_captured_var {
-            true => StoredValue::Shared(Rc::new(RefCell::new(value))),
-            false => StoredValue::Unique(value),
+            true => StoredValue::new_shared(value),
+            false => StoredValue::new_unique(value),
         };
 
         let _ = self.stack.define(name.clone(), value);
@@ -189,10 +189,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
         }
 
         for param in params {
-            env.set(
-                param.clone(),
-                StoredValue::Shared(Rc::new(RefCell::new(Value::Nil))),
-            );
+            env.set(param.clone(), StoredValue::new_shared(Value::Nil));
         }
 
         let func = Function::new(
@@ -206,7 +203,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
                 for (param_name, arg_value) in params.into_iter() {
                     let _ = interpreter
                         .stack
-                        .set(param_name.clone(), StoredValue::Unique(arg_value));
+                        .set(param_name.clone(), StoredValue::new_unique(arg_value));
                 }
 
                 if let Some(body) = body {
@@ -227,7 +224,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
         let _ = self
             .stack
-            .define(name.clone(), StoredValue::Unique(Value::Function(func)));
+            .define(name.clone(), StoredValue::new_unique(Value::Function(func)));
 
         Ok(Value::Nil)
     }
@@ -486,7 +483,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
                 let result = self
                     .stack
-                    .set(name.clone(), StoredValue::Unique(value.clone()));
+                    .set(name.clone(), StoredValue::new_unique(value.clone()));
 
                 match result {
                     Ok(_) => Ok(value),
