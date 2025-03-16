@@ -36,6 +36,7 @@ pub enum Stmt {
     Decl(Decl),
     Cond(Cond),
     While(While),
+    ForEach(ForEach),
     Block(Block),
     Return(Return),
     Break(Break),
@@ -49,6 +50,7 @@ pub trait StmtVisitor<T> {
     fn visit_block(&mut self, block: &Block) -> T;
     fn visit_return(&mut self, return_stmt: &Return) -> T;
     fn visit_while(&mut self, while_stmt: &While) -> T;
+    fn visit_for_each(&mut self, for_each: &ForEach) -> T;
     fn visit_break(&mut self, break_stmt: &Break) -> T;
     fn visit_continue(&mut self, continue_stmt: &Continue) -> T;
 }
@@ -114,7 +116,7 @@ impl LocalDecl {
 #[derive(Debug, PartialEq, Clone)]
 pub struct FunctionDecl {
     pub name: String,
-    pub params: Vec<String>,
+    pub params: Vec<(String, usize)>,
     pub body: Box<Stmt>,
     pub captured_vars: Vec<String>,
     pub is_captured_var: bool,
@@ -122,7 +124,7 @@ pub struct FunctionDecl {
 }
 
 impl FunctionDecl {
-    pub fn new(name: String, params: Vec<String>, body: Stmt, uid: usize) -> Self {
+    pub fn new(name: String, params: Vec<(String, usize)>, body: Stmt, uid: usize) -> Self {
         FunctionDecl {
             name,
             params,
@@ -161,6 +163,25 @@ impl While {
     pub fn new(cond: Expr, body: Stmt) -> Self {
         While {
             cond,
+            body: Box::new(body),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ForEach {
+    pub item_name: String,
+    pub item_uid: usize,
+    pub iterable: Expr,
+    pub body: Box<Stmt>,
+}
+
+impl ForEach {
+    pub fn new(item_name: String, item_uid: usize, iterable: Expr, body: Stmt) -> Self {
+        ForEach {
+            item_name,
+            item_uid,
+            iterable,
             body: Box::new(body),
         }
     }
@@ -499,6 +520,18 @@ macro_rules! make_while_stmt {
     }};
 }
 
+macro_rules! make_for_each_stmt {
+    ($item_name:expr, $item_uid:expr, $iterable:expr, $body:expr) => {{
+        use $crate::ast::{ForEach, Stmt};
+        Stmt::ForEach(ForEach::new(
+            $item_name.to_string(),
+            $item_uid,
+            $iterable,
+            $body,
+        ))
+    }};
+}
+
 macro_rules! make_block_stmt {
     ($statements:expr) => {{
         use $crate::ast::{Block, Stmt};
@@ -514,6 +547,7 @@ pub(crate) use make_break_stmt;
 pub(crate) use make_call_expr;
 pub(crate) use make_cond_stmt;
 pub(crate) use make_continue_stmt;
+pub(crate) use make_for_each_stmt;
 pub(crate) use make_function_decl;
 pub(crate) use make_grouping_expr;
 pub(crate) use make_list_expr;

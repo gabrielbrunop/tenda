@@ -32,6 +32,12 @@ pub enum RuntimeErrorKind {
 
     #[error("índice fora dos limites: índice {}, tamanho {}", .index, .len)]
     IndexOutOfBounds { index: usize, len: usize },
+
+    #[error("limites de intervalo precisam ser números inteiros finitos: encontrado '{}'", .bound)]
+    InvalidRangeBounds { bound: f64 },
+
+    #[error("índice de lista precisa ser um número inteiro positivo e finito: encontrado '{}'", .index)]
+    InvalidIndex { index: f64 },
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]

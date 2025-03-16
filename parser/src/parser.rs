@@ -33,7 +33,7 @@ impl<'a> Parser<'a> {
             None => Err(vec![unexpected_eoi!(self)])?,
         };
 
-        closures::apply_closures_in_ast(&mut ast);
+        closures::annotate_ast_with_var_captures(&mut ast);
 
         Ok(ast)
     }
@@ -74,6 +74,7 @@ impl<'a> Parser<'a> {
             TokenKind::Let => self.parse_declaration(),
             TokenKind::If => self.parse_if_statement(),
             TokenKind::While => self.parse_while_statement(),
+            TokenKind::For => self.parse_for_each_statement(),
             TokenKind::Function => self.parse_function_declaration(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Continue => self.parse_continue_statement(),
@@ -164,6 +165,29 @@ impl<'a> Parser<'a> {
         Ok(ast::make_while_stmt!(condition, body))
     }
 
+    fn parse_for_each_statement(&mut self) -> Result<ast::Stmt> {
+        self.tokens.next();
+
+        self.skip_token(TokenKind::Each)?;
+
+        let name = self.consume_identifier()?;
+
+        self.skip_token(TokenKind::In)?;
+
+        let iterable = self.parse_expression()?;
+
+        self.skip_token(TokenKind::Do)?;
+
+        let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
+
+        Ok(ast::make_for_each_stmt!(
+            name,
+            self.gen_uid(),
+            iterable,
+            body
+        ))
+    }
+
     fn parse_function_declaration(&mut self) -> Result<ast::Stmt> {
         self.tokens.next();
 
@@ -191,6 +215,9 @@ impl<'a> Parser<'a> {
                 }
 
                 parameters
+                    .into_iter()
+                    .map(|p| (p, self.gen_uid()))
+                    .collect()
             }
         };
 
