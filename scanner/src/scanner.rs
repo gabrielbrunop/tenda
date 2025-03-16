@@ -242,7 +242,9 @@ impl<'a> Scanner<'a> {
             }
         }
     }
+}
 
+impl Scanner<'_> {
     fn peek_match(&mut self, expected: &str) -> bool {
         for c in expected.chars() {
             if let Some(&peeked) = self.source.peek() {
