@@ -95,6 +95,7 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
             is_captured_var,
             captured_vars,
             uid,
+            params,
             ..
         })) => {
             if closure_list.is_enclosed_var_decl(*uid) {
@@ -104,6 +105,12 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
             *captured_vars = closure_list.get_closures_names(*uid);
 
             annotate_stmt_with_var_captures(body, closure_list);
+
+            for param in params {
+                if closure_list.is_enclosed_var_decl(param.uid) {
+                    param.is_captured_var = true;
+                }
+            }
         }
         Stmt::Cond(ast::Cond { then, or_else, .. }) => {
             annotate_stmt_with_var_captures(then, closure_list);
@@ -116,9 +123,19 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
             annotate_expr_with_var_captures(cond, closure_list);
             annotate_stmt_with_var_captures(body, closure_list);
         }
-        Stmt::ForEach(ast::ForEach { iterable, body, .. }) => {
+        Stmt::ForEach(ast::ForEach {
+            iterable,
+            body,
+            item_uid,
+            is_item_captured,
+            ..
+        }) => {
             annotate_expr_with_var_captures(iterable, closure_list);
             annotate_stmt_with_var_captures(body, closure_list);
+
+            if closure_list.is_enclosed_var_decl(*item_uid) {
+                *is_item_captured = true;
+            }
         }
         Stmt::Block(Block(Ast(block))) => block
             .iter_mut()
@@ -130,10 +147,10 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
     }
 }
 
-fn annotate_expr_with_var_captures(stmt: &mut ast::Expr, closure_list: &VarCaptureList) {
+fn annotate_expr_with_var_captures(expr: &mut ast::Expr, closure_list: &VarCaptureList) {
     use ast::*;
 
-    match stmt {
+    match expr {
         Expr::Variable(Variable {
             uid,
             is_captured_var,
@@ -258,17 +275,12 @@ fn get_var_captures_from_fn_args(decl: &ast::Decl) -> Vec<VarCapture> {
     match decl {
         Decl::Function(FunctionDecl { body, params, .. }) => params
             .iter()
-            .flat_map(|(param_name, param_uid)| {
-                get_free_vars_in_statement(body, param_name)
-                    .into_iter()
-                    .map(|(var_ref_id, inner_fn_decl_id)| {
-                        VarCapture::new(
-                            inner_fn_decl_id,
-                            var_ref_id,
-                            *param_uid,
-                            param_name.to_string(),
-                        )
-                    })
+            .flat_map(|FunctionParam { name, uid, .. }| {
+                get_free_vars_in_statement(body, name).into_iter().map(
+                    |(var_ref_id, inner_fn_decl_id)| {
+                        VarCapture::new(inner_fn_decl_id, var_ref_id, *uid, name.to_string())
+                    },
+                )
             })
             .collect(),
         _ => vec![],

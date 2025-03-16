@@ -114,9 +114,16 @@ impl LocalDecl {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct FunctionParam {
+    pub name: String,
+    pub uid: usize,
+    pub is_captured_var: bool,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct FunctionDecl {
     pub name: String,
-    pub params: Vec<(String, usize)>,
+    pub params: Vec<FunctionParam>,
     pub body: Box<Stmt>,
     pub captured_vars: Vec<String>,
     pub is_captured_var: bool,
@@ -127,7 +134,14 @@ impl FunctionDecl {
     pub fn new(name: String, params: Vec<(String, usize)>, body: Stmt, uid: usize) -> Self {
         FunctionDecl {
             name,
-            params,
+            params: params
+                .into_iter()
+                .map(|(name, uid)| FunctionParam {
+                    name,
+                    uid,
+                    is_captured_var: false,
+                })
+                .collect(),
             body: Box::new(body),
             captured_vars: vec![],
             is_captured_var: false,
@@ -172,6 +186,7 @@ impl While {
 pub struct ForEach {
     pub item_name: String,
     pub item_uid: usize,
+    pub is_item_captured: bool,
     pub iterable: Expr,
     pub body: Box<Stmt>,
 }
@@ -181,6 +196,7 @@ impl ForEach {
         ForEach {
             item_name,
             item_uid,
+            is_item_captured: false,
             iterable,
             body: Box::new(body),
         }
