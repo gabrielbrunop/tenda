@@ -14,7 +14,7 @@ pub enum Value {
     String(String),
     Function(Function),
     List(Rc<RefCell<Vec<Value>>>),
-    Range(f64, f64),
+    Range(usize, usize),
     Nil,
 }
 
