@@ -25,7 +25,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) -> Result<ast::Ast, Vec<ParserError>> {
-        let program = self.program()?;
+        let program = self.parse_program()?;
 
         let mut ast = match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Eof => program,
@@ -38,7 +38,7 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
-    fn program(&mut self) -> Result<ast::Ast, Vec<ParserError>> {
+    fn parse_program(&mut self) -> Result<ast::Ast, Vec<ParserError>> {
         let mut stmt_list = vec![];
         let mut errors: Vec<ParserError> = vec![];
 
@@ -47,7 +47,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            match self.statement() {
+            match self.parse_statement() {
                 Ok(stmt) => stmt_list.push(stmt),
                 Err(e) => e.into_iter().for_each(|err| errors.push(err)),
             }
@@ -60,26 +60,26 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
         let token = match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Newline => {
                 self.tokens.next().unwrap();
-                return self.statement();
+                return self.parse_statement();
             }
             Some(token) => token,
             _ => unreachable!(),
         };
 
         let result = match token.kind {
-            TokenKind::Let => self.declaration().map_err(|err| vec![err]),
-            TokenKind::If => self.if_statement(),
-            TokenKind::While => self.while_statement(),
-            TokenKind::Function => self.function_declaration(),
-            TokenKind::Return => self.return_statement().map_err(|err| vec![err]),
-            TokenKind::Continue => self.continue_statement().map_err(|err| vec![err]),
-            TokenKind::Break => self.break_statement().map_err(|err| vec![err]),
+            TokenKind::Let => self.parse_declaration().map_err(|err| vec![err]),
+            TokenKind::If => self.parse_if_statement(),
+            TokenKind::While => self.parse_while_statement(),
+            TokenKind::Function => self.parse_function_declaration(),
+            TokenKind::Return => self.parse_return_statement().map_err(|err| vec![err]),
+            TokenKind::Continue => self.parse_continue_statement().map_err(|err| vec![err]),
+            TokenKind::Break => self.parse_break_statement().map_err(|err| vec![err]),
             _ => self
-                .expression()
+                .parse_expression()
                 .map_err(|err| vec![err])
                 .map(ast::Stmt::Expr),
         }?;
@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
         Ok(result)
     }
 
-    fn block(
+    fn parse_block(
         &mut self,
         end_token_types: Vec<TokenKind>,
         scope: BlockScope,
@@ -109,7 +109,7 @@ impl<'a> Parser<'a> {
                 break token.kind;
             }
 
-            match self.statement() {
+            match self.parse_statement() {
                 Ok(stmt) => {
                     let ast::Ast(ast) = &mut ast;
                     ast.push(stmt);
@@ -128,15 +128,15 @@ impl<'a> Parser<'a> {
         Ok((ast::make_block_stmt!(ast), block_end_delimiter))
     }
 
-    fn if_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_if_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
         self.tokens.next();
 
-        let condition = self.expression().map_err(|err| vec![err])?;
+        let condition = self.parse_expression().map_err(|err| vec![err])?;
 
         let (then_branch, block_end_delimiter) = match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Then => {
                 self.tokens.next();
-                self.block(token_vec![BlockEnd, Else], BlockScope::If)?
+                self.parse_block(token_vec![BlockEnd, Else], BlockScope::If)?
             }
             Some(token) => return Err(vec![unexpected_token!(token)]),
             None => return Err(vec![unexpected_eoi!(self)]),
@@ -145,7 +145,7 @@ impl<'a> Parser<'a> {
         let stmt = match block_end_delimiter {
             TokenKind::Else => {
                 self.tokens.next();
-                let (else_branch, _) = self.block(token_vec![BlockEnd], BlockScope::Else)?;
+                let (else_branch, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Else)?;
                 ast::make_cond_stmt!(condition, then_branch, Some(else_branch))
             }
             TokenKind::BlockEnd => ast::make_cond_stmt!(condition, then_branch, None),
@@ -155,19 +155,19 @@ impl<'a> Parser<'a> {
         Ok(stmt)
     }
 
-    fn while_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_while_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
         self.tokens.next();
 
-        let condition = self.expression().map_err(|err| vec![err])?;
+        let condition = self.parse_expression().map_err(|err| vec![err])?;
 
         self.skip_token(TokenKind::Do).map_err(|e| vec![e])?;
 
-        let (body, _) = self.block(token_vec![BlockEnd], BlockScope::Loop)?;
+        let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
 
         Ok(ast::make_while_stmt!(condition, body))
     }
 
-    fn function_declaration(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_function_declaration(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
         self.tokens.next();
 
         let name = self.consume_identifier().map_err(|e| vec![e])?;
@@ -179,7 +179,7 @@ impl<'a> Parser<'a> {
         let parameters = match self.tokens.match_tokens(token_iter![RightParen]) {
             Some(_) => vec![],
             None => {
-                let parameters = self.function_parameters(&name).map_err(|e| vec![e])?;
+                let parameters = self.parse_function_parameters(&name).map_err(|e| vec![e])?;
 
                 if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
                     Err(vec![parser_err!(
@@ -195,7 +195,7 @@ impl<'a> Parser<'a> {
 
         drop(guard);
 
-        let (body, _) = self.block(token_vec![BlockEnd], BlockScope::Function)?;
+        let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Function)?;
 
         Ok(ast::make_function_decl!(
             name.to_string(),
@@ -205,7 +205,10 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn function_parameters(&mut self, function_name: &str) -> Result<Vec<String>, ParserError> {
+    fn parse_function_parameters(
+        &mut self,
+        function_name: &str,
+    ) -> Result<Vec<String>, ParserError> {
         let mut parameters: Vec<String> = vec![];
 
         loop {
@@ -232,7 +235,7 @@ impl<'a> Parser<'a> {
         Ok(parameters.into_iter().collect())
     }
 
-    fn declaration(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_declaration(&mut self) -> Result<ast::Stmt, ParserError> {
         self.tokens.next();
 
         let name = self.consume_identifier()?;
@@ -241,12 +244,12 @@ impl<'a> Parser<'a> {
 
         Ok(ast::make_local_decl!(
             name.to_string(),
-            self.expression()?,
+            self.parse_expression()?,
             self.gen_uid()
         ))
     }
 
-    fn return_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_return_statement(&mut self) -> Result<ast::Stmt, ParserError> {
         let return_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Function) {
@@ -254,14 +257,14 @@ impl<'a> Parser<'a> {
         }
 
         let expr = match self.tokens.peek() {
-            Some(token) if token.kind != TokenKind::Newline => self.expression(),
+            Some(token) if token.kind != TokenKind::Newline => self.parse_expression(),
             _ => Ok(ast::make_literal_expr!(Nil)),
         }?;
 
         Ok(ast::make_return_stmt!(Some(expr)))
     }
 
-    fn break_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_break_statement(&mut self) -> Result<ast::Stmt, ParserError> {
         let break_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Loop) {
@@ -271,7 +274,7 @@ impl<'a> Parser<'a> {
         Ok(ast::make_break_stmt!())
     }
 
-    fn continue_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_continue_statement(&mut self) -> Result<ast::Stmt, ParserError> {
         let continue_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Loop) {
@@ -281,15 +284,15 @@ impl<'a> Parser<'a> {
         Ok(ast::make_continue_stmt!())
     }
 
-    fn expression(&mut self) -> Result<ast::Expr, ParserError> {
-        self.assignment()
+    fn parse_expression(&mut self) -> Result<ast::Expr, ParserError> {
+        self.parse_assignment()
     }
 
-    fn assignment(&mut self) -> Result<ast::Expr, ParserError> {
-        let expr = self.logical()?;
+    fn parse_assignment(&mut self) -> Result<ast::Expr, ParserError> {
+        let expr = self.parse_logical()?;
 
         if let Some(equal_sign) = self.tokens.match_tokens(token_iter![EqualSign]) {
-            let value = self.assignment()?;
+            let value = self.parse_assignment()?;
 
             return match expr {
                 ast::Expr::Variable(_) | ast::Expr::Access(_) => {
@@ -305,20 +308,20 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn logical(&mut self) -> Result<ast::Expr, ParserError> {
-        let mut expr = self.equality()?;
+    fn parse_logical(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut expr = self.parse_equality()?;
 
         while let Some(op) = self.tokens.match_tokens(token_iter![Or, And]) {
             let lhs = expr;
-            let rhs = self.equality()?;
+            let rhs = self.parse_equality()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
         }
 
         Ok(expr)
     }
 
-    fn equality(&mut self) -> Result<ast::Expr, ParserError> {
-        let mut expr = self.comparison()?;
+    fn parse_equality(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut expr = self.parse_comparison()?;
 
         loop {
             let op: Option<ast::BinaryOperator> = {
@@ -335,7 +338,7 @@ impl<'a> Parser<'a> {
 
             if let Some(op) = op {
                 let lhs = expr;
-                let rhs = self.comparison()?;
+                let rhs = self.parse_comparison()?;
                 expr = ast::make_binary_expr!(lhs, op, rhs);
             } else {
                 break;
@@ -345,78 +348,78 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<ast::Expr, ParserError> {
-        let mut expr = self.term()?;
+    fn parse_comparison(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut expr = self.parse_term()?;
 
         while let Some(op) =
             self.tokens
                 .match_tokens(token_iter![Greater, GreaterOrEqual, Less, LessOrEqual])
         {
             let lhs = expr;
-            let rhs = self.term()?;
+            let rhs = self.parse_term()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
         }
 
         Ok(expr)
     }
 
-    fn term(&mut self) -> Result<ast::Expr, ParserError> {
-        let mut expr = self.factor()?;
+    fn parse_term(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut expr = self.parse_factor()?;
 
         while let Some(op) = self.tokens.match_tokens(token_iter![Plus, Minus]) {
             let lhs = expr;
-            let rhs = self.factor()?;
+            let rhs = self.parse_factor()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
         }
 
         Ok(expr)
     }
 
-    fn factor(&mut self) -> Result<ast::Expr, ParserError> {
-        let mut expr = self.exponent()?;
+    fn parse_factor(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut expr = self.parse_exponent()?;
 
         while let Some(op) = self.tokens.match_tokens(token_iter![Star, Slash, Percent]) {
             let lhs = expr;
-            let rhs = self.exponent()?;
+            let rhs = self.parse_exponent()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
         }
 
         Ok(expr)
     }
 
-    fn exponent(&mut self) -> Result<ast::Expr, ParserError> {
-        let mut expr = self.unary()?;
+    fn parse_exponent(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut expr = self.parse_unary()?;
 
         while let Some(op) = self.tokens.match_tokens(token_iter![Caret]) {
             let lhs = expr;
-            let rhs = self.unary()?;
+            let rhs = self.parse_unary()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
         }
 
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_unary(&mut self) -> Result<ast::Expr, ParserError> {
         if let Some(op) = self.tokens.match_tokens(token_iter![Minus, Not]) {
-            let rhs = self.unary()?;
+            let rhs = self.parse_unary()?;
             let expr = ast::make_unary_expr!(op.into(), rhs);
 
             Ok(expr)
         } else {
-            self.call()
+            self.parse_call()
         }
     }
 
-    fn call(&mut self) -> Result<ast::Expr, ParserError> {
-        let mut lhs = self.primary()?;
+    fn parse_call(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut lhs = self.parse_primary()?;
 
         while let Some(token) = self
             .tokens
             .match_tokens(token_iter![LeftParen, LeftBracket])
         {
             match token.kind {
-                TokenKind::LeftParen => lhs = self.function_call(lhs)?,
-                TokenKind::LeftBracket => lhs = self.access(lhs)?,
+                TokenKind::LeftParen => lhs = self.parse_function_call(lhs)?,
+                TokenKind::LeftBracket => lhs = self.parse_access(lhs)?,
                 _ => unreachable!(),
             }
         }
@@ -424,13 +427,13 @@ impl<'a> Parser<'a> {
         Ok(lhs)
     }
 
-    fn function_call(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
+    fn parse_function_call(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
         let mut arguments = vec![];
         let _guard = self.tokens.set_ignoring_newline();
 
         if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
             loop {
-                arguments.push(self.expression()?);
+                arguments.push(self.parse_expression()?);
 
                 if self.tokens.match_tokens(token_iter![Comma]).is_none() {
                     break;
@@ -449,9 +452,9 @@ impl<'a> Parser<'a> {
         Ok(ast::make_call_expr!(name, arguments))
     }
 
-    fn access(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
+    fn parse_access(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
         let _guard = self.tokens.set_ignoring_newline();
-        let index = self.expression()?;
+        let index = self.parse_expression()?;
 
         let next_token_is_bracket = self
             .tokens
@@ -469,7 +472,7 @@ impl<'a> Parser<'a> {
         Ok(ast::make_access_expr!(name, index))
     }
 
-    fn primary(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_primary(&mut self) -> Result<ast::Expr, ParserError> {
         use TokenKind::*;
 
         let token = match self.tokens.next() {
@@ -485,11 +488,11 @@ impl<'a> Parser<'a> {
             }
             LeftBracket => {
                 let _guard = self.tokens.set_ignoring_newline();
-                self.list()
+                self.parse_list()
             }
             LeftParen => {
                 let _guard = self.tokens.set_ignoring_newline();
-                let expr = self.expression()?;
+                let expr = self.parse_expression()?;
 
                 if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
                     return Err(parser_err!(MissingParentheses, line));
@@ -510,7 +513,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn list(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_list(&mut self) -> Result<ast::Expr, ParserError> {
         if self
             .tokens
             .match_tokens(token_iter![RightBracket])
@@ -522,7 +525,7 @@ impl<'a> Parser<'a> {
         let mut elements = vec![];
 
         loop {
-            elements.push(self.expression()?);
+            elements.push(self.parse_expression()?);
 
             if self.tokens.match_tokens(token_iter![Comma]).is_none() {
                 break;
