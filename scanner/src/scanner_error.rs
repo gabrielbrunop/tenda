@@ -20,8 +20,10 @@ impl Display for LexicalError {
 pub enum LexicalErrorKind {
     #[error("zeros à esquerda em literais numéricos não são permitidos")]
     LeadingZeroNumberLiterals,
+
     #[error("fim de linha inesperado em texto")]
     UnexpectedStringEol,
+
     #[error("caractere inesperado: {0}")]
     UnexpectedChar(char),
 }

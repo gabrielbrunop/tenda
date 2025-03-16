@@ -107,7 +107,7 @@ impl TokenIterator<'_> {
         NewlineGuard::new(self.ignoring_newline_counter.clone())
     }
 
-    pub fn match_tokens(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
+    pub fn consume_matching_tokens(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
         self.ignore_newline();
 
         let next = self.tokens.peek();
