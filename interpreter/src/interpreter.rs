@@ -339,6 +339,14 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     rhs
                 }
             }
+            ast::BinaryOperator::Range => match (lhs, rhs) {
+                (Number(lhs), Number(rhs)) => Value::Range(lhs, rhs),
+                (lhs, rhs) => type_err!(
+                    "não é possível criar um intervalo entre '{}' e '{}'",
+                    lhs,
+                    rhs
+                ),
+            },
         };
 
         match expr {
