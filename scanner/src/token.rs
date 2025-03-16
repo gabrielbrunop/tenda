@@ -63,6 +63,7 @@ pub enum TokenKind {
     Continue,
     Identifier,
     EqualSign,
+    Until,
     Plus,
     Minus,
     Star,

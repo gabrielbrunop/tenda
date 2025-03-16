@@ -336,6 +336,7 @@ pub enum BinaryOperator {
     LessOrEqual,
     LogicalAnd,
     LogicalOr,
+    Range,
 }
 
 impl From<Token> for BinaryOperator {
@@ -356,6 +357,7 @@ impl From<Token> for BinaryOperator {
             TokenKind::LessOrEqual => LessOrEqual,
             TokenKind::Or => LogicalOr,
             TokenKind::And => LogicalAnd,
+            TokenKind::Until => Range,
             _ => panic!("invalid token for binary operation"),
         }
     }

@@ -14,6 +14,7 @@ pub enum Value {
     String(String),
     Function(Function),
     List(Rc<RefCell<Vec<Value>>>),
+    Range(f64, f64),
     Nil,
 }
 
@@ -27,6 +28,7 @@ impl Value {
             String(_) => ValueType::String,
             Function(_) => ValueType::Function,
             List(_) => ValueType::List,
+            Range(_, _) => ValueType::Range,
             Nil => ValueType::Nil,
         }
     }
@@ -38,6 +40,7 @@ impl Value {
             Value::String(_) => true,
             Value::Function(_) => true,
             Value::List(_) => true,
+            Value::Range(_, _) => true,
             Value::Nil => false,
         }
     }
@@ -71,6 +74,7 @@ impl Display for Value {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
+                Range(start, end) => format!("{} até {}", start, end),
                 Nil => Literal::NIL_LITERAL.to_string(),
             }
         )
@@ -97,6 +101,7 @@ pub enum ValueType {
     String,
     Function,
     List,
+    Range,
     Nil,
 }
 
@@ -116,6 +121,7 @@ impl Display for ValueType {
             String => "texto".to_string(),
             Function => "função".to_string(),
             List => "lista".to_string(),
+            Range => "intervalo".to_string(),
             Nil => "Nada".to_string(),
         };
 

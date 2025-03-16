@@ -351,7 +351,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_comparison(&mut self) -> Result<ast::Expr> {
-        let mut expr = self.parse_term()?;
+        let mut expr = self.parse_range()?;
 
         while let Some(op) = self.tokens.consume_matching_tokens(token_iter![
             Greater,
@@ -360,11 +360,23 @@ impl<'a> Parser<'a> {
             LessOrEqual
         ]) {
             let lhs = expr;
-            let rhs = self.parse_term()?;
+            let rhs = self.parse_range()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
         }
 
         Ok(expr)
+    }
+
+    fn parse_range(&mut self) -> Result<ast::Expr> {
+        let lhs = self.parse_term()?;
+
+        if let Some(op) = self.tokens.consume_matching_tokens(token_iter![Until]) {
+            let rhs = self.parse_expression()?;
+
+            return Ok(ast::make_binary_expr!(lhs, op.into(), rhs));
+        }
+
+        Ok(lhs)
     }
 
     fn parse_term(&mut self) -> Result<ast::Expr> {

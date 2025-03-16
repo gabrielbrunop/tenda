@@ -210,6 +210,7 @@ impl<'a> Scanner<'a> {
             "fim" => token!(BlockEnd, "fim", self.line),
             "ou" => token!(Or, "ou", self.line),
             "e" => token!(And, "e", self.line),
+            "até" => token!(Until, "até", self.line),
             "enquanto" => token!(While, "enquanto", self.line),
             "faça" => token!(Do, "faça", self.line),
             "pare" => token!(Break, "pare", self.line),
