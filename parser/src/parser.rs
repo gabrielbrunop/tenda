@@ -5,7 +5,7 @@ use scanner::{
 
 use crate::{
     ast, closures, parser_err,
-    parser_error::{unexpected_eoi, unexpected_token, ParserError, ParserErrorKind},
+    parser_error::{unexpected_eoi, unexpected_token, ParserError, ParserErrorKind, Result},
     scope_tracker::{BlockScope, ScopeTracker},
 };
 
@@ -24,7 +24,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<ast::Ast, Vec<ParserError>> {
+    pub fn parse(&mut self) -> Result<ast::Ast> {
         let program = self.parse_program()?;
 
         let mut ast = match self.tokens.peek() {
@@ -38,7 +38,7 @@ impl<'a> Parser<'a> {
         Ok(ast)
     }
 
-    fn parse_program(&mut self) -> Result<ast::Ast, Vec<ParserError>> {
+    fn parse_program(&mut self) -> Result<ast::Ast> {
         let mut stmt_list = vec![];
         let mut errors: Vec<ParserError> = vec![];
 
@@ -60,7 +60,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_statement(&mut self) -> Result<ast::Stmt> {
         let token = match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Newline => {
                 self.tokens.next().unwrap();
@@ -71,20 +71,17 @@ impl<'a> Parser<'a> {
         };
 
         let result = match token.kind {
-            TokenKind::Let => self.parse_declaration().map_err(|err| vec![err]),
+            TokenKind::Let => self.parse_declaration(),
             TokenKind::If => self.parse_if_statement(),
             TokenKind::While => self.parse_while_statement(),
             TokenKind::Function => self.parse_function_declaration(),
-            TokenKind::Return => self.parse_return_statement().map_err(|err| vec![err]),
-            TokenKind::Continue => self.parse_continue_statement().map_err(|err| vec![err]),
-            TokenKind::Break => self.parse_break_statement().map_err(|err| vec![err]),
-            _ => self
-                .parse_expression()
-                .map_err(|err| vec![err])
-                .map(ast::Stmt::Expr),
+            TokenKind::Return => self.parse_return_statement(),
+            TokenKind::Continue => self.parse_continue_statement(),
+            TokenKind::Break => self.parse_break_statement(),
+            _ => self.parse_expression().map(ast::Stmt::Expr),
         }?;
 
-        self.consume_newline().map_err(|err| vec![err])?;
+        self.consume_newline()?;
 
         Ok(result)
     }
@@ -93,7 +90,7 @@ impl<'a> Parser<'a> {
         &mut self,
         end_token_types: Vec<TokenKind>,
         scope: BlockScope,
-    ) -> Result<(ast::Stmt, TokenKind), Vec<ParserError>> {
+    ) -> Result<(ast::Stmt, TokenKind)> {
         let _guard = self.scope.guard(scope);
         let mut ast = ast::Ast::new();
 
@@ -123,15 +120,15 @@ impl<'a> Parser<'a> {
         }
 
         self.consume_newline().ok();
-        self.skip_token(block_end_delimiter).map_err(|e| vec![e])?;
+        self.skip_token(block_end_delimiter)?;
 
         Ok((ast::make_block_stmt!(ast), block_end_delimiter))
     }
 
-    fn parse_if_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_if_statement(&mut self) -> Result<ast::Stmt> {
         self.tokens.next();
 
-        let condition = self.parse_expression().map_err(|err| vec![err])?;
+        let condition = self.parse_expression()?;
 
         let (then_branch, block_end_delimiter) = match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Then => {
@@ -155,33 +152,37 @@ impl<'a> Parser<'a> {
         Ok(stmt)
     }
 
-    fn parse_while_statement(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_while_statement(&mut self) -> Result<ast::Stmt> {
         self.tokens.next();
 
-        let condition = self.parse_expression().map_err(|err| vec![err])?;
+        let condition = self.parse_expression()?;
 
-        self.skip_token(TokenKind::Do).map_err(|e| vec![e])?;
+        self.skip_token(TokenKind::Do)?;
 
         let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
 
         Ok(ast::make_while_stmt!(condition, body))
     }
 
-    fn parse_function_declaration(&mut self) -> Result<ast::Stmt, Vec<ParserError>> {
+    fn parse_function_declaration(&mut self) -> Result<ast::Stmt> {
         self.tokens.next();
 
-        let name = self.consume_identifier().map_err(|e| vec![e])?;
+        let name = self.consume_identifier()?;
 
-        self.skip_token(TokenKind::LeftParen).map_err(|e| vec![e])?;
+        self.skip_token(TokenKind::LeftParen)?;
 
         let guard = self.tokens.set_ignoring_newline();
 
-        let parameters = match self.tokens.match_tokens(token_iter![RightParen]) {
+        let parameters = match self.tokens.consume_matching_tokens(token_iter![RightParen]) {
             Some(_) => vec![],
             None => {
-                let parameters = self.parse_function_parameters(&name).map_err(|e| vec![e])?;
+                let parameters = self.parse_function_parameters(&name)?;
 
-                if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
+                if self
+                    .tokens
+                    .consume_matching_tokens(token_iter![RightParen])
+                    .is_none()
+                {
                     Err(vec![parser_err!(
                         MissingParentheses,
                         self.tokens.next().unwrap().line,
@@ -205,29 +206,30 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_function_parameters(
-        &mut self,
-        function_name: &str,
-    ) -> Result<Vec<String>, ParserError> {
+    fn parse_function_parameters(&mut self, function_name: &str) -> Result<Vec<String>> {
         let mut parameters: Vec<String> = vec![];
 
         loop {
             let parameter = self.consume_identifier()?;
 
             if parameters.contains(&parameter) {
-                Err(parser_err!(
+                Err(vec![parser_err!(
                     DuplicateParameter(parameter.clone()),
                     self.tokens.get_last_line(),
                     format!(
                         "parâmetro '{}' duplicado na função '{}'",
                         parameter, function_name
                     )
-                ))?;
+                )])?;
             }
 
             parameters.push(parameter);
 
-            if self.tokens.match_tokens(token_iter![Comma]).is_none() {
+            if self
+                .tokens
+                .consume_matching_tokens(token_iter![Comma])
+                .is_none()
+            {
                 break;
             }
         }
@@ -235,7 +237,7 @@ impl<'a> Parser<'a> {
         Ok(parameters.into_iter().collect())
     }
 
-    fn parse_declaration(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_declaration(&mut self) -> Result<ast::Stmt> {
         self.tokens.next();
 
         let name = self.consume_identifier()?;
@@ -249,11 +251,11 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_return_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_return_statement(&mut self) -> Result<ast::Stmt> {
         let return_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Function) {
-            return Err(parser_err!(IllegalReturn, return_token.line));
+            return Err(vec![parser_err!(IllegalReturn, return_token.line)]);
         }
 
         let expr = match self.tokens.peek() {
@@ -264,54 +266,54 @@ impl<'a> Parser<'a> {
         Ok(ast::make_return_stmt!(Some(expr)))
     }
 
-    fn parse_break_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_break_statement(&mut self) -> Result<ast::Stmt> {
         let break_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Loop) {
-            return Err(parser_err!(IllegalBreak, break_token.line));
+            return Err(vec![parser_err!(IllegalBreak, break_token.line)]);
         }
 
         Ok(ast::make_break_stmt!())
     }
 
-    fn parse_continue_statement(&mut self) -> Result<ast::Stmt, ParserError> {
+    fn parse_continue_statement(&mut self) -> Result<ast::Stmt> {
         let continue_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Loop) {
-            return Err(parser_err!(IllegalContinue, continue_token.line));
+            return Err(vec![parser_err!(IllegalContinue, continue_token.line)]);
         }
 
         Ok(ast::make_continue_stmt!())
     }
 
-    fn parse_expression(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_expression(&mut self) -> Result<ast::Expr> {
         self.parse_assignment()
     }
 
-    fn parse_assignment(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_assignment(&mut self) -> Result<ast::Expr> {
         let expr = self.parse_logical()?;
 
-        if let Some(equal_sign) = self.tokens.match_tokens(token_iter![EqualSign]) {
+        if let Some(equal_sign) = self.tokens.consume_matching_tokens(token_iter![EqualSign]) {
             let value = self.parse_assignment()?;
 
             return match expr {
                 ast::Expr::Variable(_) | ast::Expr::Access(_) => {
                     Ok(ast::make_assign_expr!(expr, value))
                 }
-                _ => Err(parser_err!(
+                _ => Err(vec![parser_err!(
                     InvalidAssignmentTarget(equal_sign.clone_ref()),
                     equal_sign.line
-                )),
+                )]),
             };
         }
 
         Ok(expr)
     }
 
-    fn parse_logical(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_logical(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_equality()?;
 
-        while let Some(op) = self.tokens.match_tokens(token_iter![Or, And]) {
+        while let Some(op) = self.tokens.consume_matching_tokens(token_iter![Or, And]) {
             let lhs = expr;
             let rhs = self.parse_equality()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
@@ -320,17 +322,17 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_equality(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_equality(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_comparison()?;
 
         loop {
             let op: Option<ast::BinaryOperator> = {
-                if let Some(token) = self.tokens.match_tokens(token_iter![Equals]) {
+                if let Some(token) = self.tokens.consume_matching_tokens(token_iter![Equals]) {
                     Some(token.into())
                 } else if self.tokens.matches_sequence(token_iter![Not, Equals]) {
                     Some(ast::BinaryOperator::Inequality)
-                } else if let Some(token) = self.tokens.match_tokens(token_iter![Not]) {
-                    return Err(unexpected_token!(token));
+                } else if let Some(token) = self.tokens.consume_matching_tokens(token_iter![Not]) {
+                    return Err(vec![unexpected_token!(token)]);
                 } else {
                     None
                 }
@@ -348,13 +350,15 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_comparison(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_comparison(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_term()?;
 
-        while let Some(op) =
-            self.tokens
-                .match_tokens(token_iter![Greater, GreaterOrEqual, Less, LessOrEqual])
-        {
+        while let Some(op) = self.tokens.consume_matching_tokens(token_iter![
+            Greater,
+            GreaterOrEqual,
+            Less,
+            LessOrEqual
+        ]) {
             let lhs = expr;
             let rhs = self.parse_term()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
@@ -363,10 +367,13 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_term(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_term(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_factor()?;
 
-        while let Some(op) = self.tokens.match_tokens(token_iter![Plus, Minus]) {
+        while let Some(op) = self
+            .tokens
+            .consume_matching_tokens(token_iter![Plus, Minus])
+        {
             let lhs = expr;
             let rhs = self.parse_factor()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
@@ -375,10 +382,13 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_factor(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_factor(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_exponent()?;
 
-        while let Some(op) = self.tokens.match_tokens(token_iter![Star, Slash, Percent]) {
+        while let Some(op) = self
+            .tokens
+            .consume_matching_tokens(token_iter![Star, Slash, Percent])
+        {
             let lhs = expr;
             let rhs = self.parse_exponent()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
@@ -387,10 +397,10 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_exponent(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_exponent(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_unary()?;
 
-        while let Some(op) = self.tokens.match_tokens(token_iter![Caret]) {
+        while let Some(op) = self.tokens.consume_matching_tokens(token_iter![Caret]) {
             let lhs = expr;
             let rhs = self.parse_unary()?;
             expr = ast::make_binary_expr!(lhs, op.into(), rhs);
@@ -399,8 +409,8 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_unary(&mut self) -> Result<ast::Expr, ParserError> {
-        if let Some(op) = self.tokens.match_tokens(token_iter![Minus, Not]) {
+    fn parse_unary(&mut self) -> Result<ast::Expr> {
+        if let Some(op) = self.tokens.consume_matching_tokens(token_iter![Minus, Not]) {
             let rhs = self.parse_unary()?;
             let expr = ast::make_unary_expr!(op.into(), rhs);
 
@@ -410,12 +420,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_call(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_call(&mut self) -> Result<ast::Expr> {
         let mut lhs = self.parse_primary()?;
 
         while let Some(token) = self
             .tokens
-            .match_tokens(token_iter![LeftParen, LeftBracket])
+            .consume_matching_tokens(token_iter![LeftParen, LeftBracket])
         {
             match token.kind {
                 TokenKind::LeftParen => lhs = self.parse_function_call(lhs)?,
@@ -427,52 +437,64 @@ impl<'a> Parser<'a> {
         Ok(lhs)
     }
 
-    fn parse_function_call(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
+    fn parse_function_call(&mut self, name: ast::Expr) -> Result<ast::Expr> {
         let mut arguments = vec![];
         let _guard = self.tokens.set_ignoring_newline();
 
-        if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
+        if self
+            .tokens
+            .consume_matching_tokens(token_iter![RightParen])
+            .is_none()
+        {
             loop {
                 arguments.push(self.parse_expression()?);
 
-                if self.tokens.match_tokens(token_iter![Comma]).is_none() {
+                if self
+                    .tokens
+                    .consume_matching_tokens(token_iter![Comma])
+                    .is_none()
+                {
                     break;
                 }
             }
 
-            if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
-                Err(parser_err!(
+            if self
+                .tokens
+                .consume_matching_tokens(token_iter![RightParen])
+                .is_none()
+            {
+                Err(vec![parser_err!(
                     MissingParentheses,
                     self.tokens.next().unwrap().line,
                     "esperado ')' após chamada de função".to_string()
-                ))?;
+                )])?;
             }
         }
 
         Ok(ast::make_call_expr!(name, arguments))
     }
 
-    fn parse_access(&mut self, name: ast::Expr) -> Result<ast::Expr, ParserError> {
+    fn parse_access(&mut self, name: ast::Expr) -> Result<ast::Expr> {
         let _guard = self.tokens.set_ignoring_newline();
         let index = self.parse_expression()?;
 
         let next_token_is_bracket = self
             .tokens
-            .match_tokens(token_iter![RightBracket])
+            .consume_matching_tokens(token_iter![RightBracket])
             .is_some();
 
         if !next_token_is_bracket {
-            Err(parser_err!(
+            Err(vec![parser_err!(
                 MissingBrackets,
                 self.tokens.next().unwrap().line,
                 "esperado ']' em indexação".to_string()
-            ))?;
+            )])?;
         }
 
         Ok(ast::make_access_expr!(name, index))
     }
 
-    fn parse_primary(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_primary(&mut self) -> Result<ast::Expr> {
         use TokenKind::*;
 
         let token = match self.tokens.next() {
@@ -494,8 +516,12 @@ impl<'a> Parser<'a> {
                 let _guard = self.tokens.set_ignoring_newline();
                 let expr = self.parse_expression()?;
 
-                if self.tokens.match_tokens(token_iter![RightParen]).is_none() {
-                    return Err(parser_err!(MissingParentheses, line));
+                if self
+                    .tokens
+                    .consume_matching_tokens(token_iter![RightParen])
+                    .is_none()
+                {
+                    return Err(vec![parser_err!(MissingParentheses, line)]);
                 }
 
                 Ok(ast::make_grouping_expr!(expr))
@@ -508,15 +534,15 @@ impl<'a> Parser<'a> {
 
                 Ok(ast::make_variable_expr!(name.clone(), self.gen_uid()))
             }
-            Eof => Err(parser_err!(UnexpectedEoi, line)),
-            _ => Err(unexpected_token!(token)),
+            Eof => Err(vec![parser_err!(UnexpectedEoi, line)]),
+            _ => Err(vec![unexpected_token!(token)]),
         }
     }
 
-    fn parse_list(&mut self) -> Result<ast::Expr, ParserError> {
+    fn parse_list(&mut self) -> Result<ast::Expr> {
         if self
             .tokens
-            .match_tokens(token_iter![RightBracket])
+            .consume_matching_tokens(token_iter![RightBracket])
             .is_some()
         {
             return Ok(ast::make_list_expr!(vec![]));
@@ -527,22 +553,26 @@ impl<'a> Parser<'a> {
         loop {
             elements.push(self.parse_expression()?);
 
-            if self.tokens.match_tokens(token_iter![Comma]).is_none() {
+            if self
+                .tokens
+                .consume_matching_tokens(token_iter![Comma])
+                .is_none()
+            {
                 break;
             }
         }
 
         let next_token_is_bracket = self
             .tokens
-            .match_tokens(token_iter![RightBracket])
+            .consume_matching_tokens(token_iter![RightBracket])
             .is_some();
 
         if !next_token_is_bracket {
-            Err(parser_err!(
+            Err(vec![parser_err!(
                 MissingBrackets,
                 self.tokens.next().unwrap().line,
                 "esperado ']' ao final de lista".to_string()
-            ))?
+            )])?
         }
 
         Ok(ast::make_list_expr!(elements))
@@ -550,21 +580,28 @@ impl<'a> Parser<'a> {
 }
 
 impl Parser<'_> {
-    fn consume_newline(&mut self) -> Result<(), ParserError> {
+    fn consume_newline(&mut self) -> Result<()> {
         use TokenKind::*;
 
-        if self.tokens.match_tokens(token_iter![Newline]).is_some() {
+        if self
+            .tokens
+            .consume_matching_tokens(token_iter![Newline])
+            .is_some()
+        {
             return Ok(());
         }
 
         match self.tokens.peek() {
             Some(token) if matches!(token.kind, Eof | BlockEnd) => Ok(()),
-            Some(token) => Err(unexpected_token!(token)),
-            None => Err(parser_err!(UnexpectedEoi, self.tokens.get_last_line())),
+            Some(token) => Err(vec![unexpected_token!(token)]),
+            None => Err(vec![parser_err!(
+                UnexpectedEoi,
+                self.tokens.get_last_line()
+            )]),
         }
     }
 
-    fn consume_identifier(&mut self) -> Result<String, ParserError> {
+    fn consume_identifier(&mut self) -> Result<String> {
         match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Identifier => {
                 match token.literal.as_ref().unwrap() {
@@ -572,19 +609,25 @@ impl Parser<'_> {
                     _ => unreachable!(),
                 }
             }
-            Some(token) => Err(unexpected_token!(token)),
-            None => Err(parser_err!(UnexpectedEoi, self.tokens.get_last_line())),
+            Some(token) => Err(vec![unexpected_token!(token)]),
+            None => Err(vec![parser_err!(
+                UnexpectedEoi,
+                self.tokens.get_last_line()
+            )]),
         }
     }
 
-    fn skip_token(&mut self, token_kind: TokenKind) -> Result<(), ParserError> {
+    fn skip_token(&mut self, token_kind: TokenKind) -> Result<()> {
         match self.tokens.next() {
             Some(token) if token.kind == token_kind => Ok(()),
             Some(token) if token.kind == TokenKind::Eof => {
-                Err(parser_err!(UnexpectedEoi, token.line))
+                Err(vec![parser_err!(UnexpectedEoi, token.line)])
             }
-            Some(token) => Err(unexpected_token!(token)),
-            None => Err(parser_err!(UnexpectedEoi, self.tokens.get_last_line())),
+            Some(token) => Err(vec![unexpected_token!(token)]),
+            None => Err(vec![parser_err!(
+                UnexpectedEoi,
+                self.tokens.get_last_line()
+            )]),
         }
     }
 

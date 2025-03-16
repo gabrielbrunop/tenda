@@ -4,6 +4,8 @@ use std::fmt::Display;
 use scanner::token::Token;
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, Vec<ParserError>>;
+
 #[derive(Error, Debug)]
 pub struct ParserError {
     pub line: usize,
@@ -25,20 +27,28 @@ impl Display for ParserError {
 pub enum ParserErrorKind {
     #[error("fim inesperado de input")]
     UnexpectedEoi,
+
     #[error("esperado ')'")]
     MissingParentheses,
+
     #[error("esperado ']'")]
     MissingBrackets,
+
     #[error("token inesperado: {}", .0.lexeme)]
     UnexpectedToken(Token),
+
     #[error("o valor à direita do '=' não é um valor válido para receber atribuições")]
     InvalidAssignmentTarget(Token),
+
     #[error("retorno fora de uma função")]
     IllegalReturn,
+
     #[error("'pare' fora de uma estrutura de repetição")]
     IllegalBreak,
+
     #[error("'continue' fora de uma estrutura de repetição")]
     IllegalContinue,
+
     #[error("parâmetro '{0}' duplicado na função")]
     DuplicateParameter(String),
 }

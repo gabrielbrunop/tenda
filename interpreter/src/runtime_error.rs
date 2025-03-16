@@ -11,19 +11,25 @@ pub type Result<T> = std::result::Result<T, RuntimeError>;
 pub enum RuntimeErrorKind {
     #[error("divisão por zero não é permitida")]
     DivisionByZero,
+
     #[error("números muito grandes não são permitidos")]
     NumberOverflow,
+
     #[error("esperado '{}', encontrado '{}'", .expected.to_string(), .found.to_string())]
     TypeError {
         expected: ValueType,
         found: ValueType,
     },
+
     #[error("a variável identificada por '{0}' não está definida neste escopo")]
     UndefinedReference(String),
+
     #[error("variável identifica com {0} já está declarada neste escopo")]
     AlreadyDeclared(String),
+
     #[error("número de argumentos incorreto: esperado {}, encontrado {}", .expected, .found)]
     WrongNumberOfArguments { expected: usize, found: usize },
+
     #[error("índice fora dos limites: índice {}, tamanho {}", .index, .len)]
     IndexOutOfBounds { index: usize, len: usize },
 }
