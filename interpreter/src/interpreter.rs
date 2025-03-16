@@ -144,6 +144,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             item_name,
             iterable,
             body,
+            is_item_captured,
             ..
         } = for_each;
 
@@ -153,8 +154,13 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             Value::List(list) => {
                 for value in list.borrow().iter() {
                     let mut env = Environment::new();
+                    let stored_value = if *is_item_captured {
+                        StoredValue::new_shared(value.clone())
+                    } else {
+                        StoredValue::new_unique(value.clone())
+                    };
 
-                    env.set(item_name.clone(), StoredValue::new_shared(value.clone()));
+                    env.set(item_name.clone(), stored_value);
 
                     self.stack.push(env);
                     self.interpret_stmt(body)?;
@@ -171,8 +177,13 @@ impl StmtVisitor<Result<Value>> for Interpreter {
                 for index in start..end {
                     let mut env = Environment::new();
                     let value = Value::Number(index as f64);
+                    let stored_value = if *is_item_captured {
+                        StoredValue::new_shared(value)
+                    } else {
+                        StoredValue::new_unique(value)
+                    };
 
-                    env.set(item_name.clone(), StoredValue::new_shared(value));
+                    env.set(item_name.clone(), stored_value);
 
                     self.stack.push(env);
                     self.interpret_stmt(body)?;
@@ -248,15 +259,26 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             }
         }
 
-        for (param, _) in params {
-            env.set(param.clone(), StoredValue::new_shared(Value::Nil));
+        for ast::FunctionParam {
+            name,
+            is_captured_var,
+            ..
+        } in params
+        {
+            let stored_value = if *is_captured_var {
+                StoredValue::new_shared(Value::Nil)
+            } else {
+                StoredValue::new_unique(Value::Nil)
+            };
+
+            env.set(name.clone(), stored_value);
         }
 
         let func = Function::new(
             name.to_string(),
             params
                 .iter()
-                .map(|(param, _)| param.clone())
+                .map(|ast::FunctionParam { name, .. }| name.clone())
                 .collect::<Vec<String>>()
                 .clone(),
             Box::new(env),
