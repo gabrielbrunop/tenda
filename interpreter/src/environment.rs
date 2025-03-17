@@ -53,6 +53,15 @@ impl Environment {
     }
 }
 
+impl<'a> IntoIterator for &'a Environment {
+    type Item = (&'a String, &'a StoredValue);
+    type IntoIter = std::collections::hash_map::Iter<'a, String, StoredValue>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.state.iter()
+    }
+}
+
 impl Default for Environment {
     fn default() -> Self {
         Self::new()
@@ -66,7 +75,7 @@ pub enum StoredValue {
 }
 
 impl StoredValue {
-    pub fn new_unique(value: Value) -> Self {
+    pub fn new(value: Value) -> Self {
         StoredValue::Unique(value)
     }
 

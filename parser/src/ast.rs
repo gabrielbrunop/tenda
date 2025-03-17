@@ -98,7 +98,7 @@ pub trait DeclVisitor<T> {
 pub struct LocalDecl {
     pub name: String,
     pub value: Expr,
-    pub is_captured_var: bool,
+    pub captured: bool,
     pub uid: usize,
 }
 
@@ -107,7 +107,7 @@ impl LocalDecl {
         LocalDecl {
             name,
             value,
-            is_captured_var: false,
+            captured: false,
             uid,
         }
     }
@@ -117,7 +117,7 @@ impl LocalDecl {
 pub struct FunctionParam {
     pub name: String,
     pub uid: usize,
-    pub is_captured_var: bool,
+    pub captured: bool,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -125,8 +125,8 @@ pub struct FunctionDecl {
     pub name: String,
     pub params: Vec<FunctionParam>,
     pub body: Box<Stmt>,
-    pub captured_vars: Vec<String>,
-    pub is_captured_var: bool,
+    pub free_vars: Vec<String>,
+    pub captured: bool,
     pub uid: usize,
 }
 
@@ -139,12 +139,12 @@ impl FunctionDecl {
                 .map(|(name, uid)| FunctionParam {
                     name,
                     uid,
-                    is_captured_var: false,
+                    captured: false,
                 })
                 .collect(),
             body: Box::new(body),
-            captured_vars: vec![],
-            is_captured_var: false,
+            free_vars: vec![],
+            captured: false,
             uid,
         }
     }
@@ -183,10 +183,15 @@ impl While {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct ForEachItem {
+    pub name: String,
+    pub uid: usize,
+    pub captured: bool,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct ForEach {
-    pub item_name: String,
-    pub item_uid: usize,
-    pub is_item_captured: bool,
+    pub item: ForEachItem,
     pub iterable: Expr,
     pub body: Box<Stmt>,
 }
@@ -194,9 +199,11 @@ pub struct ForEach {
 impl ForEach {
     pub fn new(item_name: String, item_uid: usize, iterable: Expr, body: Stmt) -> Self {
         ForEach {
-            item_name,
-            item_uid,
-            is_item_captured: false,
+            item: ForEachItem {
+                name: item_name,
+                uid: item_uid,
+                captured: false,
+            },
             iterable,
             body: Box::new(body),
         }
@@ -344,7 +351,7 @@ impl Literal {
 pub struct Variable {
     pub name: String,
     pub uid: usize,
-    pub is_captured_var: bool,
+    pub captured: bool,
 }
 
 impl Variable {
@@ -352,7 +359,7 @@ impl Variable {
         Variable {
             name,
             uid: id,
-            is_captured_var: false,
+            captured: false,
         }
     }
 }

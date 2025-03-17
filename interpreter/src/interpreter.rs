@@ -103,7 +103,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
         if let Some(expr) = value {
             let value = self.visit_expr(expr)?;
-            self.stack.set_return(StoredValue::new_unique(value));
+            self.stack.set_return(StoredValue::new(value));
         }
 
         Ok(Value::Nil)
@@ -141,10 +141,9 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
     fn visit_for_each(&mut self, for_each: &ast::ForEach) -> Result<Value> {
         let ast::ForEach {
-            item_name,
+            item,
             iterable,
             body,
-            is_item_captured,
             ..
         } = for_each;
 
@@ -154,13 +153,13 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             Value::List(list) => {
                 for value in list.borrow().iter() {
                     let mut env = Environment::new();
-                    let stored_value = if *is_item_captured {
+                    let stored_value = if item.captured {
                         StoredValue::new_shared(value.clone())
                     } else {
-                        StoredValue::new_unique(value.clone())
+                        StoredValue::new(value.clone())
                     };
 
-                    env.set(item_name.clone(), stored_value);
+                    env.set(item.name.clone(), stored_value);
 
                     self.stack.push(env);
                     self.interpret_stmt(body)?;
@@ -177,13 +176,13 @@ impl StmtVisitor<Result<Value>> for Interpreter {
                 for index in start..end {
                     let mut env = Environment::new();
                     let value = Value::Number(index as f64);
-                    let stored_value = if *is_item_captured {
+                    let stored_value = if item.captured {
                         StoredValue::new_shared(value)
                     } else {
-                        StoredValue::new_unique(value)
+                        StoredValue::new(value)
                     };
 
-                    env.set(item_name.clone(), stored_value);
+                    env.set(item.name.clone(), stored_value);
 
                     self.stack.push(env);
                     self.interpret_stmt(body)?;
@@ -232,9 +231,9 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
         let value = self.visit_expr(value)?;
 
-        let value = match local.is_captured_var {
+        let value = match local.captured {
             true => StoredValue::new_shared(value),
-            false => StoredValue::new_unique(value),
+            false => StoredValue::new(value),
         };
 
         let _ = self.stack.define(name.clone(), value);
@@ -244,52 +243,42 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
     fn visit_function(&mut self, function: &ast::FunctionDecl) -> Result<Value> {
         let ast::FunctionDecl {
-            name,
-            params,
-            body,
-            captured_vars,
-            ..
+            name, params, body, ..
         } = function;
 
-        let mut env = Environment::new();
+        let mut context = Environment::new();
 
-        for var_name in captured_vars {
-            if let Some(value_in_parent) = self.stack.find(var_name) {
-                env.set(var_name.clone(), value_in_parent.clone());
+        for env in self.stack.into_iter() {
+            for (name, value) in env {
+                if params.iter().any(|param| param.name == *name) {
+                    continue;
+                }
+
+                if let StoredValue::Shared(value) = value {
+                    context.set(name.clone(), StoredValue::Shared(value.clone()));
+                }
             }
-        }
-
-        for ast::FunctionParam {
-            name,
-            is_captured_var,
-            ..
-        } in params
-        {
-            let stored_value = if *is_captured_var {
-                StoredValue::new_shared(Value::Nil)
-            } else {
-                StoredValue::new_unique(Value::Nil)
-            };
-
-            env.set(name.clone(), stored_value);
         }
 
         let func = Function::new(
             name.to_string(),
-            params
-                .iter()
-                .map(|ast::FunctionParam { name, .. }| name.clone())
-                .collect::<Vec<String>>()
-                .clone(),
-            Box::new(env),
+            params.iter().map(|p| p.clone().into()).collect(),
+            Box::new(context),
             Some(body.clone()),
-            |params, body, interpreter, captured_env| {
-                interpreter.stack.push(*captured_env.clone());
+            |params, body, interpreter, context| {
+                interpreter.stack.push(*context.clone());
 
-                for (param_name, arg_value) in params.into_iter() {
-                    let _ = interpreter
+                for (param, arg_value) in params.into_iter() {
+                    let stored_value = if param.is_captured {
+                        StoredValue::new_shared(arg_value)
+                    } else {
+                        StoredValue::new(arg_value)
+                    };
+
+                    interpreter
                         .stack
-                        .set(param_name.clone(), StoredValue::new_unique(arg_value));
+                        .define(param.name.clone(), stored_value)
+                        .unwrap();
                 }
 
                 if let Some(body) = body {
@@ -310,7 +299,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
         let _ = self
             .stack
-            .define(name.clone(), StoredValue::new_unique(Value::Function(func)));
+            .define(name.clone(), StoredValue::new(Value::Function(func)));
 
         Ok(Value::Nil)
     }
@@ -496,7 +485,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     .collect(),
                 func.context.body.clone(),
                 self,
-                &func.context.captured_env,
+                &func.context.env,
             ),
             _ => runtime_err!(
                 RuntimeErrorKind::TypeError {
@@ -586,7 +575,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
                 let result = self
                     .stack
-                    .set(name.clone(), StoredValue::new_unique(value.clone()));
+                    .set(name.clone(), StoredValue::new(value.clone()));
 
                 match result {
                     Ok(_) => Ok(value),

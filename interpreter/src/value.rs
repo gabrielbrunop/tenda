@@ -63,7 +63,13 @@ impl Display for Value {
                 Function(value) => format!(
                     "{}({})",
                     value.context.name,
-                    value.context.params.join(", ")
+                    value
+                        .context
+                        .params
+                        .iter()
+                        .map(|p| p.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
                 List(value) => format!(
                     "[{}]",

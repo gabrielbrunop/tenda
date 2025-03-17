@@ -136,6 +136,18 @@ impl Stack {
     }
 }
 
+impl<'a> IntoIterator for &'a Stack {
+    type Item = &'a Environment;
+    type IntoIter = std::vec::IntoIter<&'a Environment>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let mut scopes: Vec<&Environment> = Vec::with_capacity(self.scopes.len() + 1);
+        scopes.push(&self.global);
+        scopes.extend(self.scopes.iter());
+        scopes.into_iter()
+    }
+}
+
 impl Default for Stack {
     fn default() -> Self {
         Self::new()
@@ -146,6 +158,7 @@ impl Default for Stack {
 pub enum StackError {
     #[error("variable already declared")]
     AlreadyDeclared,
+
     #[error("assignment to undefined variable")]
     AssignToUndefined(String),
 }
