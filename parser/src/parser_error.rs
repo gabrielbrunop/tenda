@@ -34,6 +34,12 @@ pub enum ParserErrorKind {
     #[error("esperado ']'")]
     MissingBrackets,
 
+    #[error("esperado '}}'")]
+    MissingBraces,
+
+    #[error("esperado ':'")]
+    MissingColon,
+
     #[error("token inesperado: {}", .0.lexeme)]
     UnexpectedToken(Token),
 

@@ -174,6 +174,11 @@ fn annotate_expr_with_var_captures(expr: &mut ast::Expr, closure_list: &VarCaptu
                 .iter_mut()
                 .for_each(|e| annotate_expr_with_var_captures(e, closure_list));
         }
+        Expr::AssociativeArray(AssociativeArray { elements }) => {
+            elements
+                .iter_mut()
+                .for_each(|(_, value)| annotate_expr_with_var_captures(value, closure_list));
+        }
         Expr::Binary(BinaryOp { lhs, rhs, .. }) => {
             annotate_expr_with_var_captures(lhs, closure_list);
             annotate_expr_with_var_captures(rhs, closure_list);
@@ -416,6 +421,10 @@ fn get_var_refs_in_expr(expr: &ast::Expr, name: &str) -> Vec<usize> {
         List(ast::List { elements }) => elements
             .iter()
             .flat_map(|e| get_var_refs_in_expr(e, name))
+            .collect(),
+        AssociativeArray(ast::AssociativeArray { elements }) => elements
+            .iter()
+            .flat_map(|(_, value)| get_var_refs_in_expr(value, name))
             .collect(),
         Grouping(ast::Grouping { expr }) => get_var_refs_in_expr(expr, name),
         Literal(_) => vec![],

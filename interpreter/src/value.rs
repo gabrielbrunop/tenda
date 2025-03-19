@@ -15,6 +15,7 @@ pub enum Value {
     Function(Function),
     List(Rc<RefCell<Vec<Value>>>),
     Range(usize, usize),
+    AssociativeArray(Rc<RefCell<indexmap::IndexMap<AssociativeArrayKey, Value>>>),
     Nil,
 }
 
@@ -30,6 +31,7 @@ impl Value {
             List(_) => ValueType::List,
             Range(_, _) => ValueType::Range,
             Nil => ValueType::Nil,
+            AssociativeArray(_) => ValueType::AssociativeArray,
         }
     }
 
@@ -42,6 +44,7 @@ impl Value {
             Value::List(_) => true,
             Value::Range(_, _) => true,
             Value::Nil => false,
+            Value::AssociativeArray(_) => true,
         }
     }
 }
@@ -82,6 +85,18 @@ impl Display for Value {
                 ),
                 Range(start, end) => format!("{} até {}", start, end),
                 Nil => Literal::NIL_LITERAL.to_string(),
+                AssociativeArray(value) => format!(
+                    "{{ {} }}",
+                    value
+                        .borrow()
+                        .iter()
+                        .map(|(k, v)| match k {
+                            AssociativeArrayKey::String(key) => format!("\"{}\": {}", key, v),
+                            AssociativeArrayKey::Number(key) => format!("{}: {}", key, v),
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
             }
         )
     }
@@ -109,6 +124,7 @@ pub enum ValueType {
     List,
     Range,
     Nil,
+    AssociativeArray,
 }
 
 impl From<Value> for ValueType {
@@ -128,9 +144,25 @@ impl Display for ValueType {
             Function => "função".to_string(),
             List => "lista".to_string(),
             Range => "intervalo".to_string(),
+            AssociativeArray => "dicionário".to_string(),
             Nil => "Nada".to_string(),
         };
 
         write!(f, "{}", str)
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum AssociativeArrayKey {
+    String(String),
+    Number(i64),
+}
+
+impl Display for AssociativeArrayKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssociativeArrayKey::String(key) => write!(f, "{}", key),
+            AssociativeArrayKey::Number(key) => write!(f, "{}", key),
+        }
     }
 }
