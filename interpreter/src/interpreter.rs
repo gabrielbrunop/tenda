@@ -150,57 +150,31 @@ impl StmtVisitor<Result<Value>> for Interpreter {
 
         let iterable = self.visit_expr(iterable)?;
 
-        match iterable {
-            Value::List(list) => {
-                for value in list.borrow().iter() {
-                    let mut env = Environment::new();
-                    let stored_value = if item.captured {
-                        StoredValue::new_shared(value.clone())
-                    } else {
-                        StoredValue::new(value.clone())
-                    };
+        if !iterable.is_iterable() {
+            Err(RuntimeErrorKind::NotIterable {
+                value: iterable.kind(),
+            })?;
+        }
 
-                    env.set(item.name.clone(), stored_value);
+        for value in iterable {
+            let mut env = Environment::new();
+            let stored_value = if item.captured {
+                StoredValue::new_shared(value.clone())
+            } else {
+                StoredValue::new(value.clone())
+            };
 
-                    self.stack.push(env);
-                    self.interpret_stmt(body)?;
+            env.set(item.name.clone(), stored_value);
 
-                    if self.stack.has_break() {
-                        break;
-                    }
+            self.stack.push(env);
+            self.interpret_stmt(body)?;
 
-                    self.stack.set_continue(false);
-                    self.stack.pop();
-                }
+            if self.stack.has_break() {
+                break;
             }
-            Value::Range(start, end) => {
-                for index in start..end {
-                    let mut env = Environment::new();
-                    let value = Value::Number(index as f64);
-                    let stored_value = if item.captured {
-                        StoredValue::new_shared(value)
-                    } else {
-                        StoredValue::new(value)
-                    };
 
-                    env.set(item.name.clone(), stored_value);
-
-                    self.stack.push(env);
-                    self.interpret_stmt(body)?;
-
-                    if self.stack.has_break() {
-                        break;
-                    }
-
-                    self.stack.set_continue(false);
-                    self.stack.pop();
-                }
-            }
-            val => type_err!(
-                "não é possível iterar sobre '{}'; esperado {}",
-                val.kind(),
-                ValueType::List
-            ),
+            self.stack.set_continue(false);
+            self.stack.pop();
         }
 
         self.stack.set_break(false);

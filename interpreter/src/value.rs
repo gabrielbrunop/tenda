@@ -47,6 +47,10 @@ impl Value {
             Value::AssociativeArray(_) => true,
         }
     }
+
+    pub fn is_iterable(&self) -> bool {
+        matches!(self, Value::List(_) | Value::Range(_, _))
+    }
 }
 
 impl Display for Value {
@@ -111,6 +115,26 @@ impl From<Literal> for Value {
             String(value) => Value::String(value),
             Boolean(value) => Value::Boolean(value),
             Nil => Value::Nil,
+        }
+    }
+}
+
+impl IntoIterator for Value {
+    type Item = Value;
+    type IntoIter = std::vec::IntoIter<Value>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        if !self.is_iterable() {
+            panic!("Value is not iterable");
+        }
+
+        match self {
+            Value::List(list) => list.borrow_mut().clone().into_iter(),
+            Value::Range(start, end) => (start..=end)
+                .map(|i| Value::Number(i as f64))
+                .collect::<Vec<_>>()
+                .into_iter(),
+            _ => unreachable!(),
         }
     }
 }
