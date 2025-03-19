@@ -79,26 +79,50 @@ impl From<RuntimeErrorKind> for RuntimeError {
     }
 }
 
+macro_rules! runtime_err {
+    ($kind:expr) => {{
+        use crate::runtime_error::RuntimeError;
+        use crate::runtime_error::RuntimeErrorKind::*;
+
+        Err(RuntimeError {
+            source: $kind,
+            context: None,
+        })
+    }};
+    ($kind:expr, $message:expr) => {{
+        use crate::runtime_error::RuntimeErrorKind::*;
+
+        Err(RuntimeError {
+            source: $kind,
+            context: Some($message),
+        })?
+    }};
+}
+
 macro_rules! type_err {
+    ($expected:expr, $found: expr) => {{
+        use crate::runtime_error::runtime_err;
+        use crate::value::ValueType::{self, *};
+
+        let expected: ValueType = $expected.into();
+        let found: ValueType = $found.into();
+
+        runtime_err!(TypeError {
+            expected: expected.clone(),
+            found: found.clone(),
+        })
+    }};
     ($message:literal, $expected:expr, $found: expr) => {{
         let expected: ValueType = $expected.into();
         let found: ValueType = $found.into();
+
         Err(RuntimeError {
             source: RuntimeErrorKind::TypeError {
                 expected: expected.clone(),
                 found: found.clone(),
             },
             context: Some(format!($message, expected, found)),
-        })?
-    }};
-}
-
-macro_rules! runtime_err {
-    ($kind:expr, $message:expr) => {{
-        Err(RuntimeError {
-            source: $kind,
-            context: Some($message),
-        })?
+        })
     }};
 }
 

@@ -105,6 +105,10 @@ impl Stack {
     pub fn has_continue(&self) -> bool {
         self.has_continue
     }
+
+    pub fn global(&self) -> &Environment {
+        &self.global
+    }
 }
 
 impl Stack {
