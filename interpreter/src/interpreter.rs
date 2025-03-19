@@ -3,8 +3,9 @@ use std::{cell::RefCell, rc::Rc};
 use parser::ast::{self, Access, DeclVisitor, ExprVisitor, StmtVisitor};
 
 use crate::{
+    builtins,
     environment::{Environment, StoredValue},
-    function::{add_native_fn, native_fn, param_list, Function},
+    function::Function,
     runtime_error::{runtime_err, type_err, Result, RuntimeError, RuntimeErrorKind},
     stack::Stack,
     value::{AssociativeArrayKey, Value, ValueType},
@@ -18,7 +19,7 @@ impl Interpreter {
     pub fn new() -> Self {
         let mut stack = Stack::new();
 
-        Self::setup_native_bindings(&mut stack);
+        builtins::setup_native_bindings(&mut stack);
 
         Interpreter { stack }
     }
@@ -151,9 +152,9 @@ impl StmtVisitor<Result<Value>> for Interpreter {
         let iterable = self.visit_expr(iterable)?;
 
         if !iterable.is_iterable() {
-            Err(RuntimeErrorKind::NotIterable {
+            return runtime_err!(NotIterable {
                 value: iterable.kind(),
-            })?;
+            });
         }
 
         for value in iterable {
@@ -201,7 +202,8 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
         if self.stack.local_exists(name) {
             let name = name.to_string();
-            Err(RuntimeErrorKind::AlreadyDeclared(name))?;
+
+            return runtime_err!(AlreadyDeclared(name));
         }
 
         let value = self.visit_expr(value)?;
@@ -236,12 +238,13 @@ impl DeclVisitor<Result<Value>> for Interpreter {
         }
 
         let func = Function::new(
-            name.to_string(),
             params.iter().map(|p| p.clone().into()).collect(),
-            Box::new(context),
+            Some(Box::new(context)),
             Some(body.clone()),
             |params, body, interpreter, context| {
-                interpreter.stack.push(*context.clone());
+                if let Some(context) = context {
+                    interpreter.stack.push(*context.clone());
+                }
 
                 for (param, arg_value) in params.into_iter() {
                     let stored_value = if param.is_captured {
@@ -296,84 +299,114 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 (String(lhs), String(rhs)) => String(format!("{}{}", lhs, rhs)),
                 (String(lhs), rhs) => String(format!("{}{}", lhs, rhs)),
                 (lhs, String(rhs)) => String(format!("{}{}", lhs, rhs)),
-                (lhs, rhs) => type_err!("não é possível somar '{}' e '{}'", lhs, rhs),
+                (List(lhs), List(rhs)) => {
+                    let mut list = lhs.borrow().clone();
+                    list.extend_from_slice(&rhs.borrow());
+
+                    List(Rc::new(RefCell::new(list)))
+                }
+                (lhs, rhs) => return type_err!("não é possível somar '{}' e '{}'", lhs, rhs),
             },
             Subtract => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs - rhs),
-                (lhs, rhs) => type_err!("não é possível subtrair '{}' de '{}'", rhs, lhs),
+                (lhs, rhs) => return type_err!("não é possível subtrair '{}' de '{}'", rhs, lhs),
             },
             Multiply => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs * rhs),
                 (lhs, rhs) => {
-                    type_err!("não é possível multiplicar '{}' por '{}'", lhs, rhs)
+                    return type_err!("não é possível multiplicar '{}' por '{}'", lhs, rhs)
                 }
             },
             Divide => match (lhs, rhs) {
-                (Number(_), Number(0.0)) => Err(RuntimeErrorKind::DivisionByZero)?,
+                (Number(_), Number(0.0)) => return runtime_err!(DivisionByZero),
                 (Number(lhs), Number(rhs)) => Number(lhs / rhs),
-                (lhs, rhs) => type_err!("não é possível dividir '{}' por '{}'", lhs, rhs),
+                (lhs, rhs) => return type_err!("não é possível dividir '{}' por '{}'", lhs, rhs),
             },
             Exponentiation => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs.powf(rhs)),
                 (lhs, rhs) => {
-                    type_err!("não é possível elevar '{}' à potência de '{}'", lhs, rhs)
+                    return type_err!("não é possível elevar '{}' à potência de '{}'", lhs, rhs)
                 }
             },
             Modulo => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs % rhs),
-                (lhs, rhs) => type_err!(
-                    "não é possível encontrar o resto da divisão de '{}' por '{}'",
-                    lhs,
-                    rhs
-                ),
+                (lhs, rhs) => {
+                    return type_err!(
+                        "não é possível encontrar o resto da divisão de '{}' por '{}'",
+                        lhs,
+                        rhs
+                    )
+                }
             },
             Equality => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs == rhs),
                 (Boolean(lhs), Boolean(rhs)) => Boolean(lhs == rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs == rhs),
+                (List(lhs), List(rhs)) => Boolean(lhs == rhs),
+                (Value::Range(lhs_start1, lhs_end1), Value::Range(rhs_start2, rhs_end2)) => {
+                    Boolean(lhs_start1 == rhs_start2 && lhs_end1 == rhs_end2)
+                }
+                (AssociativeArray(lhs), AssociativeArray(rhs)) => Boolean(lhs == rhs),
+                (Nil, Nil) => Boolean(true),
+                (Function(lhs), Function(rhs)) => Boolean(lhs.id == rhs.id),
                 _ => Boolean(false),
             },
             Inequality => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs != rhs),
                 (Boolean(lhs), Boolean(rhs)) => Boolean(lhs != rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs != rhs),
-                _ => Boolean(false),
+                (List(lhs), List(rhs)) => Boolean(lhs != rhs),
+                (Value::Range(lhs_start1, lhs_end1), Value::Range(rhs_start2, rhs_end2)) => {
+                    Boolean(lhs_start1 != rhs_start2 || lhs_end1 != rhs_end2)
+                }
+                (AssociativeArray(lhs), AssociativeArray(rhs)) => Boolean(lhs != rhs),
+                (Nil, Nil) => Boolean(false),
+                (Function(lhs), Function(rhs)) => Boolean(lhs.id != rhs.id),
+                _ => Boolean(true),
             },
             Greater => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs > rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs > rhs),
-                (lhs, rhs) => type_err!(
-                    "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
-                    lhs,
-                    rhs
-                ),
+                (lhs, rhs) => {
+                    return type_err!(
+                        "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
+                        lhs,
+                        rhs
+                    )
+                }
             },
             GreaterOrEqual => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs >= rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs >= rhs),
-                (lhs, rhs) => type_err!(
-                    "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
-                    lhs,
-                    rhs
-                ),
+                (lhs, rhs) => {
+                    return type_err!(
+                        "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
+                        lhs,
+                        rhs
+                    )
+                }
             },
             Less => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs < rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs < rhs),
-                (lhs, rhs) => type_err!(
-                    "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
-                    lhs,
-                    rhs
-                ),
+                (lhs, rhs) => {
+                    return type_err!(
+                        "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
+                        lhs,
+                        rhs
+                    )
+                }
             },
             LessOrEqual => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs <= rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs <= rhs),
-                (lhs, rhs) => type_err!(
-                    "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
-                    lhs,
-                    rhs
-                ),
+                (lhs, rhs) => {
+                    return type_err!(
+                        "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
+                        lhs,
+                        rhs
+                    )
+                }
             },
             LogicalAnd => {
                 if lhs.to_bool() {
@@ -391,22 +424,24 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             }
             ast::BinaryOperator::Range => match (lhs, rhs) {
                 (Number(lhs), Number(_)) if lhs != lhs.trunc() || !lhs.is_finite() => {
-                    Err(RuntimeErrorKind::InvalidRangeBounds { bound: lhs })?
+                    return runtime_err!(InvalidRangeBounds { bound: lhs });
                 }
                 (Number(_), Number(rhs)) if rhs != rhs.trunc() || !rhs.is_finite() => {
-                    Err(RuntimeErrorKind::InvalidRangeBounds { bound: rhs })?
+                    return runtime_err!(InvalidRangeBounds { bound: rhs });
                 }
                 (Number(lhs), Number(rhs)) => Value::Range(lhs as usize, rhs as usize),
-                (lhs, rhs) => type_err!(
-                    "não é possível criar um intervalo entre '{}' e '{}'",
-                    lhs,
-                    rhs
-                ),
+                (lhs, rhs) => {
+                    return type_err!(
+                        "não é possível criar um intervalo entre '{}' e '{}'",
+                        lhs,
+                        rhs
+                    )
+                }
             },
         };
 
         match expr {
-            Number(value) if value.abs() == f64::INFINITY => Err(RuntimeErrorKind::NumberOverflow)?,
+            Number(value) if value.abs() == f64::INFINITY => runtime_err!(NumberOverflow),
             _ => Ok(expr),
         }
     }
@@ -422,11 +457,13 @@ impl ExprVisitor<Result<Value>> for Interpreter {
         let expr = match op {
             Negative => match rhs {
                 Number(rhs) => Number(-rhs),
-                _ => type_err!(
-                    "não é possível negar valor de tipo '{1}'; esperado '{0}'",
-                    ValueType::Number,
-                    rhs
-                ),
+                _ => {
+                    return type_err!(
+                        "não é possível negar valor de tipo '{1}'; esperado '{0}'",
+                        ValueType::Number,
+                        rhs
+                    )
+                }
             },
             LogicalNot => Value::Boolean(!rhs.to_bool()),
         };
@@ -446,10 +483,10 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
         match callee {
             Value::Function(func) if args.len() != func.context.params.len() => {
-                Err(RuntimeErrorKind::WrongNumberOfArguments {
+                runtime_err!(WrongNumberOfArguments {
                     expected: func.context.params.len(),
                     found: args.len(),
-                })?
+                })
             }
             Value::Function(func) => (func.object)(
                 func.context
@@ -460,10 +497,10 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     .collect(),
                 func.context.body.clone(),
                 self,
-                &func.context.env,
+                func.context.env.as_ref(),
             ),
             _ => runtime_err!(
-                RuntimeErrorKind::TypeError {
+                TypeError {
                     expected: ValueType::Function,
                     found: callee.kind()
                 },
@@ -482,7 +519,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             Value::AssociativeArray(associative_array) => {
                 self.visit_associative_array_access(associative_array.borrow().clone(), index)
             }
-            value => Err(RuntimeErrorKind::WrongIndexType { value })?,
+            value => runtime_err!(WrongIndexType { value }),
         }
     }
 
@@ -534,7 +571,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 match result {
                     Ok(_) => Ok(value),
                     Err(_) => runtime_err!(
-                        RuntimeErrorKind::UndefinedReference(name.clone()),
+                        UndefinedReference(name.clone()),
                         format!(
                             "a variável identificada por '{}' precisa ser definida com `seja`",
                             name
@@ -560,7 +597,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
                         self.visit_associative_array_assign(&mut associative_array, index, value)
                     }
-                    value => Err(RuntimeErrorKind::WrongIndexType { value })?,
+                    value => runtime_err!(WrongIndexType { value }),
                 }
             }
             _ => unreachable!(),
@@ -592,21 +629,23 @@ impl Interpreter {
     fn visit_list_access(&mut self, list: &[Value], index: &ast::Expr) -> Result<Value> {
         let index = match self.visit_expr(index)? {
             Value::Number(num) if !num.is_finite() || num.trunc() != num || num < 0.0 => {
-                Err(RuntimeErrorKind::InvalidIndex { index: num })?
+                return runtime_err!(InvalidIndex { index: num });
             }
             Value::Number(num) => num as usize,
-            val => type_err!(
-                "{} não é um tipo válido para indexação; esperado {}",
-                val,
-                ValueType::Number
-            ),
+            val => {
+                return type_err!(
+                    "{} não é um tipo válido para indexação; esperado {}",
+                    val,
+                    ValueType::Number
+                )
+            }
         };
 
         if index >= list.len() {
-            Err(RuntimeErrorKind::IndexOutOfBounds {
+            return runtime_err!(IndexOutOfBounds {
                 index,
                 len: list.len(),
-            })?;
+            });
         }
 
         Ok(list[index].clone())
@@ -622,7 +661,7 @@ impl Interpreter {
 
         match associative_array.get(&index) {
             Some(value) => Ok(value.clone()),
-            None => Err(RuntimeErrorKind::AssociativeArrayKeyNotFound { key: index })?,
+            None => runtime_err!(AssociativeArrayKeyNotFound { key: index }),
         }
     }
 
@@ -630,10 +669,10 @@ impl Interpreter {
         match key {
             Value::String(value) => Ok(AssociativeArrayKey::String(value)),
             Value::Number(value) if !value.is_finite() || value.trunc() != value => {
-                Err(RuntimeErrorKind::InvalidNumberAssociativeArrayKey { key: value })?
+                runtime_err!(InvalidNumberAssociativeArrayKey { key: value })
             }
             Value::Number(value) => Ok(AssociativeArrayKey::Number(value as i64)),
-            val => Err(RuntimeErrorKind::InvalidTypeAssociativeArrayKey { key: val.kind() })?,
+            val => runtime_err!(InvalidTypeAssociativeArrayKey { key: val.kind() }),
         }
     }
 
@@ -645,18 +684,20 @@ impl Interpreter {
     ) -> Result<Value> {
         let index = match index {
             Value::Number(num) => num as usize,
-            val => type_err!(
-                "{} não é um tipo válido para indexação; esperado {}",
-                val,
-                ValueType::Number
-            ),
+            val => {
+                return type_err!(
+                    "{} não é um tipo válido para indexação; esperado {}",
+                    val,
+                    ValueType::Number
+                )
+            }
         };
 
         if index >= list.len() {
-            Err(RuntimeErrorKind::IndexOutOfBounds {
+            return runtime_err!(IndexOutOfBounds {
                 index,
-                len: list.len(),
-            })?;
+                len: list.len()
+            });
         }
 
         list[index] = value.clone();
@@ -675,44 +716,6 @@ impl Interpreter {
         associative_array.insert(index, value.clone());
 
         Ok(value)
-    }
-}
-
-impl Interpreter {
-    fn setup_native_bindings(stack: &mut Stack) {
-        add_native_fn!(
-            stack,
-            native_fn!("exiba", param_list!["texto"], |args, _, _, _| {
-                let text = match &args[0].1 {
-                    Value::String(value) => value.to_string(),
-                    value => format!("{}", value),
-                };
-
-                println!("{}", text);
-
-                Ok(Value::Nil)
-            })
-        );
-        add_native_fn!(
-            stack,
-            native_fn!("insira", param_list!["lista", "valor"], |args, _, _, _| {
-                let list = match &args[0].1 {
-                    Value::List(list) => list.clone(),
-                    value => {
-                        return type_err!(
-                            "não é possível inserir em '{}'; esperado {}",
-                            value.kind(),
-                            ValueType::List
-                        )
-                    }
-                };
-
-                let mut list = list.borrow_mut();
-                list.push(args[1].1.clone());
-
-                Ok(Value::Nil)
-            })
-        )
     }
 }
 

@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
+use std::hash::Hash;
 use std::rc::Rc;
 
 use scanner::token::Literal;
@@ -68,8 +69,8 @@ impl Display for Value {
                 },
                 String(value) => format!("\"{}\"", value),
                 Function(value) => format!(
-                    "{}({})",
-                    value.context.name,
+                    "<função {}({})>",
+                    value.object as *const () as usize,
                     value
                         .context
                         .params
