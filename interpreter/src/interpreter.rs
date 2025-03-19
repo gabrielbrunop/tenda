@@ -7,7 +7,7 @@ use crate::{
     function::{add_native_fn, native_fn, param_list, Function},
     runtime_error::{runtime_err, type_err, Result, RuntimeError, RuntimeErrorKind},
     stack::Stack,
-    value::{Value, ValueType},
+    value::{AssociativeArrayKey, Value, ValueType},
 };
 
 pub struct Interpreter {
@@ -83,6 +83,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             Assign(assign) => self.visit_assign(assign),
             Access(indexing) => self.visit_access(indexing),
             Variable(variable) => self.visit_variable(variable),
+            AssociativeArray(associative_array) => self.visit_associative_array(associative_array),
         }
     }
 
@@ -500,36 +501,15 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     fn visit_access(&mut self, index: &ast::Access) -> Result<Value> {
         let Access { subscripted, index } = index;
 
-        let subscripted = match self.visit_expr(subscripted)? {
-            Value::List(list) => list,
-            val => type_err!(
-                "não é possível indexar '{}'; esperado {}",
-                val.kind(),
-                ValueType::List
-            ),
-        };
+        let subscripted = self.visit_expr(subscripted)?;
 
-        let index = match self.visit_expr(index)? {
-            Value::Number(num) if num.is_finite() && num.trunc() == num && num >= 0.0 => {
-                num as usize
+        match subscripted {
+            Value::List(list) => self.visit_list_access(&list.borrow(), index),
+            Value::AssociativeArray(associative_array) => {
+                self.visit_associative_array_access(associative_array.borrow().clone(), index)
             }
-            val => type_err!(
-                "{} não é um tipo válido para indexação; esperado {}",
-                val,
-                ValueType::Number
-            ),
-        };
-
-        let list = subscripted.borrow_mut();
-
-        if index >= list.len() {
-            Err(RuntimeErrorKind::IndexOutOfBounds {
-                index,
-                len: list.len(),
-            })?;
+            value => Err(RuntimeErrorKind::WrongIndexType { value })?,
         }
-
-        Ok(list[index].clone())
     }
 
     fn visit_list(&mut self, list: &ast::List) -> Result<Value> {
@@ -589,43 +569,138 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 }
             }
             ast::Expr::Access(ast::Access { index, subscripted }) => {
-                let index = self.visit_expr(index)?;
                 let subscripted = self.visit_expr(subscripted)?;
-                let value = self.visit_expr(value)?;
 
-                let subscripted = match subscripted {
-                    Value::List(list) => list,
-                    val => type_err!(
-                        "não é possível indexar '{}'; esperado {}",
-                        val.kind(),
-                        ValueType::List
-                    ),
-                };
+                match subscripted {
+                    Value::List(list) => {
+                        let mut list = list.borrow_mut();
+                        let value = self.visit_expr(value)?;
+                        let index = self.visit_expr(index)?;
 
-                let index = match index {
-                    Value::Number(num) => num as usize,
-                    val => type_err!(
-                        "{} não é um tipo válido para indexação; esperado {}",
-                        val,
-                        ValueType::Number
-                    ),
-                };
+                        self.visit_list_assign(&mut list, index, value)
+                    }
+                    Value::AssociativeArray(associative_array) => {
+                        let mut associative_array = associative_array.borrow_mut();
+                        let value = self.visit_expr(value)?;
+                        let index = self.visit_expr(index)?;
 
-                let mut list = subscripted.borrow_mut();
-
-                if index >= list.len() {
-                    Err(RuntimeErrorKind::IndexOutOfBounds {
-                        index,
-                        len: list.len(),
-                    })?;
+                        self.visit_associative_array_assign(&mut associative_array, index, value)
+                    }
+                    value => Err(RuntimeErrorKind::WrongIndexType { value })?,
                 }
-
-                list[index] = value.clone();
-
-                Ok(value)
             }
             _ => unreachable!(),
         }
+    }
+
+    fn visit_associative_array(
+        &mut self,
+        associative_array: &ast::AssociativeArray,
+    ) -> Result<Value> {
+        let ast::AssociativeArray { elements } = associative_array;
+
+        let mut map = indexmap::IndexMap::new();
+
+        for (key, value) in elements {
+            let key = self.visit_literal(key)?;
+            let key = self.visit_associative_array_key(key)?;
+
+            let value = self.visit_expr(value)?;
+
+            map.insert(key, value);
+        }
+
+        Ok(Value::AssociativeArray(Rc::new(RefCell::new(map))))
+    }
+}
+
+impl Interpreter {
+    fn visit_list_access(&mut self, list: &[Value], index: &ast::Expr) -> Result<Value> {
+        let index = match self.visit_expr(index)? {
+            Value::Number(num) if !num.is_finite() || num.trunc() != num || num < 0.0 => {
+                Err(RuntimeErrorKind::InvalidIndex { index: num })?
+            }
+            Value::Number(num) => num as usize,
+            val => type_err!(
+                "{} não é um tipo válido para indexação; esperado {}",
+                val,
+                ValueType::Number
+            ),
+        };
+
+        if index >= list.len() {
+            Err(RuntimeErrorKind::IndexOutOfBounds {
+                index,
+                len: list.len(),
+            })?;
+        }
+
+        Ok(list[index].clone())
+    }
+
+    fn visit_associative_array_access(
+        &mut self,
+        associative_array: indexmap::IndexMap<AssociativeArrayKey, Value>,
+        index: &ast::Expr,
+    ) -> Result<Value> {
+        let index = self.visit_expr(index)?;
+        let index = self.visit_associative_array_key(index)?;
+
+        match associative_array.get(&index) {
+            Some(value) => Ok(value.clone()),
+            None => Err(RuntimeErrorKind::AssociativeArrayKeyNotFound { key: index })?,
+        }
+    }
+
+    fn visit_associative_array_key(&mut self, key: Value) -> Result<AssociativeArrayKey> {
+        match key {
+            Value::String(value) => Ok(AssociativeArrayKey::String(value)),
+            Value::Number(value) if !value.is_finite() || value.trunc() != value => {
+                Err(RuntimeErrorKind::InvalidNumberAssociativeArrayKey { key: value })?
+            }
+            Value::Number(value) => Ok(AssociativeArrayKey::Number(value as i64)),
+            val => Err(RuntimeErrorKind::InvalidTypeAssociativeArrayKey { key: val.kind() })?,
+        }
+    }
+
+    fn visit_list_assign(
+        &mut self,
+        list: &mut [Value],
+        index: Value,
+        value: Value,
+    ) -> Result<Value> {
+        let index = match index {
+            Value::Number(num) => num as usize,
+            val => type_err!(
+                "{} não é um tipo válido para indexação; esperado {}",
+                val,
+                ValueType::Number
+            ),
+        };
+
+        if index >= list.len() {
+            Err(RuntimeErrorKind::IndexOutOfBounds {
+                index,
+                len: list.len(),
+            })?;
+        }
+
+        list[index] = value.clone();
+
+        Ok(value)
+    }
+
+    fn visit_associative_array_assign(
+        &mut self,
+        associative_array: &mut indexmap::IndexMap<AssociativeArrayKey, Value>,
+        index: Value,
+        value: Value,
+    ) -> Result<Value> {
+        let index = self.visit_associative_array_key(index)?;
+
+        associative_array.insert(index, value.clone());
+
+        Ok(value)
     }
 }
 

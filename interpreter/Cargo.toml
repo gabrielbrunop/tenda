@@ -7,3 +7,4 @@ edition = "2021"
 parser = { path = "../parser" }
 scanner = { path = "../scanner" }
 thiserror = { workspace = true }
+indexmap = "1.7.0"

@@ -221,6 +221,7 @@ pub enum Expr {
     Grouping(Grouping),
     Literal(Literal),
     Variable(Variable),
+    AssociativeArray(AssociativeArray),
 }
 
 pub trait ExprVisitor<T> {
@@ -233,6 +234,7 @@ pub trait ExprVisitor<T> {
     fn visit_grouping(&mut self, grouping: &Grouping) -> T;
     fn visit_literal(&mut self, literal: &Literal) -> T;
     fn visit_variable(&mut self, variable: &Variable) -> T;
+    fn visit_associative_array(&mut self, associative_array: &AssociativeArray) -> T;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -320,6 +322,17 @@ pub struct List {
 impl List {
     pub fn new(elements: Vec<Expr>) -> Self {
         List { elements }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct AssociativeArray {
+    pub elements: Vec<(Literal, Expr)>,
+}
+
+impl AssociativeArray {
+    pub fn new(elements: Vec<(Literal, Expr)>) -> Self {
+        AssociativeArray { elements }
     }
 }
 
@@ -529,6 +542,13 @@ macro_rules! make_list_expr {
     }};
 }
 
+macro_rules! make_associative_array_expr {
+    ($elements:expr) => {{
+        use $crate::ast::Expr;
+        Expr::AssociativeArray($crate::ast::AssociativeArray::new($elements))
+    }};
+}
+
 macro_rules! make_cond_stmt {
     ($cond:expr, $then:expr, $or_else:expr) => {{
         use $crate::ast::{Cond, Stmt};
@@ -564,6 +584,7 @@ macro_rules! make_block_stmt {
 
 pub(crate) use make_access_expr;
 pub(crate) use make_assign_expr;
+pub(crate) use make_associative_array_expr;
 pub(crate) use make_binary_expr;
 pub(crate) use make_block_stmt;
 pub(crate) use make_break_stmt;

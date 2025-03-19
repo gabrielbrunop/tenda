@@ -565,6 +565,10 @@ impl<'a> Parser<'a> {
 
                 Ok(ast::make_grouping_expr!(expr))
             }
+            LeftBrace => {
+                let _guard = self.tokens.set_ignoring_newline();
+                self.parse_associative_array()
+            }
             Identifier => {
                 let name = match token.literal.as_ref().unwrap() {
                     token::Literal::String(string) => string,
@@ -615,6 +619,69 @@ impl<'a> Parser<'a> {
         }
 
         Ok(ast::make_list_expr!(elements))
+    }
+
+    fn parse_associative_array(&mut self) -> Result<ast::Expr> {
+        if self
+            .tokens
+            .consume_matching_tokens(token_iter![RightBrace])
+            .is_some()
+        {
+            return Ok(ast::make_associative_array_expr!(vec![]));
+        }
+
+        let mut elements = vec![];
+
+        loop {
+            let key = match self
+                .tokens
+                .consume_matching_tokens(token_iter![Number, String])
+            {
+                Some(token) => ast::Literal {
+                    value: token.literal.clone().unwrap(),
+                },
+                None => Err(vec![unexpected_token!(self.tokens.next().unwrap())])?,
+            };
+
+            if self
+                .tokens
+                .consume_matching_tokens(token_iter![Colon])
+                .is_none()
+            {
+                Err(vec![parser_err!(
+                    MissingColon,
+                    self.tokens.next().unwrap().line,
+                    "esperado ':' após chave de dicionário".to_string()
+                )])?;
+            }
+
+            let value = self.parse_expression()?;
+
+            elements.push((key, value));
+
+            if self
+                .tokens
+                .consume_matching_tokens(token_iter![Comma])
+                .is_none()
+            {
+                break;
+            }
+        }
+
+        let next_token_is_brace = self
+            .tokens
+            .consume_matching_tokens(token_iter![RightBrace])
+            .is_some();
+
+        if !next_token_is_brace {
+            Err(vec![parser_err!(
+                MissingBraces,
+                self.tokens.next().unwrap().line,
+                "esperado '}' ao final de dicionário".to_string()
+            )])?
+        }
+
+        Ok(ast::make_associative_array_expr!(elements))
     }
 }
 

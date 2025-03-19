@@ -1,9 +1,8 @@
 use core::fmt;
 use std::fmt::Display;
-
 use thiserror::Error;
 
-use crate::value::ValueType;
+use crate::value::{AssociativeArrayKey, Value, ValueType};
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 
@@ -33,11 +32,23 @@ pub enum RuntimeErrorKind {
     #[error("índice fora dos limites: índice {}, tamanho {}", .index, .len)]
     IndexOutOfBounds { index: usize, len: usize },
 
+    #[error("não é possível acessar um valor do tipo '{}'", .value.to_string())]
+    WrongIndexType { value: Value },
+
     #[error("limites de intervalo precisam ser números inteiros finitos: encontrado '{}'", .bound)]
     InvalidRangeBounds { bound: f64 },
 
     #[error("índice de lista precisa ser um número inteiro positivo e finito: encontrado '{}'", .index)]
     InvalidIndex { index: f64 },
+
+    #[error("chave de dicionário precisa ser número inteiro ou texto: encontrado '{}'", .key)]
+    InvalidNumberAssociativeArrayKey { key: f64 },
+
+    #[error("chave de dicionário precisa ser número inteiro ou texto: encontrado '{}'", .key)]
+    InvalidTypeAssociativeArrayKey { key: ValueType },
+
+    #[error("chave de dicionário não encontrada: '{}'", .key.to_string())]
+    AssociativeArrayKeyNotFound { key: AssociativeArrayKey },
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]
