@@ -575,7 +575,17 @@ impl<'a> Parser<'a> {
                     _ => unreachable!(),
                 };
 
-                Ok(ast::make_variable_expr!(name.clone(), self.gen_uid()))
+                let id = self.gen_uid();
+
+                if self
+                    .tokens
+                    .consume_matching_tokens(token_iter![Dot])
+                    .is_some()
+                {
+                    self.parse_dot_access(ast::make_variable_expr!(name.clone(), id))
+                } else {
+                    Ok(ast::make_variable_expr!(name.clone(), id))
+                }
             }
             Eof => Err(vec![parser_err!(UnexpectedEoi, line)]),
             _ => Err(vec![unexpected_token!(token)]),
@@ -682,6 +692,22 @@ impl<'a> Parser<'a> {
         }
 
         Ok(ast::make_associative_array_expr!(elements))
+    }
+
+    fn parse_dot_access(&mut self, name: ast::Expr) -> Result<ast::Expr> {
+        let field = self.consume_identifier()?;
+        let field = token::Literal::String(field);
+        let mut expr = ast::make_access_expr!(name, ast::make_literal_expr!(field));
+
+        if self
+            .tokens
+            .consume_matching_tokens(token_iter![Dot])
+            .is_some()
+        {
+            expr = self.parse_dot_access(expr)?;
+        }
+
+        Ok(expr)
     }
 }
 

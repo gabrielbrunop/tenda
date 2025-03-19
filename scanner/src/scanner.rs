@@ -56,6 +56,7 @@ impl<'a> Scanner<'a> {
                 '=' => token!(EqualSign, "=", self.line).into(),
                 '"' => self.consume_string(c).map(Some),
                 ',' => token!(Comma, ",", self.line).into(),
+                '.' => token!(Dot, ".", self.line).into(),
                 '>' => match self.source.peek() {
                     Some('=') => {
                         self.source.next();
