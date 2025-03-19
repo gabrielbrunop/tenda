@@ -49,6 +49,9 @@ pub enum RuntimeErrorKind {
 
     #[error("chave de dicionário não encontrada: '{}'", .key.to_string())]
     AssociativeArrayKeyNotFound { key: AssociativeArrayKey },
+
+    #[error("não é possível iterar sobre um valor do tipo '{}'", .value.to_string())]
+    NotIterable { value: ValueType },
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]
