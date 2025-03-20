@@ -19,16 +19,26 @@ pub struct Function {
 impl Function {
     pub fn new(
         params: Vec<FunctionParam>,
-        context: Option<Box<Environment>>,
-        body: Option<Box<Stmt>>,
-        object: FunctionObject,
+        context: Box<Environment>,
+        body: Box<Stmt>,
+        object: UserDefinedFunctionObject,
     ) -> Self {
         let unique_id = FUNCTION_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         Function {
             id: unique_id,
             context: FunctionContext::new(params, context, body),
-            object,
+            object: FunctionObject::UserDefined(object),
+        }
+    }
+
+    pub fn new_builtin(params: Vec<FunctionParam>, object: BuiltinFunctionObject) -> Self {
+        let unique_id = FUNCTION_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+
+        Function {
+            id: unique_id,
+            context: FunctionContext::new_builtin(params),
+            object: FunctionObject::Builtin(object),
         }
     }
 
@@ -37,20 +47,36 @@ impl Function {
         params: Vec<(FunctionParam, Value)>,
         interpreter: &mut Interpreter,
     ) -> Result<Value> {
-        (self.object)(
-            params,
-            self.context.body.clone(),
-            interpreter,
-            self.context.env.as_ref(),
-        )
+        match self.object {
+            FunctionObject::UserDefined(f) => {
+                let body = match &self.context {
+                    FunctionContext::UserDefined { body, .. } => body.clone(),
+                    _ => unreachable!(),
+                };
+
+                let env = match &self.context {
+                    FunctionContext::UserDefined { env, .. } => env,
+                    _ => unreachable!(),
+                };
+
+                f(params, body.clone(), interpreter, env)
+            }
+            FunctionObject::Builtin(f) => f(params, interpreter),
+        }
     }
 
     pub fn get_fn_ptr(&self) -> usize {
-        self.object as *const () as usize
+        match self.object {
+            FunctionObject::UserDefined(f) => f as *const () as usize,
+            FunctionObject::Builtin(f) => f as *const () as usize,
+        }
     }
 
     pub fn get_params(&self) -> Vec<FunctionParam> {
-        self.context.params.clone()
+        match &self.context {
+            FunctionContext::UserDefined { params, .. } => params.clone(),
+            FunctionContext::Builtin { params } => params.clone(),
+        }
     }
 }
 
@@ -61,23 +87,28 @@ impl PartialEq for Function {
 }
 
 #[derive(Debug, Clone)]
-pub struct FunctionContext {
-    pub params: Vec<FunctionParam>,
-    pub env: Option<Box<Environment>>,
-    pub body: Option<Box<Stmt>>,
+pub enum FunctionContext {
+    UserDefined {
+        params: Vec<FunctionParam>,
+        env: Box<Environment>,
+        body: Box<Stmt>,
+    },
+    Builtin {
+        params: Vec<FunctionParam>,
+    },
 }
 
 impl FunctionContext {
-    pub fn new(
-        params: Vec<FunctionParam>,
-        context: Option<Box<Environment>>,
-        body: Option<Box<Stmt>>,
-    ) -> Self {
-        FunctionContext {
+    pub fn new(params: Vec<FunctionParam>, context: Box<Environment>, body: Box<Stmt>) -> Self {
+        FunctionContext::UserDefined {
             params,
             body,
             env: context,
         }
+    }
+
+    pub fn new_builtin(params: Vec<FunctionParam>) -> Self {
+        FunctionContext::Builtin { params }
     }
 }
 
@@ -96,12 +127,21 @@ impl From<ast::FunctionParam> for FunctionParam {
     }
 }
 
-type FunctionObject = fn(
+type UserDefinedFunctionObject = fn(
     params: Vec<(FunctionParam, Value)>,
-    body: Option<Box<Stmt>>,
+    body: Box<Stmt>,
     interpreter: &mut Interpreter,
-    context: Option<&Box<Environment>>,
+    context: &Box<Environment>,
 ) -> Result<Value>;
+
+type BuiltinFunctionObject =
+    fn(params: Vec<(FunctionParam, Value)>, interpreter: &mut Interpreter) -> Result<Value>;
+
+#[derive(Debug, Clone)]
+pub enum FunctionObject {
+    UserDefined(UserDefinedFunctionObject),
+    Builtin(BuiltinFunctionObject),
+}
 
 macro_rules! params {
     ($($kind:expr),*) => {
