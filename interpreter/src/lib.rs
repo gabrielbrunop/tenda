@@ -1,3 +1,4 @@
+pub mod associative_array;
 pub mod builtins;
 pub mod environment;
 pub mod function;
