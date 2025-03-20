@@ -468,6 +468,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
         match subscripted {
             Value::List(list) => self.visit_list_access(&list.borrow(), index),
+            Value::String(string) => self.visit_string_access(&string, index),
             Value::AssociativeArray(associative_array) => {
                 self.visit_associative_array_access(associative_array.borrow().clone(), index)
             }
@@ -551,6 +552,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
                         self.visit_associative_array_assign(&mut associative_array, index, value)
                     }
+                    Value::String(_) => runtime_err!(ImmutableString),
                     value => runtime_err!(WrongIndexType { value }),
                 }
             }
@@ -592,19 +594,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
 impl Interpreter {
     fn visit_list_access(&mut self, list: &[Value], index: &ast::Expr) -> Result<Value> {
-        let index = match self.visit_expr(index)? {
-            Value::Number(num) if !num.is_finite() || num.trunc() != num || num < 0.0 => {
-                return runtime_err!(InvalidIndex { index: num });
-            }
-            Value::Number(num) => num as usize,
-            val => {
-                return type_err!(
-                    "{} não é um tipo válido para indexação; esperado {}",
-                    val,
-                    ValueType::Number
-                )
-            }
-        };
+        let index = self.resolve_index(index)?;
 
         if index >= list.len() {
             return runtime_err!(IndexOutOfBounds {
@@ -614,6 +604,19 @@ impl Interpreter {
         }
 
         Ok(list[index].clone())
+    }
+
+    fn visit_string_access(&mut self, string: &str, index: &ast::Expr) -> Result<Value> {
+        let index = self.resolve_index(index)?;
+
+        if let Some(char) = string.chars().nth(index) {
+            Ok(Value::String(char.to_string()))
+        } else {
+            runtime_err!(IndexOutOfBounds {
+                index,
+                len: string.len(),
+            })
+        }
     }
 
     fn visit_associative_array_access(
@@ -681,6 +684,20 @@ impl Interpreter {
         associative_array.insert(index, value.clone());
 
         Ok(value)
+    }
+
+    fn resolve_index(&mut self, index: &ast::Expr) -> Result<usize> {
+        match self.visit_expr(index)? {
+            Value::Number(num) if !num.is_finite() || num.trunc() != num || num < 0.0 => {
+                runtime_err!(InvalidIndex { index: num })
+            }
+            Value::Number(num) => Ok(num as usize),
+            val => type_err!(
+                "{} não é um tipo válido para indexação; esperado {}",
+                val,
+                ValueType::Number
+            ),
+        }
     }
 
     fn create_function(&self, params: &[ast::FunctionParam], body: Box<ast::Stmt>) -> Function {
