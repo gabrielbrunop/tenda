@@ -12,13 +12,13 @@ macro_rules! print_errors {
     };
 }
 
-pub struct Tenda {
+pub struct Runtime {
     interpreter: Interpreter,
 }
 
-impl Tenda {
-    pub fn new() -> Tenda {
-        Tenda {
+impl Runtime {
+    pub fn new() -> Runtime {
+        Runtime {
             interpreter: Interpreter::new(),
         }
     }
@@ -47,7 +47,7 @@ impl Tenda {
     }
 }
 
-impl Default for Tenda {
+impl Default for Runtime {
     fn default() -> Self {
         Self::new()
     }

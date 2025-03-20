@@ -1,8 +1,8 @@
+use runtime::Runtime;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::io;
 use std::io::{IsTerminal, Read};
-use tenda::Tenda;
 
 fn main() -> io::Result<()> {
     let mut stdin = io::stdin();
@@ -21,7 +21,7 @@ fn main() -> io::Result<()> {
 
 fn start_repl() {
     let mut rl = DefaultEditor::new().unwrap();
-    let mut tenda = Tenda::new();
+    let mut tenda = Runtime::new();
     let mut exiting = false;
 
     loop {
@@ -57,7 +57,7 @@ fn start_repl() {
 }
 
 fn run_string(string: String) {
-    let mut tenda = Tenda::new();
+    let mut tenda = Runtime::new();
     let output = tenda.run(string);
 
     if let Err(err) = output {
@@ -65,4 +65,4 @@ fn run_string(string: String) {
     };
 }
 
-mod tenda;
+mod runtime;
