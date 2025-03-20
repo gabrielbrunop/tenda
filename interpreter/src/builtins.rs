@@ -21,7 +21,7 @@ macro_rules! builtin_assoc_array {
     ($($name:literal => $value:expr),+ $(,)?) => {{
         use std::cell::RefCell;
         use std::rc::Rc;
-        use crate::value::AssociativeArrayKey;
+        use crate::associative_array::AssociativeArrayKey;
 
         let mut map = indexmap::IndexMap::new();
 

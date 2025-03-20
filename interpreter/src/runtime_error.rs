@@ -2,7 +2,10 @@ use core::fmt;
 use std::fmt::Display;
 use thiserror::Error;
 
-use crate::value::{AssociativeArrayKey, Value, ValueType};
+use crate::{
+    associative_array::AssociativeArrayKey,
+    value::{Value, ValueType},
+};
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 

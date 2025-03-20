@@ -3,12 +3,13 @@ use std::{cell::RefCell, rc::Rc};
 use parser::ast::{self, Access, DeclVisitor, ExprVisitor, StmtVisitor};
 
 use crate::{
+    associative_array::{AssociativeArray, AssociativeArrayKey},
     builtins,
     environment::{Environment, StoredValue},
     function::Function,
     runtime_error::{runtime_err, type_err, Result, RuntimeError, RuntimeErrorKind},
     stack::Stack,
-    value::{AssociativeArrayKey, Value, ValueType},
+    value::{Value, ValueType},
 };
 
 #[derive(Debug)]
@@ -487,11 +488,13 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
     fn visit_grouping(&mut self, grouping: &ast::Grouping) -> Result<Value> {
         let ast::Grouping { expr } = grouping;
+
         self.visit_expr(expr)
     }
 
     fn visit_literal(&mut self, literal: &ast::Literal) -> Result<Value> {
         let ast::Literal { value } = literal;
+
         Ok(value.clone().into())
     }
 
@@ -615,7 +618,7 @@ impl Interpreter {
 
     fn visit_associative_array_access(
         &mut self,
-        associative_array: indexmap::IndexMap<AssociativeArrayKey, Value>,
+        associative_array: AssociativeArray,
         index: &ast::Expr,
     ) -> Result<Value> {
         let index = self.visit_expr(index)?;

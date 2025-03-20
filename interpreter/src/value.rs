@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
-use std::hash::Hash;
 use std::rc::Rc;
 
 use scanner::token::Literal;
 
+use crate::associative_array::{AssociativeArray, AssociativeArrayKey};
 use crate::function::Function;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,7 +16,7 @@ pub enum Value {
     Function(Function),
     List(Rc<RefCell<Vec<Value>>>),
     Range(usize, usize),
-    AssociativeArray(Rc<RefCell<indexmap::IndexMap<AssociativeArrayKey, Value>>>),
+    AssociativeArray(Rc<RefCell<AssociativeArray>>),
     Nil,
 }
 
@@ -173,20 +173,5 @@ impl Display for ValueType {
         };
 
         write!(f, "{}", str)
-    }
-}
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub enum AssociativeArrayKey {
-    String(String),
-    Number(i64),
-}
-
-impl Display for AssociativeArrayKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AssociativeArrayKey::String(key) => write!(f, "{}", key),
-            AssociativeArrayKey::Number(key) => write!(f, "{}", key),
-        }
     }
 }
