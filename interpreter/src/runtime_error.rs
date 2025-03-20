@@ -58,6 +58,9 @@ pub enum RuntimeErrorKind {
 
     #[error("o valor do tipo '{}' não é um argumento válido para a função", .value.to_string())]
     InvalidArgument { value: Value },
+
+    #[error("textos são imutáveis e não podem ser modificados")]
+    ImmutableString,
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]
