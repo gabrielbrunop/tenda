@@ -4,7 +4,7 @@ use crate::runtime_error::{runtime_err, type_err, Result};
 use crate::stack::Stack;
 use crate::value::Value;
 
-macro_rules! add_global {
+macro_rules! global {
     ($stack:ident, $builtin:expr) => {{
         let builtin = $builtin;
 
@@ -18,39 +18,43 @@ macro_rules! add_global {
 }
 
 macro_rules! builtin_assoc_array {
-    ($assoc_array_name:literal, $($name:literal => $value:expr),+) => {
+    ($($name:literal => $value:expr),+ $(,)?) => {{
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        use crate::value::AssociativeArrayKey;
+
+        let mut map = indexmap::IndexMap::new();
+
+        $(
+            let key = AssociativeArrayKey::String($name.to_string());
+            map.insert(key, $value);
+        )+
+
+        Value::AssociativeArray(Rc::new(RefCell::new(map)))
+    }};
+}
+
+macro_rules! define_assoc_array {
+    ($assoc_array_name:literal, { $($name:literal => $value:expr),+ $(,)? }) => {
         (
             $assoc_array_name.to_string(),
-            {
-                use std::cell::RefCell;
-                use std::rc::Rc;
-                use crate::value::AssociativeArrayKey;
-
-                let mut map = indexmap::IndexMap::new();
-
-                $(
-                    let key = AssociativeArrayKey::String($name.to_string());
-                    map.insert(key, $value);
-                )+
-
-                Value::AssociativeArray(Rc::new(RefCell::new(map)))
-            }
+            builtin_assoc_array!($($name => $value),+)
         )
     };
 }
 
 macro_rules! builtin_fn {
-    ($args:expr, $body:expr) => {
-        Value::Function(Function::new($args, None, None, $body))
+    ([$($param:expr),*], $body:expr) => {
+        Value::Function(Function::new_builtin(
+            params![$($param),*],
+            $body,
+        ))
     };
 }
 
-macro_rules! named_builtin_fn {
-    ($name:literal, $args:expr, $body:expr) => {
-        (
-            $name.to_string(),
-            Value::Function(Function::new($args, None, None, $body)),
-        )
+macro_rules! define_fn {
+    ($name:literal, [$($param:expr),*], $body:expr) => {
+        ($name.to_string(), builtin_fn!([$($param),*], $body))
     };
 }
 
@@ -70,9 +74,13 @@ macro_rules! ensure {
 }
 
 pub fn setup_native_bindings(stack: &mut Stack) {
-    add_global!(
+    setup_list_global_bindings(stack);
+}
+
+pub fn setup_io_global_bindings(stack: &mut Stack) {
+    global!(
         stack,
-        named_builtin_fn!("exiba", params!["texto"], |args, _, _, _| {
+        define_fn!("exiba", ["texto"], |args, _| {
             let text = match args!(args, 0) {
                 Value::String(value) => value.to_string(),
                 value => format!("{}", value),
@@ -81,23 +89,27 @@ pub fn setup_native_bindings(stack: &mut Stack) {
             println!("{}", text);
 
             Ok(Value::Nil)
-        }),
-        builtin_assoc_array!(
-            "Lista",
+        })
+    );
+}
 
-            "tamanho" => builtin_fn!(params!["lista"], |args, _, _, _| {
+pub fn setup_list_global_bindings(stack: &mut Stack) {
+    global!(
+        stack,
+        define_assoc_array!("Lista", {
+            "tamanho" => builtin_fn!(["lista"], |args, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
 
                 Ok(Value::Number(list.len() as f64))
             }),
-            "insira" => builtin_fn!(params!["lista", "valor"], |args, _, _, _| {
+            "insira" => builtin_fn!(["lista", "valor"], |args, _| {
                 let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
 
                 list.push(args!(args, 1).clone());
 
                 Ok(Value::Nil)
             }),
-            "remova" => builtin_fn!(params!["lista", "valor"], |args, _, _, _| {
+            "remova" => builtin_fn!(["lista", "valor"], |args, _| {
                 let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
                 let value = args!(args, 1);
                 let index = list.iter().position(|v| v == value);
@@ -108,7 +120,7 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 
                 Ok(Value::Nil)
             }),
-            "remova_todos" => builtin_fn!(params!["lista", "valor"], |args, _, _, _| {
+            "remova_todos" => builtin_fn!(["lista", "valor"], |args, _| {
                 let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
                 let value = args!(args, 1);
 
@@ -116,7 +128,7 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 
                 Ok(Value::Nil)
             }),
-            "remova_por_índice" => builtin_fn!(params!["lista", "índice"], |args, _, _, _| {
+            "remova_por_índice" => builtin_fn!(["lista", "índice"], |args, _| {
                 let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
                 let index = ensure!(args!(args, 1), Number(value) => *value as usize);
 
@@ -128,7 +140,7 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 
                 Ok(element)
             }),
-            "obtenha" => builtin_fn!(params!["lista", "índice"], |args, _, _, _| {
+            "obtenha" => builtin_fn!(["lista", "índice"], |args, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let index = ensure!(args!(args, 1), Number(value) => *value as usize);
 
@@ -138,33 +150,32 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 
                 Ok(list[index].clone())
             }),
-            "índice_de" => builtin_fn!(params!["lista", "valor"], |args, _, _, _| {
+            "índice_de" => builtin_fn!(["lista", "valor"], |args, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let value = args!(args, 1);
+                let index = list.iter().position(|v| v == value).map(|i| i as f64);
 
-                let index = list.iter().position(|v| v == value);
-
-                Ok(Value::Number(index.map(|i| i as f64).unwrap_or(-1.0)))
+                Ok(index.map(Value::Number).unwrap_or(Value::Nil))
             }),
-            "contém" => builtin_fn!(params!["lista", "valor"], |args, _, _, _| {
+            "contém" => builtin_fn!(["lista", "valor"], |args, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let value = args!(args, 1);
 
                 Ok(Value::Boolean(list.contains(value)))
             }),
-            "vazio" => builtin_fn!(params!["lista"], |args, _, _, _| {
+            "vazio" => builtin_fn!(["lista"], |args, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
 
                 Ok(Value::Boolean(list.is_empty()))
             }),
-            "limpar" => builtin_fn!(params!["lista"], |args, _, _, _| {
+            "limpar" => builtin_fn!(["lista"], |args, _| {
                 let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
 
                 list.clear();
 
                 Ok(Value::Nil)
             }),
-            "fatiar" => builtin_fn!(params!["lista", "início", "fim"], |args, _, _, _| {
+            "fatiar" => builtin_fn!(["lista", "início", "fim"], |args, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let start = ensure!(args!(args, 1), Number(value) => *value as usize);
                 let end = ensure!(args!(args, 2), Number(value) => *value as usize);
@@ -181,7 +192,7 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 
                 Ok(Value::List(Rc::new(RefCell::new(extracted))))
             }),
-            "para_cada" => builtin_fn!(params!["lista", "função"], |args, _, interpreter, _| {
+            "para_cada" => builtin_fn!(["lista", "função"], |args, interpreter| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let function = ensure!(args!(args, 1), Function(function) => function);
 
@@ -200,7 +211,7 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 
                 Ok(Value::Nil)
             }),
-            "transformar" => builtin_fn!(params!["lista", "função"], |args, _, interpreter, _| {
+            "transformar" => builtin_fn!(["lista", "função"], |args, interpreter| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let function = ensure!(args!(args, 1), Function(function) => function);
 
@@ -222,6 +233,6 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 
                 Ok(Value::List(Rc::new(RefCell::new(transformed?))))
             })
-        )
+        })
     );
 }

@@ -697,12 +697,10 @@ impl Interpreter {
 
         Function::new(
             params.iter().map(|p| p.clone().into()).collect(),
-            Some(Box::new(context)),
-            Some(body),
+            Box::new(context),
+            body,
             |params, body, interpreter, context| {
-                if let Some(context) = context {
-                    interpreter.stack.push(*context.clone());
-                }
+                interpreter.stack.push(*context.clone());
 
                 for (param, arg_value) in params.into_iter() {
                     let stored_value = if param.is_captured {
@@ -717,9 +715,7 @@ impl Interpreter {
                         .unwrap();
                 }
 
-                if let Some(body) = body {
-                    interpreter.interpret_stmt(&body)?;
-                }
+                interpreter.interpret_stmt(&body)?;
 
                 let value = interpreter
                     .stack
@@ -727,9 +723,7 @@ impl Interpreter {
                     .map(|v| v.clone_value())
                     .unwrap_or(Value::Nil);
 
-                if context.is_some() {
-                    interpreter.stack.pop();
-                }
+                interpreter.stack.pop();
 
                 Ok(value)
             },
