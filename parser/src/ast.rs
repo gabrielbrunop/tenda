@@ -222,6 +222,7 @@ pub enum Expr {
     Literal(Literal),
     Variable(Variable),
     AssociativeArray(AssociativeArray),
+    AnonymousFunction(AnonymousFunction),
 }
 
 pub trait ExprVisitor<T> {
@@ -235,6 +236,7 @@ pub trait ExprVisitor<T> {
     fn visit_literal(&mut self, literal: &Literal) -> T;
     fn visit_variable(&mut self, variable: &Variable) -> T;
     fn visit_associative_array(&mut self, associative_array: &AssociativeArray) -> T;
+    fn visit_anonymous_function(&mut self, anonymous_function: &AnonymousFunction) -> T;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -373,6 +375,32 @@ impl Variable {
             name,
             uid: id,
             captured: false,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct AnonymousFunction {
+    pub params: Vec<FunctionParam>,
+    pub body: Box<Stmt>,
+    pub uid: usize,
+    pub free_vars: Vec<String>,
+}
+
+impl AnonymousFunction {
+    pub fn new(params: Vec<(String, usize)>, body: Stmt, uid: usize) -> Self {
+        AnonymousFunction {
+            params: params
+                .into_iter()
+                .map(|(name, uid)| FunctionParam {
+                    name,
+                    uid,
+                    captured: false,
+                })
+                .collect(),
+            body: Box::new(body),
+            uid,
+            free_vars: vec![],
         }
     }
 }
@@ -549,6 +577,13 @@ macro_rules! make_associative_array_expr {
     }};
 }
 
+macro_rules! make_anonymous_function_expr {
+    ($params:expr, $body:expr, $uid:expr) => {{
+        use $crate::ast::Expr;
+        Expr::AnonymousFunction($crate::ast::AnonymousFunction::new($params, $body, $uid))
+    }};
+}
+
 macro_rules! make_cond_stmt {
     ($cond:expr, $then:expr, $or_else:expr) => {{
         use $crate::ast::{Cond, Stmt};
@@ -583,6 +618,7 @@ macro_rules! make_block_stmt {
 }
 
 pub(crate) use make_access_expr;
+pub(crate) use make_anonymous_function_expr;
 pub(crate) use make_assign_expr;
 pub(crate) use make_associative_array_expr;
 pub(crate) use make_binary_expr;

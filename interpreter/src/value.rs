@@ -70,10 +70,9 @@ impl Display for Value {
                 String(value) => format!("\"{}\"", value),
                 Function(value) => format!(
                     "<função {}({})>",
-                    value.object as *const () as usize,
+                    value.get_fn_ptr(),
                     value
-                        .context
-                        .params
+                        .get_params()
                         .iter()
                         .map(|p| p.name.clone())
                         .collect::<Vec<_>>()

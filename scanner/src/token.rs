@@ -100,6 +100,7 @@ impl Literal {
     pub const NIL_LITERAL: &'static str = "Nada";
 }
 
+#[derive(Debug)]
 pub struct TokenIterator<'a> {
     tokens: PeekMoreIterator<Iter<'a, Token>>,
     ignoring_newline_counter: Rc<RefCell<usize>>,

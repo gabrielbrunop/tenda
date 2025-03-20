@@ -41,7 +41,7 @@ impl<'a> Scanner<'a> {
                     }
                 }
                 c if c.is_whitespace() => Ok(None),
-                '(' => token!(LeftParen, ")", self.line).into(),
+                '(' => token!(LeftParen, "(", self.line).into(),
                 ')' => token!(RightParen, ")", self.line).into(),
                 '[' => token!(LeftBracket, "[", self.line).into(),
                 ']' => token!(RightBracket, "]", self.line).into(),
