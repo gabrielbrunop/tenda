@@ -171,14 +171,14 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::Boolean(list.is_empty()))
             }),
-            "limpar" => builtin_fn!(["lista"], |args, _| {
+            "limpa" => builtin_fn!(["lista"], |args, _| {
                 let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
 
                 list.clear();
 
                 Ok(Value::Nil)
             }),
-            "fatiar" => builtin_fn!(["lista", "início", "fim"], |args, _| {
+            "fatia" => builtin_fn!(["lista", "início", "fim"], |args, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let start = ensure!(args!(args, 1), Number(value) => *value as usize);
                 let end = ensure!(args!(args, 2), Number(value) => *value as usize);
@@ -214,7 +214,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::Nil)
             }),
-            "transformar" => builtin_fn!(["lista", "função"], |args, interpreter| {
+            "transforma" => builtin_fn!(["lista", "função"], |args, interpreter| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let function = ensure!(args!(args, 1), Function(function) => function);
 
@@ -249,7 +249,7 @@ fn setup_math_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::Number(number.abs()))
             }),
-            "arredondar" => builtin_fn!(["número"], |args, _| {
+            "arredonda" => builtin_fn!(["número"], |args, _| {
                 let number = ensure!(args!(args, 0), Number(value) => *value);
 
                 Ok(Value::Number(number.round()))
@@ -384,7 +384,7 @@ fn setup_math_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::Number(radians.to_degrees()))
             }),
-            "truncar" => builtin_fn!(["número"], |args, _| {
+            "trunca" => builtin_fn!(["número"], |args, _| {
                 let number = ensure!(args!(args, 0), Number(value) => *value);
 
                 Ok(Value::Number(number.trunc()))
@@ -412,13 +412,13 @@ fn setup_math_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::Number(n1.rem_euclid(n2)))
             }),
-            "copiar_sinal" => builtin_fn!(["valor", "sinal"], |args, _| {
+            "copia_sinal" => builtin_fn!(["valor", "sinal"], |args, _| {
                 let valor = ensure!(args!(args, 0), Number(value) => *value);
                 let sinal = ensure!(args!(args, 1), Number(value) => *value);
 
                 Ok(Value::Number(valor.copysign(sinal)))
             }),
-            "limitar" => builtin_fn!(["número", "mínimo", "máximo"], |args, _| {
+            "limita" => builtin_fn!(["número", "mínimo", "máximo"], |args, _| {
                 let x = ensure!(args!(args, 0), Number(value) => *value);
                 let min_val = ensure!(args!(args, 1), Number(value) => *value);
                 let max_val = ensure!(args!(args, 2), Number(value) => *value);
