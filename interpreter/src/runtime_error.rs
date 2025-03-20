@@ -52,6 +52,9 @@ pub enum RuntimeErrorKind {
 
     #[error("não é possível iterar sobre um valor do tipo '{}'", .value.to_string())]
     NotIterable { value: ValueType },
+
+    #[error("o valor do tipo '{}' não é um argumento válido para a função", .value.to_string())]
+    InvalidArgument { value: Value },
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]
