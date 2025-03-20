@@ -11,9 +11,9 @@ static FUNCTION_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub id: usize,
-    pub context: FunctionContext,
-    pub object: FunctionObject,
+    id: usize,
+    context: FunctionContext,
+    object: FunctionObject,
 }
 
 impl Function {
@@ -30,6 +30,27 @@ impl Function {
             context: FunctionContext::new(params, context, body),
             object,
         }
+    }
+
+    pub fn call(
+        &self,
+        params: Vec<(FunctionParam, Value)>,
+        interpreter: &mut Interpreter,
+    ) -> Result<Value> {
+        (self.object)(
+            params,
+            self.context.body.clone(),
+            interpreter,
+            self.context.env.as_ref(),
+        )
+    }
+
+    pub fn get_fn_ptr(&self) -> usize {
+        self.object as *const () as usize
+    }
+
+    pub fn get_params(&self) -> Vec<FunctionParam> {
+        self.context.params.clone()
     }
 }
 

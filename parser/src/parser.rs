@@ -192,37 +192,7 @@ impl<'a> Parser<'a> {
         self.tokens.next();
 
         let name = self.consume_identifier()?;
-
-        self.skip_token(TokenKind::LeftParen)?;
-
-        let guard = self.tokens.set_ignoring_newline();
-
-        let parameters = match self.tokens.consume_matching_tokens(token_iter![RightParen]) {
-            Some(_) => vec![],
-            None => {
-                let parameters = self.parse_function_parameters(&name)?;
-
-                if self
-                    .tokens
-                    .consume_matching_tokens(token_iter![RightParen])
-                    .is_none()
-                {
-                    Err(vec![parser_err!(
-                        MissingParentheses,
-                        self.tokens.next().unwrap().line,
-                        "esperado ')' após declaração de função".to_string()
-                    )])?;
-                }
-
-                parameters
-                    .into_iter()
-                    .map(|p| (p, self.gen_uid()))
-                    .collect()
-            }
-        };
-
-        drop(guard);
-
+        let parameters = self.parse_function_parameters_signature(Some(&name))?;
         let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Function)?;
 
         Ok(ast::make_function_decl!(
@@ -231,37 +201,6 @@ impl<'a> Parser<'a> {
             body,
             self.gen_uid()
         ))
-    }
-
-    fn parse_function_parameters(&mut self, function_name: &str) -> Result<Vec<String>> {
-        let mut parameters: Vec<String> = vec![];
-
-        loop {
-            let parameter = self.consume_identifier()?;
-
-            if parameters.contains(&parameter) {
-                Err(vec![parser_err!(
-                    DuplicateParameter(parameter.clone()),
-                    self.tokens.get_last_line(),
-                    format!(
-                        "parâmetro '{}' duplicado na função '{}'",
-                        parameter, function_name
-                    )
-                )])?;
-            }
-
-            parameters.push(parameter);
-
-            if self
-                .tokens
-                .consume_matching_tokens(token_iter![Comma])
-                .is_none()
-            {
-                break;
-            }
-        }
-
-        Ok(parameters.into_iter().collect())
     }
 
     fn parse_declaration(&mut self) -> Result<ast::Stmt> {
@@ -587,9 +526,93 @@ impl<'a> Parser<'a> {
                     Ok(ast::make_variable_expr!(name.clone(), id))
                 }
             }
+            Function => self.parse_anonymous_function(),
             Eof => Err(vec![parser_err!(UnexpectedEoi, line)]),
             _ => Err(vec![unexpected_token!(token)]),
         }
+    }
+
+    fn parse_anonymous_function(&mut self) -> Result<ast::Expr> {
+        let parameters = self.parse_function_parameters_signature(None)?;
+        let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Function)?;
+
+        Ok(ast::make_anonymous_function_expr!(
+            parameters,
+            body,
+            self.gen_uid()
+        ))
+    }
+
+    fn parse_function_parameters_signature(
+        &mut self,
+        function_name: Option<&str>,
+    ) -> Result<Vec<(String, usize)>> {
+        self.skip_token(TokenKind::LeftParen)?;
+
+        let _guard = self.tokens.set_ignoring_newline();
+
+        let parameters = match self.tokens.consume_matching_tokens(token_iter![RightParen]) {
+            Some(_) => vec![],
+            None => {
+                let parameters = self.parse_function_parameters(function_name)?;
+
+                if self
+                    .tokens
+                    .consume_matching_tokens(token_iter![RightParen])
+                    .is_none()
+                {
+                    Err(vec![parser_err!(
+                        MissingParentheses,
+                        self.tokens.next().unwrap().line,
+                        "esperado ')' após declaração de função".to_string()
+                    )])?;
+                }
+
+                parameters
+                    .into_iter()
+                    .map(|p| (p, self.gen_uid()))
+                    .collect()
+            }
+        };
+
+        Ok(parameters.into_iter().collect())
+    }
+
+    fn parse_function_parameters(&mut self, function_name: Option<&str>) -> Result<Vec<String>> {
+        let mut parameters: Vec<String> = vec![];
+
+        loop {
+            let parameter = self.consume_identifier()?;
+
+            if parameters.contains(&parameter) {
+                let err = match function_name {
+                    Some(name) => parser_err!(
+                        DuplicateParameter(parameter.clone()),
+                        self.tokens.get_last_line(),
+                        format!("parâmetro '{}' duplicado na função '{}'", parameter, name)
+                    ),
+                    None => parser_err!(
+                        DuplicateParameter(parameter.clone()),
+                        self.tokens.get_last_line(),
+                        format!("parâmetro '{}' duplicado", parameter)
+                    ),
+                };
+
+                Err(vec![err])?;
+            }
+
+            parameters.push(parameter);
+
+            if self
+                .tokens
+                .consume_matching_tokens(token_iter![Comma])
+                .is_none()
+            {
+                break;
+            }
+        }
+
+        Ok(parameters.into_iter().collect())
     }
 
     fn parse_list(&mut self) -> Result<ast::Expr> {

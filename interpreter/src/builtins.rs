@@ -1,12 +1,8 @@
 use crate::environment::StoredValue;
 use crate::function::{params, Function};
-use crate::runtime_error::{runtime_err, type_err};
+use crate::runtime_error::{runtime_err, type_err, Result};
 use crate::stack::Stack;
 use crate::value::Value;
-
-pub fn setup_native_bindings(stack: &mut Stack) {
-    setup_global_bindings(stack);
-}
 
 macro_rules! add_global {
     ($stack:ident, $builtin:expr) => {{
@@ -73,7 +69,7 @@ macro_rules! ensure {
     }};
 }
 
-fn setup_global_bindings(stack: &mut Stack) {
+pub fn setup_native_bindings(stack: &mut Stack) {
     add_global!(
         stack,
         named_builtin_fn!("exiba", params!["texto"], |args, _, _, _| {
@@ -184,6 +180,47 @@ fn setup_global_bindings(stack: &mut Stack) {
                 let extracted = list[start..=end].to_vec();
 
                 Ok(Value::List(Rc::new(RefCell::new(extracted))))
+            }),
+            "para_cada" => builtin_fn!(params!["lista", "função"], |args, _, interpreter, _| {
+                let list = ensure!(args!(args, 0), List(list) => list.borrow());
+                let function = ensure!(args!(args, 1), Function(function) => function);
+
+                for (i, value) in list.iter().enumerate() {
+                    let i = Value::Number(i as f64);
+                    let args = vec![value, &i].into_iter();
+                    let params = function
+                        .get_params()
+                        .iter()
+                        .zip(args)
+                        .map(|(param_name, arg_value)| (param_name.clone(), arg_value.clone()))
+                        .collect();
+
+                    function.call(params, interpreter)?;
+                }
+
+                Ok(Value::Nil)
+            }),
+            "transformar" => builtin_fn!(params!["lista", "função"], |args, _, interpreter, _| {
+                let list = ensure!(args!(args, 0), List(list) => list.borrow());
+                let function = ensure!(args!(args, 1), Function(function) => function);
+
+                let transformed: Result<Vec<Value>> = list.iter().try_fold(Vec::new(), |mut acc, value| {
+                    let args = vec![value].into_iter();
+                    let params = function
+                        .get_params()
+                        .iter()
+                        .zip(args)
+                        .map(|(param_name, arg_value)| (param_name.clone(), arg_value.clone()))
+                        .collect();
+
+                    let result = function.call(params, interpreter)?;
+
+                    acc.push(result);
+
+                    Ok(acc)
+                });
+
+                Ok(Value::List(Rc::new(RefCell::new(transformed?))))
             })
         )
     );

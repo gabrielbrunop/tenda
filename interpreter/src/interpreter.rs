@@ -11,6 +11,7 @@ use crate::{
     value::{AssociativeArrayKey, Value, ValueType},
 };
 
+#[derive(Debug)]
 pub struct Interpreter {
     stack: Stack,
 }
@@ -85,6 +86,9 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             Access(indexing) => self.visit_access(indexing),
             Variable(variable) => self.visit_variable(variable),
             AssociativeArray(associative_array) => self.visit_associative_array(associative_array),
+            AnonymousFunction(anonymous_function) => {
+                self.visit_anonymous_function(anonymous_function)
+            }
         }
     }
 
@@ -223,57 +227,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             name, params, body, ..
         } = function;
 
-        let mut context = Environment::new();
-
-        for env in self.stack.into_iter() {
-            for (name, value) in env {
-                if params.iter().any(|param| param.name == *name) {
-                    continue;
-                }
-
-                if let StoredValue::Shared(value) = value {
-                    context.set(name.clone(), StoredValue::Shared(value.clone()));
-                }
-            }
-        }
-
-        let func = Function::new(
-            params.iter().map(|p| p.clone().into()).collect(),
-            Some(Box::new(context)),
-            Some(body.clone()),
-            |params, body, interpreter, context| {
-                if let Some(context) = context {
-                    interpreter.stack.push(*context.clone());
-                }
-
-                for (param, arg_value) in params.into_iter() {
-                    let stored_value = if param.is_captured {
-                        StoredValue::new_shared(arg_value)
-                    } else {
-                        StoredValue::new(arg_value)
-                    };
-
-                    interpreter
-                        .stack
-                        .define(param.name.clone(), stored_value)
-                        .unwrap();
-                }
-
-                if let Some(body) = body {
-                    interpreter.interpret_stmt(&body)?;
-                }
-
-                let value = interpreter
-                    .stack
-                    .consume_return()
-                    .map(|v| v.clone_value())
-                    .unwrap_or(Value::Nil);
-
-                interpreter.stack.pop();
-
-                Ok(value)
-            },
-        );
+        let func = self.create_function(params, body.clone());
 
         let _ = self
             .stack
@@ -348,7 +302,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 }
                 (AssociativeArray(lhs), AssociativeArray(rhs)) => Boolean(lhs == rhs),
                 (Nil, Nil) => Boolean(true),
-                (Function(lhs), Function(rhs)) => Boolean(lhs.id == rhs.id),
+                (Function(lhs), Function(rhs)) => Boolean(lhs == rhs),
                 _ => Boolean(false),
             },
             Inequality => match (lhs, rhs) {
@@ -361,7 +315,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 }
                 (AssociativeArray(lhs), AssociativeArray(rhs)) => Boolean(lhs != rhs),
                 (Nil, Nil) => Boolean(false),
-                (Function(lhs), Function(rhs)) => Boolean(lhs.id != rhs.id),
+                (Function(lhs), Function(rhs)) => Boolean(lhs != rhs),
                 _ => Boolean(true),
             },
             Greater => match (lhs, rhs) {
@@ -482,22 +436,19 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             .collect::<Result<Vec<_>>>()?;
 
         match callee {
-            Value::Function(func) if args.len() != func.context.params.len() => {
+            Value::Function(func) if args.len() != func.get_params().len() => {
                 runtime_err!(WrongNumberOfArguments {
-                    expected: func.context.params.len(),
+                    expected: func.get_params().len(),
                     found: args.len(),
                 })
             }
-            Value::Function(func) => (func.object)(
-                func.context
-                    .params
+            Value::Function(func) => func.call(
+                func.get_params()
                     .iter()
                     .zip(args)
                     .map(|(a, b)| (a.clone(), b))
                     .collect(),
-                func.context.body.clone(),
                 self,
-                func.context.env.as_ref(),
             ),
             _ => runtime_err!(
                 TypeError {
@@ -623,6 +574,17 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
         Ok(Value::AssociativeArray(Rc::new(RefCell::new(map))))
     }
+
+    fn visit_anonymous_function(
+        &mut self,
+        anonymous_function: &ast::AnonymousFunction,
+    ) -> Result<Value> {
+        let ast::AnonymousFunction { params, body, .. } = anonymous_function;
+
+        let func = self.create_function(params, body.clone());
+
+        Ok(Value::Function(func))
+    }
 }
 
 impl Interpreter {
@@ -716,6 +678,62 @@ impl Interpreter {
         associative_array.insert(index, value.clone());
 
         Ok(value)
+    }
+
+    fn create_function(&self, params: &[ast::FunctionParam], body: Box<ast::Stmt>) -> Function {
+        let mut context = Environment::new();
+
+        for env in self.stack.into_iter() {
+            for (name, value) in env {
+                if params.iter().any(|param| param.name == *name) {
+                    continue;
+                }
+
+                if let StoredValue::Shared(value) = value {
+                    context.set(name.clone(), StoredValue::Shared(value.clone()));
+                }
+            }
+        }
+
+        Function::new(
+            params.iter().map(|p| p.clone().into()).collect(),
+            Some(Box::new(context)),
+            Some(body),
+            |params, body, interpreter, context| {
+                if let Some(context) = context {
+                    interpreter.stack.push(*context.clone());
+                }
+
+                for (param, arg_value) in params.into_iter() {
+                    let stored_value = if param.is_captured {
+                        StoredValue::new_shared(arg_value)
+                    } else {
+                        StoredValue::new(arg_value)
+                    };
+
+                    interpreter
+                        .stack
+                        .define(param.name.clone(), stored_value)
+                        .unwrap();
+                }
+
+                if let Some(body) = body {
+                    interpreter.interpret_stmt(&body)?;
+                }
+
+                let value = interpreter
+                    .stack
+                    .consume_return()
+                    .map(|v| v.clone_value())
+                    .unwrap_or(Value::Nil);
+
+                if context.is_some() {
+                    interpreter.stack.pop();
+                }
+
+                Ok(value)
+            },
+        )
     }
 }
 
