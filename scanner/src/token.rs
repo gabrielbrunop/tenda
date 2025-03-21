@@ -67,6 +67,7 @@ pub enum TokenKind {
     For,
     Each,
     In,
+    Has,
     Colon,
     Plus,
     Minus,

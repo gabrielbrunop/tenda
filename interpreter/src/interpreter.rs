@@ -401,6 +401,28 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     )
                 }
             },
+            Has => match (lhs, rhs) {
+                (List(list), value) => Boolean(list.borrow().contains(&value)),
+                (AssociativeArray(associative_array), key) => {
+                    let key = self.visit_associative_array_key(key)?;
+
+                    Boolean(associative_array.borrow().contains_key(&key))
+                }
+                (lhs, rhs) => {
+                    return type_err!("não é possível verificar se '{}' contém '{}'", lhs, rhs)
+                }
+            },
+            Lacks => match (lhs, rhs) {
+                (List(list), value) => Boolean(!list.borrow().contains(&value)),
+                (AssociativeArray(associative_array), key) => {
+                    let key = self.visit_associative_array_key(key)?;
+
+                    Boolean(!associative_array.borrow().contains_key(&key))
+                }
+                (lhs, rhs) => {
+                    return type_err!("não é possível verificar se '{}' não contém '{}'", lhs, rhs)
+                }
+            },
         };
 
         match expr {
