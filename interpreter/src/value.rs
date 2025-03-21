@@ -83,7 +83,10 @@ impl Display for Value {
                     value
                         .borrow()
                         .iter()
-                        .map(|v| v.to_string())
+                        .map(|v| match v {
+                            Value::String(s) => format!("\"{}\"", s.escape_default()),
+                            _ => v.to_string(),
+                        })
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
@@ -94,6 +97,10 @@ impl Display for Value {
                     value
                         .borrow()
                         .iter()
+                        .map(|(k, v)| match v {
+                            Value::String(s) => (k, format!("\"{}\"", s.escape_default())),
+                            _ => (k, v.to_string()),
+                        })
                         .map(|(k, v)| match k {
                             AssociativeArrayKey::String(key) => format!("\"{}\": {}", key, v),
                             AssociativeArrayKey::Number(key) => format!("{}: {}", key, v),
