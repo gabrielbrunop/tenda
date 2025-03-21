@@ -1,4 +1,4 @@
-use interpreter::interpreter::Interpreter;
+use interpreter::{interpreter::Interpreter, platform::Platform};
 use parser::parser::Parser;
 use scanner::scanner::Scanner;
 
@@ -17,9 +17,9 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn new() -> Runtime {
+    pub fn new(platform: impl Platform + 'static) -> Self {
         Runtime {
-            interpreter: Interpreter::new(),
+            interpreter: Interpreter::new(platform),
         }
     }
 
@@ -44,11 +44,5 @@ impl Runtime {
         };
 
         Ok(format!("{}", result))
-    }
-}
-
-impl Default for Runtime {
-    fn default() -> Self {
-        Self::new()
     }
 }

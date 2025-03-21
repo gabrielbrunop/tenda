@@ -83,15 +83,37 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 pub fn setup_io_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_fn!("exiba", ["texto"], |args, _| {
+        define_fn!("exiba", ["texto"], |args, interpreter| {
             let text = match args!(args, 0) {
                 Value::String(value) => value.to_string(),
                 value => format!("{}", value),
             };
 
-            println!("{}", text);
+            interpreter.get_platform().println(&text);
 
             Ok(Value::Nil)
+        }),
+        define_assoc_array!("Saída", {
+            "exiba" => builtin_fn!(["texto"], |args, interpreter| {
+                let text = match args!(args, 0) {
+                    Value::String(value) => value.to_string(),
+                    value => format!("{}", value),
+                };
+
+                interpreter.get_platform().println(&text);
+
+                Ok(Value::Nil)
+            }),
+            "escreva" => builtin_fn!(["texto"], |args, interpreter| {
+                let text = match args!(args, 0) {
+                    Value::String(value) => value.to_string(),
+                    value => format!("{}", value),
+                };
+
+                interpreter.get_platform().write(&text);
+
+                Ok(Value::Nil)
+            }),
         })
     );
 }
@@ -333,11 +355,13 @@ fn setup_math_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::Number(number1.min(number2)))
             }),
-            "aleatório" => builtin_fn!(["mínimo", "máximo"], |args, _| {
+            "aleatório" => builtin_fn!(["mínimo", "máximo"], |args, interpreter| {
                 let min = ensure!(args!(args, 0), Number(value) => *value);
                 let max = ensure!(args!(args, 1), Number(value) => *value);
 
-                Ok(Value::Number(rand::random::<f64>() * (max - min) + min))
+                let number = interpreter.get_platform().rand();
+
+                Ok(Value::Number(number * (max - min) + min))
             }),
             "raiz_cúbica" => builtin_fn!(["número"], |args, _| {
                 let number = ensure!(args!(args, 0), Number(value) => *value);

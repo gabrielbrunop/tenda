@@ -1,12 +1,12 @@
-use std::{cell::RefCell, rc::Rc};
-
 use parser::ast::{self, Access, DeclVisitor, ExprVisitor, StmtVisitor};
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use crate::{
     associative_array::{AssociativeArray, AssociativeArrayKey},
     builtins,
     environment::{Environment, StoredValue},
     function::Function,
+    platform::{self},
     runtime_error::{runtime_err, type_err, Result, RuntimeError, RuntimeErrorKind},
     stack::Stack,
     value::{Value, ValueType},
@@ -15,15 +15,19 @@ use crate::{
 #[derive(Debug)]
 pub struct Interpreter {
     stack: Stack,
+    platform: Box<dyn platform::Platform>,
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
+    pub fn new(platform: impl platform::Platform + 'static) -> Self {
         let mut stack = Stack::new();
 
         builtins::setup_native_bindings(&mut stack);
 
-        Interpreter { stack }
+        Interpreter {
+            stack,
+            platform: Box::new(platform),
+        }
     }
 
     pub fn eval(&mut self, ast: &ast::Ast) -> Result<Value> {
@@ -58,6 +62,10 @@ impl Interpreter {
             Break(break_stmt) => self.visit_break(break_stmt),
             Continue(continue_stmt) => self.visit_continue(continue_stmt),
         }
+    }
+
+    pub fn get_platform(&self) -> &dyn platform::Platform {
+        self.platform.as_ref()
     }
 }
 
@@ -748,11 +756,5 @@ impl Interpreter {
                 Ok(value)
             },
         )
-    }
-}
-
-impl Default for Interpreter {
-    fn default() -> Self {
-        Self::new()
     }
 }
