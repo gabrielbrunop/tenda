@@ -1,3 +1,4 @@
+use platform::Platform;
 use runtime::Runtime;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
@@ -13,7 +14,7 @@ fn main() -> io::Result<()> {
         let mut buffer = String::new();
         stdin.read_to_string(&mut buffer)?;
 
-        run_string(buffer);
+        run_source(buffer);
     }
 
     Ok(())
@@ -21,7 +22,8 @@ fn main() -> io::Result<()> {
 
 fn start_repl() {
     let mut rl = DefaultEditor::new().unwrap();
-    let mut tenda = Runtime::new();
+    let platform = Platform;
+    let mut runtime = Runtime::new(platform);
     let mut exiting = false;
 
     loop {
@@ -34,7 +36,7 @@ fn start_repl() {
 
                 rl.add_history_entry(line.as_str()).unwrap();
 
-                let output = tenda.run(line);
+                let output = runtime.run(line);
                 println!("{}", output.unwrap_or_else(|err| err));
             }
             Err(ReadlineError::Interrupted) if exiting => break,
@@ -56,13 +58,15 @@ fn start_repl() {
     }
 }
 
-fn run_string(string: String) {
-    let mut tenda = Runtime::new();
-    let output = tenda.run(string);
+fn run_source(string: String) {
+    let platform = Platform;
+    let mut runtime = Runtime::new(platform);
+    let output = runtime.run(string);
 
     if let Err(err) = output {
         eprintln!("{}", err)
     };
 }
 
+mod platform;
 mod runtime;
