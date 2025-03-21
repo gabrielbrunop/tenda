@@ -1,5 +1,6 @@
 use crate::environment::StoredValue;
 use crate::function::{params, Function};
+use crate::platform;
 use crate::runtime_error::{runtime_err, type_err, Result};
 use crate::stack::Stack;
 use crate::value::Value;
@@ -34,6 +35,12 @@ macro_rules! builtin_assoc_array {
     }};
 }
 
+macro_rules! assoc_array_enum {
+    ($($name:literal),+ $(,)?) => {{
+        builtin_assoc_array!($($name => Value::String($name.to_string())),+)
+    }};
+}
+
 macro_rules! define_assoc_array {
     ($assoc_array_name:literal, { $($name:literal => $value:expr),+ $(,)? }) => {
         (
@@ -64,6 +71,22 @@ macro_rules! args {
     };
 }
 
+macro_rules! error_object {
+    ($kind:literal) => {
+        builtin_assoc_array! {
+            "tipo" => Value::String($kind.to_string()),
+        }
+    };
+}
+
+macro_rules! success_object {
+    ($value:expr) => {
+        builtin_assoc_array! {
+            "valor" => $value,
+        }
+    };
+}
+
 macro_rules! ensure {
     ($val:expr, $variant:ident($binding:pat) => $body:expr) => {{
         match $val {
@@ -78,6 +101,8 @@ pub fn setup_native_bindings(stack: &mut Stack) {
     setup_list_global_bindings(stack);
     setup_math_global_bindings(stack);
     setup_string_global_bindings(stack);
+    setup_file_global_bindings(stack);
+    setup_program_global_bindings(stack);
 }
 
 pub fn setup_io_global_bindings(stack: &mut Stack) {
@@ -588,7 +613,7 @@ fn setup_string_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::String(text.replace(old, new)))
             }),
-            "corte" => builtin_fn!(["texto", "início", "fim"], |args, _| {
+            "corta" => builtin_fn!(["texto", "início", "fim"], |args, _| {
                 let text = ensure!(args!(args, 0), String(value) => value);
                 let start = ensure!(args!(args, 1), Number(value) => *value as usize);
                 let end = ensure!(args!(args, 2), Number(value) => *value as usize);
@@ -680,4 +705,118 @@ fn setup_string_global_bindings(stack: &mut Stack) {
             })
         })
     );
+}
+
+fn setup_file_global_bindings(stack: &mut Stack) {
+    global!(
+        stack,
+        define_assoc_array!("Arquivo", {
+            "erros" => assoc_array_enum! {
+                "NÃO_ENCONTRADO",
+                "PERMISSÃO_NEGADA",
+                "JÁ_EXISTE",
+                "OUTRO",
+            },
+            "leia" => builtin_fn!(["caminho"], |args, interpreter| {
+                let path = ensure!(args!(args, 0), String(value) => value);
+
+                match interpreter.get_platform().read_file(path) {
+                    Ok(text) => Ok(success_object!(Value::String(text))),
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
+            "escreva" => builtin_fn!(["caminho", "conteúdo"], |args, interpreter| {
+                let path = ensure!(args!(args, 0), String(value) => value);
+                let content = ensure!(args!(args, 1), String(value) => value);
+
+                match interpreter.get_platform().write_file(path, content) {
+                    Ok(_) => Ok(success_object!(Value::Nil)),
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
+            "remova" => builtin_fn!(["caminho"], |args, interpreter| {
+                let path = ensure!(args!(args, 0), String(value) => value);
+
+                match interpreter.get_platform().remove_file(path) {
+                    Ok(_) => Ok(success_object!(Value::Nil)),
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
+            "lista" => builtin_fn!(["caminho"], |args, interpreter| {
+                let path = ensure!(args!(args, 0), String(value) => value);
+
+                match interpreter.get_platform().list_files(path) {
+                    Ok(files) => {
+                        let files = files.into_iter().map(Value::String).collect();
+                        let value = Value::List(Rc::new(RefCell::new(files)));
+
+                        Ok(success_object!(value))
+                    },
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
+            "cria_diretório" => builtin_fn!(["caminho"], |args, interpreter| {
+                let path = ensure!(args!(args, 0), String(value) => value);
+
+                match interpreter.get_platform().create_dir(path) {
+                    Ok(_) => Ok(success_object!(Value::Nil)),
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
+            "remova_diretório" => builtin_fn!(["caminho"], |args, interpreter| {
+                let path = ensure!(args!(args, 0), String(value) => value);
+
+                match interpreter.get_platform().remove_dir(path) {
+                    Ok(_) => Ok(success_object!(Value::Nil)),
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
+            "caminho_atual" => builtin_fn!([], |_, interpreter| {
+                match interpreter.get_platform().current_dir() {
+                    Ok(path) => Ok(success_object!(Value::String(path))),
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
+        })
+    );
+}
+
+fn setup_program_global_bindings(stack: &mut Stack) {
+    global!(
+        stack,
+        define_assoc_array!("Programa", {
+            "argumentos" => builtin_fn!([], |_, interpreter| {
+                let args = interpreter.get_platform().args();
+                let args = args.into_iter().map(Value::String).collect();
+                let value = Value::List(Rc::new(RefCell::new(args)));
+
+                Ok(value)
+            }),
+            "encerra" => builtin_fn!(["código"], |args, interpreter| {
+                let code = ensure!(args!(args, 0), Number(value) => *value as i32);
+
+                interpreter.get_platform().exit(code);
+
+                Ok(Value::Nil)
+            }),
+            "espera" => builtin_fn!(["segundos"], |args, interpreter| {
+                let seconds = ensure!(args!(args, 0), Number(value) => *value);
+
+                interpreter.get_platform().sleep(seconds);
+
+                Ok(Value::Nil)
+            }),
+        })
+    );
+}
+
+fn io_error_to_error_object(kind: platform::FileErrorKind) -> Value {
+    use platform::FileErrorKind::*;
+
+    match kind {
+        NotFound => error_object!("NÃO_ENCONTRADO"),
+        PermissionDenied => error_object!("PERMISSÃO_NEGADA"),
+        AlreadyExists => error_object!("JÁ_EXISTE"),
+        _ => error_object!("OUTRO"),
+    }
 }
