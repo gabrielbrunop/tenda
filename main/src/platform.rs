@@ -5,12 +5,13 @@ pub struct Platform;
 
 fn map_file_error_kind(kind: std::io::ErrorKind) -> interpreter::platform::FileErrorKind {
     use interpreter::platform::FileErrorKind;
+    use std::io;
 
     match kind {
-        std::io::ErrorKind::NotFound => FileErrorKind::NotFound,
-        std::io::ErrorKind::PermissionDenied => FileErrorKind::PermissionDenied,
-        std::io::ErrorKind::AlreadyExists => FileErrorKind::AlreadyExists,
-        std::io::ErrorKind::Other => FileErrorKind::Other,
+        io::ErrorKind::NotFound => FileErrorKind::NotFound,
+        io::ErrorKind::PermissionDenied => FileErrorKind::PermissionDenied,
+        io::ErrorKind::AlreadyExists => FileErrorKind::AlreadyExists,
+        io::ErrorKind::Other => FileErrorKind::Other,
         _ => FileErrorKind::Other,
     }
 }

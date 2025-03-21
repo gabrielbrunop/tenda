@@ -93,6 +93,8 @@ impl<'a> Parser<'a> {
         scope: BlockScope,
     ) -> Result<(ast::Stmt, TokenKind)> {
         let _guard = self.scope.guard(scope);
+        let _newline_guard = self.tokens.halt_ignoring_newline();
+
         let mut ast = ast::Ast::new();
 
         self.consume_newline().ok();
@@ -210,9 +212,11 @@ impl<'a> Parser<'a> {
 
         self.skip_token(TokenKind::EqualSign)?;
 
+        let expr = self.parse_expression()?;
+
         Ok(ast::make_local_decl!(
             name.to_string(),
-            self.parse_expression()?,
+            expr,
             self.gen_uid()
         ))
     }
@@ -253,6 +257,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self) -> Result<ast::Expr> {
+        let _guard = self.tokens.set_ignoring_newline();
+
         self.parse_assignment()
     }
 
@@ -425,7 +431,6 @@ impl<'a> Parser<'a> {
 
     fn parse_function_call(&mut self, name: ast::Expr) -> Result<ast::Expr> {
         let mut arguments = vec![];
-        let _guard = self.tokens.set_ignoring_newline();
 
         if self
             .tokens
@@ -461,7 +466,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_access(&mut self, name: ast::Expr) -> Result<ast::Expr> {
-        let _guard = self.tokens.set_ignoring_newline();
         let index = self.parse_expression()?;
 
         let next_token_is_bracket = self
@@ -494,12 +498,8 @@ impl<'a> Parser<'a> {
             Number | True | False | String | Nil => {
                 Ok(ast::make_literal_expr!(token.literal.clone().unwrap()))
             }
-            LeftBracket => {
-                let _guard = self.tokens.set_ignoring_newline();
-                self.parse_list()
-            }
+            LeftBracket => self.parse_list(),
             LeftParen => {
-                let _guard = self.tokens.set_ignoring_newline();
                 let expr = self.parse_expression()?;
 
                 if self
@@ -512,10 +512,7 @@ impl<'a> Parser<'a> {
 
                 Ok(ast::make_grouping_expr!(expr))
             }
-            LeftBrace => {
-                let _guard = self.tokens.set_ignoring_newline();
-                self.parse_associative_array()
-            }
+            LeftBrace => self.parse_associative_array(),
             Identifier => {
                 let name = match token.literal.as_ref().unwrap() {
                     token::Literal::String(string) => string,
