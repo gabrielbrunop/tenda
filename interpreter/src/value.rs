@@ -84,7 +84,7 @@ impl Display for Value {
                         .borrow()
                         .iter()
                         .map(|v| match v {
-                            Value::String(s) => format!("\"{}\"", s.escape_default()),
+                            Value::String(s) => format!("\"{}\"", escape_special_chars(s)),
                             _ => v.to_string(),
                         })
                         .collect::<Vec<_>>()
@@ -98,7 +98,7 @@ impl Display for Value {
                         .borrow()
                         .iter()
                         .map(|(k, v)| match v {
-                            Value::String(s) => (k, format!("\"{}\"", s.escape_default())),
+                            Value::String(s) => (k, format!("\"{}\"", escape_special_chars(s))),
                             _ => (k, v.to_string()),
                         })
                         .map(|(k, v)| match k {
@@ -181,4 +181,27 @@ impl Display for ValueType {
 
         write!(f, "{}", str)
     }
+}
+
+fn escape_special_chars(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '\r' => {
+                if let Some(&'\n') = chars.peek() {
+                    result.push_str("\\r\\n");
+                    chars.next();
+                } else {
+                    result.push_str("\\r");
+                }
+            }
+            '\n' => result.push_str("\\n"),
+            '\t' => result.push_str("\\t"),
+            _ => result.push(c),
+        }
+    }
+
+    result
 }

@@ -57,6 +57,12 @@ macro_rules! builtin_fn {
             $body,
         ))
     };
+    ($body:expr) => {
+        Value::Function(Function::new_builtin(
+            Vec::new(),
+            $body,
+        ))
+    };
 }
 
 macro_rules! define_fn {
@@ -74,7 +80,9 @@ macro_rules! args {
 macro_rules! error_object {
     ($kind:literal) => {
         builtin_assoc_array! {
-            "tipo" => Value::String($kind.to_string()),
+            "erro" => builtin_assoc_array! {
+                "tipo" => Value::String($kind.to_string()),
+            }
         }
     };
 }
@@ -771,7 +779,7 @@ fn setup_file_global_bindings(stack: &mut Stack) {
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "caminho_atual" => builtin_fn!([], |_, interpreter| {
+            "caminho_atual" => builtin_fn!(|_, interpreter| {
                 match interpreter.get_platform().current_dir() {
                     Ok(path) => Ok(success_object!(Value::String(path))),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
@@ -785,7 +793,7 @@ fn setup_program_global_bindings(stack: &mut Stack) {
     global!(
         stack,
         define_assoc_array!("Programa", {
-            "argumentos" => builtin_fn!([], |_, interpreter| {
+            "argumentos" => builtin_fn!(|_, interpreter| {
                 let args = interpreter.get_platform().args();
                 let args = args.into_iter().map(Value::String).collect();
                 let value = Value::List(Rc::new(RefCell::new(args)));

@@ -422,6 +422,8 @@ pub enum BinaryOperator {
     LogicalAnd,
     LogicalOr,
     Range,
+    Has,
+    Lacks,
 }
 
 impl From<Token> for BinaryOperator {

@@ -295,6 +295,14 @@ impl<'a> Parser<'a> {
             let op: Option<ast::BinaryOperator> = {
                 if let Some(token) = self.tokens.consume_matching_tokens(token_iter![Equals]) {
                     Some(token.into())
+                } else if self
+                    .tokens
+                    .consume_matching_tokens(token_iter![Has])
+                    .is_some()
+                {
+                    Some(ast::BinaryOperator::Has)
+                } else if self.tokens.matches_sequence(token_iter![Not, Has]) {
+                    Some(ast::BinaryOperator::Lacks)
                 } else if self.tokens.matches_sequence(token_iter![Not, Equals]) {
                     Some(ast::BinaryOperator::Inequality)
                 } else if let Some(token) = self.tokens.consume_matching_tokens(token_iter![Not]) {

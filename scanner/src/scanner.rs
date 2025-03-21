@@ -218,6 +218,7 @@ impl<'a> Scanner<'a> {
             "para" => token!(For, "para", self.line),
             "cada" => token!(Each, "cada", self.line),
             "em" => token!(In, "em", self.line),
+            "tem" => token!(Has, "tem", self.line),
             "enquanto" => token!(While, "enquanto", self.line),
             "faça" => token!(Do, "faça", self.line),
             "pare" => token!(Break, "pare", self.line),
