@@ -20,6 +20,7 @@ pub trait Platform: Debug {
     fn remove_dir(&self, path: &str) -> Result<(), FileErrorKind>;
     fn list_dirs(&self, path: &str) -> Result<Vec<String>, FileErrorKind>;
     fn current_dir(&self) -> Result<String, FileErrorKind>;
+    fn file_append(&self, path: &str, content: &str) -> Result<(), FileErrorKind>;
     fn args(&self) -> Vec<String>;
     fn exit(&self, code: i32);
     fn sleep(&self, seconds: f64);

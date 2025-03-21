@@ -742,6 +742,15 @@ fn setup_file_global_bindings(stack: &mut Stack) {
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
+            "acrescenta" => builtin_fn!(["caminho", "conteúdo"], |args, interpreter| {
+                let path = ensure!(args!(args, 0), String(value) => value);
+                let content = ensure!(args!(args, 1), String(value) => value);
+
+                match interpreter.get_platform().file_append(path, content) {
+                    Ok(_) => Ok(success_object!(Value::Nil)),
+                    Err(kind) => Ok(io_error_to_error_object(kind)),
+                }
+            }),
             "remova" => builtin_fn!(["caminho"], |args, interpreter| {
                 let path = ensure!(args!(args, 0), String(value) => value);
 
