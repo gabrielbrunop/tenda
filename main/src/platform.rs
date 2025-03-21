@@ -1,3 +1,5 @@
+use std::io::Write;
+
 #[derive(Debug)]
 pub struct Platform;
 
@@ -88,6 +90,20 @@ impl interpreter::platform::Platform for Platform {
     fn current_dir(&self) -> Result<String, interpreter::platform::FileErrorKind> {
         match std::env::current_dir() {
             Ok(path) => Ok(path.to_string_lossy().to_string()),
+            Err(error) => Err(map_file_error_kind(error.kind())),
+        }
+    }
+
+    fn file_append(
+        &self,
+        path: &str,
+        content: &str,
+    ) -> Result<(), interpreter::platform::FileErrorKind> {
+        match std::fs::OpenOptions::new().append(true).open(path) {
+            Ok(mut file) => match file.write_all(content.as_bytes()) {
+                Ok(_) => Ok(()),
+                Err(error) => Err(map_file_error_kind(error.kind())),
+            },
             Err(error) => Err(map_file_error_kind(error.kind())),
         }
     }
