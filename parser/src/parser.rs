@@ -29,8 +29,8 @@ impl<'a> Parser<'a> {
 
         let mut ast = match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Eof => program,
-            Some(token) => Err(vec![unexpected_token!(token)])?,
-            None => Err(vec![unexpected_eoi!(self)])?,
+            Some(token) => return Err(vec![unexpected_token!(token)]),
+            None => return Err(vec![unexpected_eoi!(self)]),
         };
 
         closures::annotate_ast_with_var_captures(&mut ast);
@@ -441,11 +441,11 @@ impl<'a> Parser<'a> {
                 .consume_matching_tokens(token_iter![RightParen])
                 .is_none()
             {
-                Err(vec![parser_err!(
+                return Err(vec![parser_err!(
                     MissingParentheses,
                     self.tokens.next().unwrap().line,
                     "esperado ')' após chamada de função".to_string()
-                )])?;
+                )]);
             }
         }
 
@@ -462,11 +462,11 @@ impl<'a> Parser<'a> {
             .is_some();
 
         if !next_token_is_bracket {
-            Err(vec![parser_err!(
+            return Err(vec![parser_err!(
                 MissingBrackets,
                 self.tokens.next().unwrap().line,
                 "esperado ']' em indexação".to_string()
-            )])?;
+            )]);
         }
 
         Ok(ast::make_access_expr!(name, index))
@@ -561,11 +561,11 @@ impl<'a> Parser<'a> {
                     .consume_matching_tokens(token_iter![RightParen])
                     .is_none()
                 {
-                    Err(vec![parser_err!(
+                    return Err(vec![parser_err!(
                         MissingParentheses,
                         self.tokens.next().unwrap().line,
                         "esperado ')' após declaração de função".to_string()
-                    )])?;
+                    )]);
                 }
 
                 parameters
@@ -598,7 +598,7 @@ impl<'a> Parser<'a> {
                     ),
                 };
 
-                Err(vec![err])?;
+                return Err(vec![err]);
             }
 
             parameters.push(parameter);
@@ -644,11 +644,11 @@ impl<'a> Parser<'a> {
             .is_some();
 
         if !next_token_is_bracket {
-            Err(vec![parser_err!(
+            return Err(vec![parser_err!(
                 MissingBrackets,
                 self.tokens.next().unwrap().line,
                 "esperado ']' ao final de lista".to_string()
-            )])?
+            )]);
         }
 
         Ok(ast::make_list_expr!(elements))
@@ -673,7 +673,7 @@ impl<'a> Parser<'a> {
                 Some(token) => ast::Literal {
                     value: token.literal.clone().unwrap(),
                 },
-                None => Err(vec![unexpected_token!(self.tokens.next().unwrap())])?,
+                None => return Err(vec![unexpected_token!(self.tokens.next().unwrap())]),
             };
 
             if self
@@ -681,11 +681,11 @@ impl<'a> Parser<'a> {
                 .consume_matching_tokens(token_iter![Colon])
                 .is_none()
             {
-                Err(vec![parser_err!(
+                return Err(vec![parser_err!(
                     MissingColon,
                     self.tokens.next().unwrap().line,
                     "esperado ':' após chave de dicionário".to_string()
-                )])?;
+                )]);
             }
 
             let value = self.parse_expression()?;
@@ -707,11 +707,11 @@ impl<'a> Parser<'a> {
             .is_some();
 
         if !next_token_is_brace {
-            Err(vec![parser_err!(
+            return Err(vec![parser_err!(
                 MissingBraces,
                 self.tokens.next().unwrap().line,
                 "esperado '}' ao final de dicionário".to_string()
-            )])?
+            )]);
         }
 
         Ok(ast::make_associative_array_expr!(elements))
