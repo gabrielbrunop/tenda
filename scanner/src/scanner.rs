@@ -120,7 +120,7 @@ impl<'a> Scanner<'a> {
                     break;
                 }
                 '\n' => {
-                    Err(lexical_error!(UnexpectedStringEol, self.line))?;
+                    return Err(lexical_error!(UnexpectedStringEol, self.line));
                 }
                 _ => {
                     string.push(peeked);
@@ -146,7 +146,7 @@ impl<'a> Scanner<'a> {
 
             match peeked {
                 c if is_unexpected(c) => {
-                    Err(lexical_error!(UnexpectedChar(c), self.line))?;
+                    return Err(lexical_error!(UnexpectedChar(c), self.line));
                 }
                 c if c.is_numeric() || c == '.' => {
                     if c == '.' {
@@ -164,7 +164,7 @@ impl<'a> Scanner<'a> {
             number.starts_with('0') && !number.starts_with("0.") && number != "0";
 
         if illegal_leading_zero {
-            Err(lexical_error!(LeadingZeroNumberLiterals, self.line))?;
+            return Err(lexical_error!(LeadingZeroNumberLiterals, self.line));
         }
 
         let number: f64 = number.parse().unwrap();
