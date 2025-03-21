@@ -1,5 +1,5 @@
 use peekmore::{PeekMore, PeekMoreIterator};
-use std::{cell::RefCell, rc::Rc, slice::Iter};
+use std::{cell::RefCell, ops::Neg, rc::Rc, slice::Iter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -104,56 +104,83 @@ impl Literal {
 #[derive(Debug)]
 pub struct TokenIterator<'a> {
     tokens: PeekMoreIterator<Iter<'a, Token>>,
-    ignoring_newline_counter: Rc<RefCell<usize>>,
+    ignoring_newline_counter: Rc<RefCell<isize>>,
     last_line: usize,
 }
 
 impl TokenIterator<'_> {
     pub fn peek(&mut self) -> Option<&&Token> {
+        self.skip_ignored_newlines();
         self.tokens.peek()
     }
 
     pub fn set_ignoring_newline(&mut self) -> NewlineGuard {
-        NewlineGuard::new(self.ignoring_newline_counter.clone())
+        NewlineGuard::new(self.ignoring_newline_counter.clone(), None)
+    }
+
+    pub fn halt_ignoring_newline(&mut self) -> NewlineGuard {
+        let size = self.ignoring_newline_counter.borrow().neg();
+
+        NewlineGuard::new(self.ignoring_newline_counter.clone(), Some(size))
     }
 
     pub fn consume_matching_tokens(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
-        self.ignore_newline();
+        self.tokens.reset_cursor();
 
-        let next = self.tokens.peek();
-
-        for t in token_types {
-            match next {
-                Some(token) if token.kind == *t => {
-                    return Some(self.tokens.next().unwrap().clone())
-                }
-                _ => (),
+        while let Some(token) = self.tokens.peek() {
+            if token.kind == TokenKind::Newline && *self.ignoring_newline_counter.borrow() > 0 {
+                self.tokens.advance_cursor();
+            } else {
+                break;
             }
         }
+
+        let skipped = self.tokens.cursor();
+
+        if let Some(token) = self.tokens.peek() {
+            let expected: Vec<TokenKind> = token_types.cloned().collect();
+
+            if expected.iter().any(|t| *t == token.kind) {
+                for _ in 0..skipped {
+                    self.tokens.next();
+                }
+
+                return self.tokens.next().cloned();
+            }
+        }
+
+        self.tokens.reset_cursor();
 
         None
     }
 
     pub fn matches_sequence(&mut self, token_types: Iter<TokenKind>) -> bool {
-        assert_eq!(self.tokens.cursor(), 0, "cursor is already in use");
+        self.tokens.reset_cursor();
 
         for token_type in token_types {
-            if self.ignore_newline().is_some() {
-                continue;
+            while let Some(token) = self.tokens.peek() {
+                if token.kind == TokenKind::Newline && *self.ignoring_newline_counter.borrow() > 0 {
+                    self.tokens.advance_cursor();
+                } else {
+                    break;
+                }
             }
 
-            let matched_sequence =
-                matches!(self.tokens.peek(), Some(token) if *token_type == token.kind);
+            match self.tokens.peek() {
+                Some(token) if token.kind == *token_type => {
+                    self.tokens.advance_cursor();
+                }
+                _ => {
+                    self.tokens.reset_cursor();
 
-            if !matched_sequence {
-                self.tokens.reset_cursor();
-                return false;
+                    return false;
+                }
             }
-
-            self.tokens.advance_cursor();
         }
 
-        for _ in 0..self.tokens.cursor() {
+        let count = self.tokens.cursor();
+
+        for _ in 0..count {
             self.tokens.next();
         }
 
@@ -164,13 +191,13 @@ impl TokenIterator<'_> {
         self.last_line
     }
 
-    fn ignore_newline(&mut self) -> Option<&Token> {
-        if *self.ignoring_newline_counter.borrow() == 0 {
-            None
-        } else if matches!(self.tokens.peek(), Some(token) if token.kind == TokenKind::Newline) {
-            self.tokens.next()
-        } else {
-            None
+    fn skip_ignored_newlines(&mut self) {
+        while let Some(token) = self.tokens.peek() {
+            if token.kind == TokenKind::Newline && *self.ignoring_newline_counter.borrow() > 0 {
+                self.tokens.next();
+            } else {
+                break;
+            }
         }
     }
 }
@@ -179,6 +206,7 @@ impl<'a> Iterator for TokenIterator<'a> {
     type Item = &'a Token;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.skip_ignored_newlines();
         self.tokens.next()
     }
 }
@@ -193,18 +221,24 @@ impl<'a> From<&'a [Token]> for TokenIterator<'a> {
     }
 }
 
-pub struct NewlineGuard(Rc<RefCell<usize>>);
+pub struct NewlineGuard {
+    counter: Rc<RefCell<isize>>,
+    size: isize,
+}
 
 impl NewlineGuard {
-    pub fn new(counter: Rc<RefCell<usize>>) -> Self {
-        *counter.borrow_mut() += 1;
-        NewlineGuard(counter)
+    pub fn new(counter: Rc<RefCell<isize>>, custom_size: Option<isize>) -> Self {
+        let size = custom_size.unwrap_or(1);
+
+        *counter.borrow_mut() += size;
+
+        NewlineGuard { counter, size }
     }
 }
 
 impl Drop for NewlineGuard {
     fn drop(&mut self) {
-        *self.0.borrow_mut() -= 1;
+        *self.counter.borrow_mut() -= self.size;
     }
 }
 
