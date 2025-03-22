@@ -6,6 +6,7 @@ use std::rc::Rc;
 use scanner::token::Literal;
 
 use crate::associative_array::{AssociativeArray, AssociativeArrayKey};
+use crate::date::Date;
 use crate::function::Function;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,6 +18,7 @@ pub enum Value {
     List(Rc<RefCell<Vec<Value>>>),
     Range(usize, usize),
     AssociativeArray(Rc<RefCell<AssociativeArray>>),
+    Date(Date),
     Nil,
 }
 
@@ -33,6 +35,7 @@ impl Value {
             Range(_, _) => ValueType::Range,
             Nil => ValueType::Nil,
             AssociativeArray(_) => ValueType::AssociativeArray,
+            Date(_) => ValueType::Date,
         }
     }
 
@@ -46,6 +49,7 @@ impl Value {
             Value::Range(_, _) => true,
             Value::Nil => false,
             Value::AssociativeArray(_) => true,
+            Value::Date(_) => true,
         }
     }
 
@@ -108,6 +112,7 @@ impl Display for Value {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ),
+                Date(value) => value.to_iso_string(),
             }
         )
     }
@@ -156,6 +161,7 @@ pub enum ValueType {
     Range,
     Nil,
     AssociativeArray,
+    Date,
 }
 
 impl From<Value> for ValueType {
@@ -176,6 +182,7 @@ impl Display for ValueType {
             List => "lista".to_string(),
             Range => "intervalo".to_string(),
             AssociativeArray => "dicionário".to_string(),
+            Date => "data".to_string(),
             Nil => "Nada".to_string(),
         };
 

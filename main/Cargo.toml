@@ -9,3 +9,4 @@ parser = { path = "../parser" }
 scanner = { path = "../scanner" }
 reedline = "0.39.0"
 rand = "0.9.0"
+chrono = "0.4.40"

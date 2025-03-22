@@ -24,4 +24,6 @@ pub trait Platform: Debug {
     fn args(&self) -> Vec<String>;
     fn exit(&self, code: i32);
     fn sleep(&self, seconds: f64);
+    fn date_now(&self) -> i64;
+    fn timezone_offset(&self) -> i32;
 }

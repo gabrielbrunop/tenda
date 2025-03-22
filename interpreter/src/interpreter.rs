@@ -268,10 +268,14 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
                     List(Rc::new(RefCell::new(list)))
                 }
+                (Date(rhs), Number(millis)) => Value::Date(rhs + millis as i64),
+                (Number(millis), Date(rhs)) => Value::Date(rhs + millis as i64),
                 (lhs, rhs) => return type_err!("não é possível somar '{}' e '{}'", lhs, rhs),
             },
             Subtract => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs - rhs),
+                (Date(rhs), Number(millis)) => Value::Date(rhs - millis as i64),
+                (Number(millis), Date(rhs)) => Value::Date(rhs - millis as i64),
                 (lhs, rhs) => return type_err!("não é possível subtrair '{}' de '{}'", rhs, lhs),
             },
             Multiply => match (lhs, rhs) {
@@ -312,6 +316,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 (AssociativeArray(lhs), AssociativeArray(rhs)) => Boolean(lhs == rhs),
                 (Nil, Nil) => Boolean(true),
                 (Function(lhs), Function(rhs)) => Boolean(lhs == rhs),
+                (Date(lhs), Date(rhs)) => Boolean(lhs == rhs),
                 _ => Boolean(false),
             },
             Inequality => match (lhs, rhs) {
@@ -325,11 +330,13 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 (AssociativeArray(lhs), AssociativeArray(rhs)) => Boolean(lhs != rhs),
                 (Nil, Nil) => Boolean(false),
                 (Function(lhs), Function(rhs)) => Boolean(lhs != rhs),
+                (Date(lhs), Date(rhs)) => Boolean(lhs != rhs),
                 _ => Boolean(true),
             },
             Greater => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs > rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs > rhs),
+                (Date(lhs), Date(rhs)) => Boolean(lhs > rhs),
                 (lhs, rhs) => {
                     return type_err!(
                         "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
@@ -341,6 +348,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             GreaterOrEqual => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs >= rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs >= rhs),
+                (Date(lhs), Date(rhs)) => Boolean(lhs >= rhs),
                 (lhs, rhs) => {
                     return type_err!(
                         "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
@@ -352,6 +360,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             Less => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs < rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs < rhs),
+                (Date(lhs), Date(rhs)) => Boolean(lhs < rhs),
                 (lhs, rhs) => {
                     return type_err!(
                         "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
@@ -363,6 +372,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             LessOrEqual => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Boolean(lhs <= rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs <= rhs),
+                (Date(lhs), Date(rhs)) => Boolean(lhs <= rhs),
                 (lhs, rhs) => {
                     return type_err!(
                         "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
