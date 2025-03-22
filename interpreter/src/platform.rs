@@ -10,7 +10,9 @@ pub enum FileErrorKind {
 
 pub trait Platform: Debug {
     fn println(&self, message: &str);
+    fn print(&self, message: &str);
     fn write(&self, message: &str);
+    fn read_line(&self) -> String;
     fn rand(&self) -> f64;
     fn read_file(&self, path: &str) -> Result<String, FileErrorKind>;
     fn write_file(&self, path: &str, content: &str) -> Result<(), FileErrorKind>;

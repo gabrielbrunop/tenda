@@ -23,6 +23,11 @@ impl interpreter::platform::Platform for Platform {
         println!("{}", message);
     }
 
+    fn print(&self, message: &str) {
+        print!("{}", message);
+        std::io::stdout().flush().unwrap();
+    }
+
     fn write(&self, message: &str) {
         print!("{}", message);
     }
@@ -129,5 +134,11 @@ impl interpreter::platform::Platform for Platform {
 
     fn timezone_offset(&self) -> i32 {
         Local::now().offset().local_minus_utc()
+    }
+
+    fn read_line(&self) -> String {
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).unwrap();
+        input.trim().to_string()
     }
 }

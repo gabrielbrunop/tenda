@@ -6,8 +6,8 @@ use reedline::{
 };
 use runtime::Runtime;
 use scanner::scanner::Scanner;
-use std::io;
 use std::io::{IsTerminal, Read};
+use std::{env, io};
 
 struct BlockValidator;
 
@@ -33,15 +33,27 @@ impl Validator for BlockValidator {
 }
 
 fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 {
+        let path = &args[1];
+        let code = std::fs::read_to_string(path)?;
+        run_source(code);
+
+        return Ok(());
+    }
+
     let mut stdin = io::stdin();
 
     if stdin.is_terminal() {
         start_repl();
-    } else {
-        let mut buffer = String::new();
-        stdin.read_to_string(&mut buffer)?;
-        run_source(buffer);
+
+        return Ok(());
     }
+
+    let mut buffer = String::new();
+    stdin.read_to_string(&mut buffer)?;
+    run_source(buffer);
 
     Ok(())
 }
