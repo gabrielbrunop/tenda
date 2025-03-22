@@ -32,12 +32,19 @@ impl Function {
         }
     }
 
-    pub fn new_builtin(params: Vec<FunctionParam>, object: BuiltinFunctionObject) -> Self {
+    pub fn new_builtin(
+        params: Vec<FunctionParam>,
+        object: BuiltinFunctionObject,
+        context: Option<Box<Environment>>,
+    ) -> Self {
         let unique_id = FUNCTION_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         Function {
             id: unique_id,
-            context: FunctionContext::new_builtin(params),
+            context: FunctionContext::new_builtin(
+                params,
+                context.unwrap_or(Box::new(Environment::new())),
+            ),
             object: FunctionObject::Builtin(object),
         }
     }
@@ -47,6 +54,11 @@ impl Function {
         params: Vec<(FunctionParam, Value)>,
         interpreter: &mut Interpreter,
     ) -> Result<Value> {
+        let env = match &self.context {
+            FunctionContext::UserDefined { env, .. } => env,
+            FunctionContext::Builtin { env, .. } => env,
+        };
+
         match self.object {
             FunctionObject::UserDefined(f) => {
                 let body = match &self.context {
@@ -54,14 +66,9 @@ impl Function {
                     _ => unreachable!(),
                 };
 
-                let env = match &self.context {
-                    FunctionContext::UserDefined { env, .. } => env,
-                    _ => unreachable!(),
-                };
-
                 f(params, body.clone(), interpreter, env)
             }
-            FunctionObject::Builtin(f) => f(params, interpreter),
+            FunctionObject::Builtin(f) => f(params, interpreter, env.clone()),
         }
     }
 
@@ -75,7 +82,7 @@ impl Function {
     pub fn get_params(&self) -> Vec<FunctionParam> {
         match &self.context {
             FunctionContext::UserDefined { params, .. } => params.clone(),
-            FunctionContext::Builtin { params } => params.clone(),
+            FunctionContext::Builtin { params, .. } => params.clone(),
         }
     }
 }
@@ -95,6 +102,7 @@ pub enum FunctionContext {
     },
     Builtin {
         params: Vec<FunctionParam>,
+        env: Box<Environment>,
     },
 }
 
@@ -107,8 +115,8 @@ impl FunctionContext {
         }
     }
 
-    pub fn new_builtin(params: Vec<FunctionParam>) -> Self {
-        FunctionContext::Builtin { params }
+    pub fn new_builtin(params: Vec<FunctionParam>, env: Box<Environment>) -> Self {
+        FunctionContext::Builtin { params, env }
     }
 }
 
@@ -134,8 +142,11 @@ type UserDefinedFunctionObject = fn(
     context: &Box<Environment>,
 ) -> Result<Value>;
 
-type BuiltinFunctionObject =
-    fn(params: Vec<(FunctionParam, Value)>, interpreter: &mut Interpreter) -> Result<Value>;
+type BuiltinFunctionObject = fn(
+    params: Vec<(FunctionParam, Value)>,
+    interpreter: &mut Interpreter,
+    context: Box<Environment>,
+) -> Result<Value>;
 
 #[derive(Debug, Clone)]
 pub enum FunctionObject {
