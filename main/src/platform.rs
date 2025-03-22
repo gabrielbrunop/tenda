@@ -1,5 +1,7 @@
 use std::io::Write;
 
+use chrono::Local;
+
 #[derive(Debug)]
 pub struct Platform;
 
@@ -119,5 +121,13 @@ impl interpreter::platform::Platform for Platform {
 
     fn sleep(&self, seconds: f64) {
         std::thread::sleep(std::time::Duration::from_secs_f64(seconds));
+    }
+
+    fn date_now(&self) -> i64 {
+        Local::now().timestamp_millis()
+    }
+
+    fn timezone_offset(&self) -> i32 {
+        Local::now().offset().local_minus_utc()
     }
 }

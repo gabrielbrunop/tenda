@@ -8,3 +8,5 @@ parser = { path = "../parser" }
 scanner = { path = "../scanner" }
 thiserror = { workspace = true }
 indexmap = "1.7.0"
+chrono = "0.4.40"
+chrono-tz = "0.10.1"

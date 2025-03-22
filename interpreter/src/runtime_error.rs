@@ -61,6 +61,15 @@ pub enum RuntimeErrorKind {
 
     #[error("textos são imutáveis e não podem ser modificados")]
     ImmutableString,
+
+    #[error("timestamp inválido: {}", .timestamp.to_string())]
+    InvalidTimestamp { timestamp: i64 },
+
+    #[error("falha ao analisar data ISO: {0}")]
+    DateIsoParseError(#[from] chrono::ParseError),
+
+    #[error("fuso horário inválido: '{tz_str}'")]
+    InvalidTimeZoneString { tz_str: String },
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]

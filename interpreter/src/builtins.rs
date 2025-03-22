@@ -1,7 +1,8 @@
+use crate::date::Date;
 use crate::environment::StoredValue;
 use crate::function::{params, Function};
 use crate::platform;
-use crate::runtime_error::{runtime_err, type_err, Result};
+use crate::runtime_error::{runtime_err, type_err, Result, RuntimeErrorKind};
 use crate::stack::Stack;
 use crate::value::Value;
 
@@ -111,6 +112,7 @@ pub fn setup_native_bindings(stack: &mut Stack) {
     setup_string_global_bindings(stack);
     setup_file_global_bindings(stack);
     setup_program_global_bindings(stack);
+    setup_date_global_bindings(stack);
 }
 
 pub fn setup_io_global_bindings(stack: &mut Stack) {
@@ -827,6 +829,112 @@ fn setup_program_global_bindings(stack: &mut Stack) {
     );
 }
 
+fn setup_date_global_bindings(stack: &mut Stack) {
+    global!(
+        stack,
+        define_assoc_array!("Data", {
+            "erros" => assoc_array_enum! {
+                "ISO_INVÁLIDA",
+                "TIMESTAMP_INVÁLIDO",
+                "FUSO_HORÁRIO_INVÁLIDO",
+            },
+            "agora" => builtin_fn!(|_, interpreter| {
+                let now = interpreter.get_platform().date_now();
+                let tz = interpreter.get_platform().timezone_offset();
+
+                let value = Value::Date(Date::from_timestamp_millis(now, Some(tz)).unwrap());
+
+                Ok(value)
+            }),
+            "para_iso" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::String(date.to_iso_string()))
+            }),
+            "para_timestamp" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.to_timestamp_millis() as f64))
+            }),
+            "de_iso" => builtin_fn!(["texto"], |args, _| {
+                let text = ensure!(args!(args, 0), String(value) => value);
+
+                 match Date::from_iso_string(text) {
+                    Ok(date) => Ok(Value::Date(date)),
+                    Err(kind) => Ok(date_error_to_error_object(kind.source))
+                }
+            }),
+            "de_timestamp" => builtin_fn!(["número"], |args, _| {
+                let timestamp = ensure!(args!(args, 0), Number(value) => *value as i64);
+
+                match Date::from_timestamp_millis(timestamp, None) {
+                    Ok(date) => Ok(Value::Date(date)),
+                    Err(kind) => Ok(date_error_to_error_object(kind.source))
+                }
+            }),
+            "com_região" => builtin_fn!(["data", "região"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+                let offset = ensure!(args!(args, 1), String(value) => value);
+
+                match date.with_named_timezone(offset) {
+                    Ok(date) => Ok(Value::Date(date)),
+                    Err(kind) => Ok(date_error_to_error_object(kind.source))
+                }
+            }),
+            "desvio_fuso_horário" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::String(date.to_offset_string()))
+            }),
+            "ano" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.year() as f64))
+            }),
+            "mês" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.month() as f64))
+            }),
+            "dia" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.day() as f64))
+            }),
+            "hora" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.hour() as f64))
+            }),
+            "minuto" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.minute() as f64))
+            }),
+            "segundo" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.second() as f64))
+            }),
+            "dia_da_semana" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.weekday() as f64))
+            }),
+            "dia_do_ano" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.ordinal() as f64))
+            }),
+            "semana_do_ano" => builtin_fn!(["data"], |args, _| {
+                let date = ensure!(args!(args, 0), Date(date) => date);
+
+                Ok(Value::Number(date.iso_week() as f64))
+            }),
+        })
+    );
+}
+
 fn io_error_to_error_object(kind: platform::FileErrorKind) -> Value {
     use platform::FileErrorKind::*;
 
@@ -835,5 +943,16 @@ fn io_error_to_error_object(kind: platform::FileErrorKind) -> Value {
         PermissionDenied => error_object!("PERMISSÃO_NEGADA"),
         AlreadyExists => error_object!("JÁ_EXISTE"),
         _ => error_object!("OUTRO"),
+    }
+}
+
+fn date_error_to_error_object(kind: RuntimeErrorKind) -> Value {
+    use RuntimeErrorKind::*;
+
+    match kind {
+        InvalidTimestamp { .. } => error_object!("TIMESTAMP_INVÁLIDO"),
+        DateIsoParseError { .. } => error_object!("ISO_INVÁLIDA"),
+        InvalidTimeZoneString { .. } => error_object!("FUSO_HORÁRIO_INVÁLIDO"),
+        _ => panic!("unexpected date error kind: {:?}", kind),
     }
 }
