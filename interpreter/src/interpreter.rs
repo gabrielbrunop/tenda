@@ -33,14 +33,17 @@ impl Interpreter {
     pub fn eval(&mut self, ast: &ast::Ast) -> Result<Value> {
         let mut last_value = Value::Nil;
 
-        let ast::Ast(ast) = ast;
+        let ast::Ast { inner: ast, .. } = ast;
 
         for stmt in ast {
             let value = self.interpret_stmt(stmt)?;
 
             last_value = value;
 
-            if self.stack.has_return() || self.stack.has_break() || self.stack.has_continue() {
+            if self.stack.has_return_value()
+                || self.stack.has_loop_break_flag()
+                || self.stack.has_loop_continue_flag()
+            {
                 break;
             }
         }
@@ -102,11 +105,11 @@ impl StmtVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_block(&mut self, block: &ast::Block) -> Result<Value> {
-        let ast::Block(ast) = block;
+        let ast::Block { inner, .. } = block;
 
         self.stack.push(Environment::new());
 
-        self.eval(ast)?;
+        self.eval(inner)?;
 
         self.stack.pop();
 
@@ -114,11 +117,11 @@ impl StmtVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_return(&mut self, return_stmt: &ast::Return) -> Result<Value> {
-        let ast::Return(value) = return_stmt;
+        let ast::Return { value, .. } = return_stmt;
 
         if let Some(expr) = value {
             let value = self.visit_expr(expr)?;
-            self.stack.set_return(StoredValue::new(value));
+            self.stack.set_return_value(StoredValue::new(value));
         }
 
         Ok(Value::Nil)
@@ -129,6 +132,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             cond,
             then,
             or_else,
+            ..
         } = cond;
 
         if self.visit_expr(cond)?.to_bool() {
@@ -141,15 +145,15 @@ impl StmtVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_while(&mut self, while_stmt: &ast::While) -> Result<Value> {
-        let ast::While { cond, body } = while_stmt;
+        let ast::While { cond, body, .. } = while_stmt;
 
-        while self.visit_expr(cond)?.to_bool() && !self.stack.has_break() {
+        while self.visit_expr(cond)?.to_bool() && !self.stack.has_loop_break_flag() {
             self.interpret_stmt(body)?;
 
-            self.stack.set_continue(false);
+            self.stack.set_loop_continue_flag(false);
         }
 
-        self.stack.set_break(false);
+        self.stack.set_loop_break_flag(false);
 
         Ok(Value::Nil)
     }
@@ -183,27 +187,27 @@ impl StmtVisitor<Result<Value>> for Interpreter {
             self.stack.push(env);
             self.interpret_stmt(body)?;
 
-            if self.stack.has_break() {
+            if self.stack.has_loop_break_flag() {
                 break;
             }
 
-            self.stack.set_continue(false);
+            self.stack.set_loop_continue_flag(false);
             self.stack.pop();
         }
 
-        self.stack.set_break(false);
+        self.stack.set_loop_break_flag(false);
 
         Ok(Value::Nil)
     }
 
     fn visit_break(&mut self, _break_stmt: &ast::Break) -> Result<Value> {
-        self.stack.set_break(true);
+        self.stack.set_loop_break_flag(true);
 
         Ok(Value::Nil)
     }
 
     fn visit_continue(&mut self, _continue_stmt: &ast::Continue) -> Result<Value> {
-        self.stack.set_continue(true);
+        self.stack.set_loop_continue_flag(true);
 
         Ok(Value::Nil)
     }
@@ -213,7 +217,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
     fn visit_local(&mut self, local: &ast::LocalDecl) -> Result<Value> {
         let ast::LocalDecl { name, value, .. } = local;
 
-        if self.stack.local_exists(name) {
+        if self.stack.is_name_in_local_scope(name) {
             let name = name.to_string();
 
             return runtime_err!(AlreadyDeclared(name));
@@ -248,7 +252,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
 impl ExprVisitor<Result<Value>> for Interpreter {
     fn visit_binary(&mut self, binary: &ast::BinaryOp) -> Result<Value> {
-        let ast::BinaryOp { lhs, op, rhs } = binary;
+        let ast::BinaryOp { lhs, op, rhs, .. } = binary;
 
         use ast::BinaryOperator::*;
         use Value::*;
@@ -442,7 +446,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_unary(&mut self, unary: &ast::UnaryOp) -> Result<Value> {
-        let ast::UnaryOp { op, rhs } = unary;
+        let ast::UnaryOp { op, rhs, .. } = unary;
 
         use ast::UnaryOperator::*;
         use Value::*;
@@ -467,7 +471,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_call(&mut self, call: &ast::Call) -> Result<Value> {
-        let ast::Call { callee, args } = call;
+        let ast::Call { callee, args, .. } = call;
 
         let callee = self.visit_expr(callee)?;
 
@@ -502,7 +506,9 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_access(&mut self, index: &ast::Access) -> Result<Value> {
-        let Access { subscripted, index } = index;
+        let Access {
+            subscripted, index, ..
+        } = index;
 
         let subscripted = self.visit_expr(subscripted)?;
 
@@ -528,13 +534,13 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_grouping(&mut self, grouping: &ast::Grouping) -> Result<Value> {
-        let ast::Grouping { expr } = grouping;
+        let ast::Grouping { expr, .. } = grouping;
 
         self.visit_expr(expr)
     }
 
     fn visit_literal(&mut self, literal: &ast::Literal) -> Result<Value> {
-        let ast::Literal { value } = literal;
+        let ast::Literal { value, .. } = literal;
 
         Ok(value.clone().into())
     }
@@ -543,8 +549,8 @@ impl ExprVisitor<Result<Value>> for Interpreter {
         let ast::Variable { name, .. } = variable;
 
         self.stack
-            .find(name)
-            .map(|v| v.clone_value())
+            .lookup(name)
+            .map(|v| v.extract_value())
             .ok_or(RuntimeErrorKind::UndefinedReference(name.clone()))
             .map_err(|e| e.into())
     }
@@ -553,6 +559,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
         let ast::Assign {
             name: variable,
             value,
+            ..
         } = assign;
 
         match &**variable {
@@ -561,7 +568,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
                 let result = self
                     .stack
-                    .set(name.clone(), StoredValue::new(value.clone()));
+                    .assign(name.clone(), StoredValue::new(value.clone()));
 
                 match result {
                     Ok(_) => Ok(value),
@@ -574,7 +581,9 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     ),
                 }
             }
-            ast::Expr::Access(ast::Access { index, subscripted }) => {
+            ast::Expr::Access(ast::Access {
+                index, subscripted, ..
+            }) => {
                 let subscripted = self.visit_expr(subscripted)?;
 
                 match subscripted {
@@ -604,7 +613,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
         &mut self,
         associative_array: &ast::AssociativeArray,
     ) -> Result<Value> {
-        let ast::AssociativeArray { elements } = associative_array;
+        let ast::AssociativeArray { elements, .. } = associative_array;
 
         let mut map = indexmap::IndexMap::new();
 
@@ -779,8 +788,8 @@ impl Interpreter {
 
                 let value = interpreter
                     .stack
-                    .consume_return()
-                    .map(|v| v.clone_value())
+                    .consume_return_value()
+                    .map(|v| v.extract_value())
                     .unwrap_or(Value::Nil);
 
                 interpreter.stack.pop();

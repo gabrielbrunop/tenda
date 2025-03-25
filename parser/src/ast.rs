@@ -1,17 +1,38 @@
-use scanner::token::{Token, TokenKind};
+use scanner::token::{Token, TokenKind, TokenSpan};
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Ast(pub Vec<Stmt>);
+pub struct AstSpan {
+    pub start: usize,
+    pub end: usize,
+}
 
-impl Ast {
-    pub fn new() -> Self {
-        Ast(vec![])
+impl AstSpan {
+    pub fn new(start: usize, end: usize) -> Self {
+        AstSpan { start, end }
     }
 }
 
-impl Default for Ast {
-    fn default() -> Self {
-        Self::new()
+impl From<TokenSpan> for AstSpan {
+    fn from(span: TokenSpan) -> Self {
+        AstSpan {
+            start: span.start,
+            end: span.end,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Ast {
+    pub inner: Vec<Stmt>,
+    pub span: AstSpan,
+}
+
+impl Ast {
+    pub fn new(span: AstSpan) -> Self {
+        Ast {
+            inner: vec![],
+            span,
+        }
     }
 }
 
@@ -20,13 +41,22 @@ impl IntoIterator for Ast {
     type IntoIter = std::vec::IntoIter<Stmt>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        self.inner.into_iter()
     }
 }
 
 impl From<Vec<Stmt>> for Ast {
     fn from(value: Vec<Stmt>) -> Self {
-        Ast(value)
+        let span = if value.is_empty() {
+            AstSpan { start: 0, end: 0 }
+        } else {
+            AstSpan {
+                start: value[0].get_span().start,
+                end: value[value.len() - 1].get_span().end,
+            }
+        };
+
+        Ast { inner: value, span }
     }
 }
 
@@ -43,6 +73,25 @@ pub enum Stmt {
     Continue(Continue),
 }
 
+impl Stmt {
+    pub fn get_span(&self) -> &AstSpan {
+        match self {
+            Stmt::Expr(expr) => expr.get_span(),
+            Stmt::Decl(decl) => match decl {
+                Decl::Local(local) => &local.span,
+                Decl::Function(function) => &function.span,
+            },
+            Stmt::Cond(cond) => &cond.span,
+            Stmt::While(while_stmt) => &while_stmt.span,
+            Stmt::ForEach(for_each) => &for_each.span,
+            Stmt::Block(block) => &block.span,
+            Stmt::Return(return_stmt) => &return_stmt.span,
+            Stmt::Break(break_stmt) => &break_stmt.span,
+            Stmt::Continue(continue_stmt) => &continue_stmt.span,
+        }
+    }
+}
+
 pub trait StmtVisitor<T> {
     fn visit_expr(&mut self, expr: &Expr) -> T;
     fn visit_decl(&mut self, decl: &Decl) -> T;
@@ -56,16 +105,50 @@ pub trait StmtVisitor<T> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Return(pub Option<Expr>);
+pub struct Return {
+    pub value: Option<Expr>,
+    pub span: AstSpan,
+}
+
+impl Return {
+    pub fn new(value: Option<Expr>, span: AstSpan) -> Self {
+        Return { value, span }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Break;
+pub struct Break {
+    pub span: AstSpan,
+}
+
+impl Break {
+    pub fn new(span: AstSpan) -> Self {
+        Break { span }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Continue;
+pub struct Continue {
+    pub span: AstSpan,
+}
+
+impl Continue {
+    pub fn new(span: AstSpan) -> Self {
+        Continue { span }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Block(pub Ast);
+pub struct Block {
+    pub inner: Ast,
+    pub span: AstSpan,
+}
+
+impl Block {
+    pub fn new(inner: Ast, span: AstSpan) -> Self {
+        Block { inner, span }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Decl {
@@ -100,15 +183,17 @@ pub struct LocalDecl {
     pub value: Expr,
     pub captured: bool,
     pub uid: usize,
+    pub span: AstSpan,
 }
 
 impl LocalDecl {
-    pub fn new(name: String, value: Expr, uid: usize) -> Self {
+    pub fn new(name: String, value: Expr, uid: usize, span: AstSpan) -> Self {
         LocalDecl {
             name,
             value,
             captured: false,
             uid,
+            span,
         }
     }
 }
@@ -118,6 +203,18 @@ pub struct FunctionParam {
     pub name: String,
     pub uid: usize,
     pub captured: bool,
+    pub span: AstSpan,
+}
+
+impl FunctionParam {
+    pub fn new(name: String, uid: usize, span: AstSpan) -> Self {
+        FunctionParam {
+            name,
+            uid,
+            captured: false,
+            span,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -128,24 +225,25 @@ pub struct FunctionDecl {
     pub free_vars: Vec<String>,
     pub captured: bool,
     pub uid: usize,
+    pub span: AstSpan,
 }
 
 impl FunctionDecl {
-    pub fn new(name: String, params: Vec<(String, usize)>, body: Stmt, uid: usize) -> Self {
+    pub fn new(
+        name: String,
+        params: Vec<FunctionParam>,
+        body: Stmt,
+        uid: usize,
+        span: AstSpan,
+    ) -> Self {
         FunctionDecl {
             name,
-            params: params
-                .into_iter()
-                .map(|(name, uid)| FunctionParam {
-                    name,
-                    uid,
-                    captured: false,
-                })
-                .collect(),
+            params,
             body: Box::new(body),
             free_vars: vec![],
             captured: false,
             uid,
+            span,
         }
     }
 }
@@ -155,14 +253,16 @@ pub struct Cond {
     pub cond: Expr,
     pub then: Box<Stmt>,
     pub or_else: Option<Box<Stmt>>,
+    pub span: AstSpan,
 }
 
 impl Cond {
-    pub fn new(cond: Expr, then: Stmt, or_else: Option<Stmt>) -> Self {
+    pub fn new(cond: Expr, then: Stmt, or_else: Option<Stmt>, span: AstSpan) -> Self {
         Cond {
             cond,
             then: Box::new(then),
             or_else: or_else.map(Box::new),
+            span,
         }
     }
 }
@@ -171,13 +271,15 @@ impl Cond {
 pub struct While {
     pub cond: Expr,
     pub body: Box<Stmt>,
+    pub span: AstSpan,
 }
 
 impl While {
-    pub fn new(cond: Expr, body: Stmt) -> Self {
+    pub fn new(cond: Expr, body: Stmt, span: AstSpan) -> Self {
         While {
             cond,
             body: Box::new(body),
+            span,
         }
     }
 }
@@ -187,6 +289,18 @@ pub struct ForEachItem {
     pub name: String,
     pub uid: usize,
     pub captured: bool,
+    pub span: AstSpan,
+}
+
+impl ForEachItem {
+    pub fn new(name: String, uid: usize, span: AstSpan) -> Self {
+        ForEachItem {
+            name,
+            uid,
+            captured: false,
+            span,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -194,18 +308,16 @@ pub struct ForEach {
     pub item: ForEachItem,
     pub iterable: Expr,
     pub body: Box<Stmt>,
+    pub span: AstSpan,
 }
 
 impl ForEach {
-    pub fn new(item_name: String, item_uid: usize, iterable: Expr, body: Stmt) -> Self {
+    pub fn new(item: ForEachItem, iterable: Expr, body: Stmt, span: AstSpan) -> Self {
         ForEach {
-            item: ForEachItem {
-                name: item_name,
-                uid: item_uid,
-                captured: false,
-            },
+            item,
             iterable,
             body: Box::new(body),
+            span,
         }
     }
 }
@@ -223,6 +335,24 @@ pub enum Expr {
     Variable(Variable),
     AssociativeArray(AssociativeArray),
     AnonymousFunction(AnonymousFunction),
+}
+
+impl Expr {
+    pub fn get_span(&self) -> &AstSpan {
+        match self {
+            Expr::Binary(binary_op) => &binary_op.span,
+            Expr::Unary(unary_op) => &unary_op.span,
+            Expr::Call(call) => &call.span,
+            Expr::Assign(assign) => &assign.span,
+            Expr::Access(access) => &access.span,
+            Expr::List(list) => &list.span,
+            Expr::Grouping(grouping) => &grouping.span,
+            Expr::Literal(literal) => &literal.span,
+            Expr::Variable(variable) => &variable.span,
+            Expr::AssociativeArray(associative_array) => &associative_array.span,
+            Expr::AnonymousFunction(anonymous_function) => &anonymous_function.span,
+        }
+    }
 }
 
 pub trait ExprVisitor<T> {
@@ -244,14 +374,16 @@ pub struct BinaryOp {
     pub lhs: Box<Expr>,
     pub op: BinaryOperator,
     pub rhs: Box<Expr>,
+    pub span: AstSpan,
 }
 
 impl BinaryOp {
-    pub fn new(lhs: Expr, op: BinaryOperator, rhs: Expr) -> Self {
+    pub fn new(lhs: Expr, op: BinaryOperator, rhs: Expr, span: AstSpan) -> Self {
         BinaryOp {
             lhs: Box::new(lhs),
             op,
             rhs: Box::new(rhs),
+            span,
         }
     }
 }
@@ -260,13 +392,15 @@ impl BinaryOp {
 pub struct UnaryOp {
     pub op: UnaryOperator,
     pub rhs: Box<Expr>,
+    pub span: AstSpan,
 }
 
 impl UnaryOp {
-    pub fn new(op: UnaryOperator, rhs: Expr) -> Self {
+    pub fn new(op: UnaryOperator, rhs: Expr, span: AstSpan) -> Self {
         UnaryOp {
             op,
             rhs: Box::new(rhs),
+            span,
         }
     }
 }
@@ -275,13 +409,15 @@ impl UnaryOp {
 pub struct Call {
     pub callee: Box<Expr>,
     pub args: Vec<Expr>,
+    pub span: AstSpan,
 }
 
 impl Call {
-    pub fn new(callee: Expr, args: Vec<Expr>) -> Self {
+    pub fn new(callee: Expr, args: Vec<Expr>, span: AstSpan) -> Self {
         Call {
             callee: Box::new(callee),
             args,
+            span,
         }
     }
 }
@@ -290,13 +426,15 @@ impl Call {
 pub struct Assign {
     pub name: Box<Expr>,
     pub value: Box<Expr>,
+    pub span: AstSpan,
 }
 
 impl Assign {
-    pub fn new(name: Expr, value: Expr) -> Self {
+    pub fn new(name: Expr, value: Expr, span: AstSpan) -> Self {
         Assign {
             name: Box::new(name),
             value: Box::new(value),
+            span,
         }
     }
 }
@@ -305,13 +443,15 @@ impl Assign {
 pub struct Access {
     pub subscripted: Box<Expr>,
     pub index: Box<Expr>,
+    pub span: AstSpan,
 }
 
 impl Access {
-    pub fn new(subscripted: Expr, index: Expr) -> Self {
+    pub fn new(subscripted: Expr, index: Expr, span: AstSpan) -> Self {
         Access {
             subscripted: Box::new(subscripted),
             index: Box::new(index),
+            span,
         }
     }
 }
@@ -319,34 +459,38 @@ impl Access {
 #[derive(Debug, PartialEq, Clone)]
 pub struct List {
     pub elements: Vec<Expr>,
+    pub span: AstSpan,
 }
 
 impl List {
-    pub fn new(elements: Vec<Expr>) -> Self {
-        List { elements }
+    pub fn new(elements: Vec<Expr>, span: AstSpan) -> Self {
+        List { elements, span }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AssociativeArray {
     pub elements: Vec<(Literal, Expr)>,
+    pub span: AstSpan,
 }
 
 impl AssociativeArray {
-    pub fn new(elements: Vec<(Literal, Expr)>) -> Self {
-        AssociativeArray { elements }
+    pub fn new(elements: Vec<(Literal, Expr)>, span: AstSpan) -> Self {
+        AssociativeArray { elements, span }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Grouping {
     pub expr: Box<Expr>,
+    pub span: AstSpan,
 }
 
 impl Grouping {
-    pub fn new(expr: Expr) -> Self {
+    pub fn new(expr: Expr, span: AstSpan) -> Self {
         Grouping {
             expr: Box::new(expr),
+            span,
         }
     }
 }
@@ -354,11 +498,12 @@ impl Grouping {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Literal {
     pub value: scanner::token::Literal,
+    pub span: AstSpan,
 }
 
 impl Literal {
-    pub fn new(value: scanner::token::Literal) -> Self {
-        Literal { value }
+    pub fn new(value: scanner::token::Literal, span: AstSpan) -> Self {
+        Literal { value, span }
     }
 }
 
@@ -367,14 +512,16 @@ pub struct Variable {
     pub name: String,
     pub uid: usize,
     pub captured: bool,
+    pub span: AstSpan,
 }
 
 impl Variable {
-    pub fn new(name: String, id: usize) -> Self {
+    pub fn new(name: String, id: usize, span: AstSpan) -> Self {
         Variable {
             name,
             uid: id,
             captured: false,
+            span,
         }
     }
 }
@@ -385,22 +532,17 @@ pub struct AnonymousFunction {
     pub body: Box<Stmt>,
     pub uid: usize,
     pub free_vars: Vec<String>,
+    pub span: AstSpan,
 }
 
 impl AnonymousFunction {
-    pub fn new(params: Vec<(String, usize)>, body: Stmt, uid: usize) -> Self {
+    pub fn new(params: Vec<FunctionParam>, body: Stmt, uid: usize, span: AstSpan) -> Self {
         AnonymousFunction {
-            params: params
-                .into_iter()
-                .map(|(name, uid)| FunctionParam {
-                    name,
-                    uid,
-                    captured: false,
-                })
-                .collect(),
+            params,
             body: Box::new(body),
             uid,
             free_vars: vec![],
+            span,
         }
     }
 }
@@ -467,175 +609,3 @@ impl From<Token> for UnaryOperator {
         }
     }
 }
-
-macro_rules! make_function_decl {
-    ($name:expr, $parameters:expr, $body:expr, $uid:expr) => {{
-        use $crate::ast::{Decl, FunctionDecl, Stmt};
-        Stmt::Decl(Decl::Function(FunctionDecl::new(
-            $name.to_string(),
-            $parameters,
-            $body,
-            $uid,
-        )))
-    }};
-}
-
-macro_rules! make_local_decl {
-    ($name:expr, $value:expr, $uid:expr) => {{
-        use $crate::ast::{Decl, LocalDecl, Stmt};
-        Stmt::Decl(Decl::Local(LocalDecl::new($name.to_string(), $value, $uid)))
-    }};
-}
-
-macro_rules! make_literal_expr {
-    ($value:expr) => {{
-        #[allow(unused_imports)]
-        use scanner::token::Literal::*;
-        $crate::ast::Expr::Literal($crate::ast::Literal::new($value))
-    }};
-}
-
-macro_rules! make_return_stmt {
-    ($value:expr) => {{
-        use $crate::ast::Stmt;
-        Stmt::Return($crate::ast::Return($value))
-    }};
-}
-
-macro_rules! make_break_stmt {
-    () => {{
-        use $crate::ast::Stmt;
-        Stmt::Break($crate::ast::Break)
-    }};
-}
-
-macro_rules! make_continue_stmt {
-    () => {{
-        use $crate::ast::Stmt;
-        Stmt::Continue($crate::ast::Continue)
-    }};
-}
-
-macro_rules! make_binary_expr {
-    ($lhs:expr, $op:expr, $rhs:expr) => {{
-        use $crate::ast::Expr;
-        Expr::Binary($crate::ast::BinaryOp::new($lhs, $op, $rhs))
-    }};
-}
-
-macro_rules! make_unary_expr {
-    ($op:expr, $rhs:expr) => {{
-        use $crate::ast::Expr;
-        Expr::Unary($crate::ast::UnaryOp::new($op, $rhs))
-    }};
-}
-
-macro_rules! make_call_expr {
-    ($callee:expr, $args:expr) => {{
-        use $crate::ast::Expr;
-        Expr::Call($crate::ast::Call::new($callee, $args))
-    }};
-}
-
-macro_rules! make_assign_expr {
-    ($name:expr, $value:expr) => {{
-        use $crate::ast::Expr;
-        Expr::Assign($crate::ast::Assign::new($name, $value))
-    }};
-}
-
-macro_rules! make_access_expr {
-    ($subscripted:expr, $index:expr) => {{
-        use $crate::ast::Expr;
-        Expr::Access($crate::ast::Access::new($subscripted, $index))
-    }};
-}
-
-macro_rules! make_grouping_expr {
-    ($expr:expr) => {{
-        use $crate::ast::Expr;
-        Expr::Grouping($crate::ast::Grouping::new($expr))
-    }};
-}
-
-macro_rules! make_variable_expr {
-    ($name:expr, $uid:expr) => {{
-        use $crate::ast::Expr;
-        Expr::Variable($crate::ast::Variable::new($name.to_string(), $uid))
-    }};
-}
-
-macro_rules! make_list_expr {
-    ($elements:expr) => {{
-        use $crate::ast::Expr;
-        Expr::List($crate::ast::List::new($elements))
-    }};
-}
-
-macro_rules! make_associative_array_expr {
-    ($elements:expr) => {{
-        use $crate::ast::Expr;
-        Expr::AssociativeArray($crate::ast::AssociativeArray::new($elements))
-    }};
-}
-
-macro_rules! make_anonymous_function_expr {
-    ($params:expr, $body:expr, $uid:expr) => {{
-        use $crate::ast::Expr;
-        Expr::AnonymousFunction($crate::ast::AnonymousFunction::new($params, $body, $uid))
-    }};
-}
-
-macro_rules! make_cond_stmt {
-    ($cond:expr, $then:expr, $or_else:expr) => {{
-        use $crate::ast::{Cond, Stmt};
-        Stmt::Cond(Cond::new($cond, $then, $or_else))
-    }};
-}
-
-macro_rules! make_while_stmt {
-    ($cond:expr, $body:expr) => {{
-        use $crate::ast::{Stmt, While};
-        Stmt::While(While::new($cond, $body))
-    }};
-}
-
-macro_rules! make_for_each_stmt {
-    ($item_name:expr, $item_uid:expr, $iterable:expr, $body:expr) => {{
-        use $crate::ast::{ForEach, Stmt};
-        Stmt::ForEach(ForEach::new(
-            $item_name.to_string(),
-            $item_uid,
-            $iterable,
-            $body,
-        ))
-    }};
-}
-
-macro_rules! make_block_stmt {
-    ($statements:expr) => {{
-        use $crate::ast::{Block, Stmt};
-        Stmt::Block(Block($statements))
-    }};
-}
-
-pub(crate) use make_access_expr;
-pub(crate) use make_anonymous_function_expr;
-pub(crate) use make_assign_expr;
-pub(crate) use make_associative_array_expr;
-pub(crate) use make_binary_expr;
-pub(crate) use make_block_stmt;
-pub(crate) use make_break_stmt;
-pub(crate) use make_call_expr;
-pub(crate) use make_cond_stmt;
-pub(crate) use make_continue_stmt;
-pub(crate) use make_for_each_stmt;
-pub(crate) use make_function_decl;
-pub(crate) use make_grouping_expr;
-pub(crate) use make_list_expr;
-pub(crate) use make_literal_expr;
-pub(crate) use make_local_decl;
-pub(crate) use make_return_stmt;
-pub(crate) use make_unary_expr;
-pub(crate) use make_variable_expr;
-pub(crate) use make_while_stmt;

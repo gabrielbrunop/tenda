@@ -63,7 +63,7 @@ pub fn annotate_ast_with_var_captures(ast: &mut Ast) {
     let closure_list = get_var_captures_from_ast(ast);
     let closure_list = VarCaptureList::new(closure_list);
 
-    let Ast(ast) = ast;
+    let Ast { inner: ast, .. } = ast;
 
     for stmt in ast.iter_mut() {
         annotate_stmt_with_var_captures(stmt, &closure_list);
@@ -116,6 +116,7 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
             then,
             or_else,
             cond,
+            ..
         }) => {
             annotate_stmt_with_var_captures(then, closure_list);
 
@@ -125,7 +126,7 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
 
             annotate_expr_with_var_captures(cond, closure_list);
         }
-        Stmt::While(ast::While { cond, body }) => {
+        Stmt::While(ast::While { cond, body, .. }) => {
             annotate_expr_with_var_captures(cond, closure_list);
             annotate_stmt_with_var_captures(body, closure_list);
         }
@@ -142,11 +143,16 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
                 item.captured = true;
             }
         }
-        Stmt::Block(Block(Ast(block))) => block
+        Stmt::Block(Block {
+            inner: Ast { inner, .. },
+            ..
+        }) => inner
             .iter_mut()
             .for_each(|stmt| annotate_stmt_with_var_captures(stmt, closure_list)),
-        Stmt::Return(Return(Some(expr))) => annotate_expr_with_var_captures(expr, closure_list),
-        Stmt::Return(Return(None)) => {}
+        Stmt::Return(Return {
+            value: Some(expr), ..
+        }) => annotate_expr_with_var_captures(expr, closure_list),
+        Stmt::Return(Return { value: None, .. }) => {}
         Stmt::Continue(_) => {}
         Stmt::Break(_) => {}
     }
@@ -165,25 +171,27 @@ fn annotate_expr_with_var_captures(expr: &mut ast::Expr, closure_list: &VarCaptu
                 *is_captured_var = true;
             }
         }
-        Expr::Call(Call { args, callee }) => {
+        Expr::Call(Call { args, callee, .. }) => {
             args.iter_mut()
                 .for_each(|arg| annotate_expr_with_var_captures(arg, closure_list));
             annotate_expr_with_var_captures(callee, closure_list);
         }
-        Expr::Access(Access { index, subscripted }) => {
+        Expr::Access(Access {
+            index, subscripted, ..
+        }) => {
             annotate_expr_with_var_captures(index, closure_list);
             annotate_expr_with_var_captures(subscripted, closure_list);
         }
-        Expr::Assign(Assign { name, value }) => {
+        Expr::Assign(Assign { name, value, .. }) => {
             annotate_expr_with_var_captures(name, closure_list);
             annotate_expr_with_var_captures(value, closure_list);
         }
-        Expr::List(List { elements }) => {
+        Expr::List(List { elements, .. }) => {
             elements
                 .iter_mut()
                 .for_each(|e| annotate_expr_with_var_captures(e, closure_list));
         }
-        Expr::AssociativeArray(AssociativeArray { elements }) => {
+        Expr::AssociativeArray(AssociativeArray { elements, .. }) => {
             elements
                 .iter_mut()
                 .for_each(|(_, value)| annotate_expr_with_var_captures(value, closure_list));
@@ -193,12 +201,15 @@ fn annotate_expr_with_var_captures(expr: &mut ast::Expr, closure_list: &VarCaptu
             annotate_expr_with_var_captures(rhs, closure_list);
         }
         Expr::Unary(UnaryOp { rhs, .. }) => annotate_expr_with_var_captures(rhs, closure_list),
-        Expr::Grouping(Grouping { expr }) => annotate_expr_with_var_captures(expr, closure_list),
+        Expr::Grouping(Grouping { expr, .. }) => {
+            annotate_expr_with_var_captures(expr, closure_list)
+        }
         Expr::AnonymousFunction(AnonymousFunction {
             body,
             params,
             free_vars,
             uid,
+            ..
         }) => {
             let mut free_vars_in_fn = closure_list.get_free_vars_in_fn(*uid);
 
@@ -220,7 +231,7 @@ fn annotate_expr_with_var_captures(expr: &mut ast::Expr, closure_list: &VarCaptu
 fn get_var_captures_from_ast(ast: &Ast) -> Vec<VarCapture> {
     use ast::*;
 
-    let Ast(ast) = ast;
+    let Ast { inner: ast, .. } = ast;
 
     let iter = ast.iter().enumerate();
     let iter = iter.flat_map(|(i, stmt)| match stmt {
@@ -251,11 +262,11 @@ fn get_var_captures_from_ast(ast: &Ast) -> Vec<VarCapture> {
         }) => {
             let mut closure_list = vec![];
 
-            if let Stmt::Block(Block(then)) = then.as_ref() {
+            if let Stmt::Block(Block { inner: then, .. }) = then.as_ref() {
                 closure_list.extend(get_var_captures_from_ast(then));
             }
 
-            if let Some(Stmt::Block(Block(or_else))) = or_else.as_deref() {
+            if let Some(Stmt::Block(Block { inner: or_else, .. })) = or_else.as_deref() {
                 closure_list.extend(get_var_captures_from_ast(or_else));
             }
 
@@ -265,7 +276,7 @@ fn get_var_captures_from_ast(ast: &Ast) -> Vec<VarCapture> {
         }
         Stmt::While(While { body, cond, .. }) => {
             let var_captures_from_body = match body.as_ref() {
-                Stmt::Block(Block(block)) => get_var_captures_from_ast(block),
+                Stmt::Block(Block { inner: block, .. }) => get_var_captures_from_ast(block),
                 _ => vec![],
             };
 
@@ -283,12 +294,15 @@ fn get_var_captures_from_ast(ast: &Ast) -> Vec<VarCapture> {
             ..
         }) => {
             let var_captures_in_body = match body.as_ref() {
-                Stmt::Block(Block(block)) => get_var_captures_from_ast(block),
+                Stmt::Block(Block { inner, .. }) => get_var_captures_from_ast(inner),
                 _ => vec![],
             };
 
             let body = match body.as_ref() {
-                Stmt::Block(Block(Ast(block))) => block,
+                Stmt::Block(Block {
+                    inner: Ast { inner, .. },
+                    ..
+                }) => inner,
                 _ => unreachable!(),
             };
 
@@ -312,9 +326,9 @@ fn get_var_captures_from_ast(ast: &Ast) -> Vec<VarCapture> {
                 .chain(var_captures_from_iterable)
                 .collect()
         }
-        Stmt::Block(Block(block)) => get_var_captures_from_ast(block),
+        Stmt::Block(Block { inner, .. }) => get_var_captures_from_ast(inner),
         Stmt::Expr(expr) => get_var_captures_from_expr(expr),
-        Stmt::Return(Return(expr)) => match expr {
+        Stmt::Return(Return { value, .. }) => match value {
             Some(expr) => get_var_captures_from_expr(expr),
             None => vec![],
         },
@@ -331,7 +345,7 @@ fn get_var_captures_from_expr(expr: &ast::Expr) -> Vec<VarCapture> {
     match expr {
         Expr::AnonymousFunction(AnonymousFunction { body, params, .. }) => {
             let body = match body.as_ref() {
-                Stmt::Block(Block(block)) => block,
+                Stmt::Block(Block { inner, .. }) => inner,
                 _ => unreachable!(),
             };
 
@@ -340,7 +354,7 @@ fn get_var_captures_from_expr(expr: &ast::Expr) -> Vec<VarCapture> {
             let var_captures_from_params = params
                 .iter()
                 .flat_map(|param| {
-                    body.0
+                    body.inner
                         .iter()
                         .flat_map(|stmt| get_free_vars_in_stmt(stmt, &param.name))
                         .map(|(var_ref_id, inner_fn_decl_id)| {
@@ -366,7 +380,7 @@ fn get_var_captures_from_expr(expr: &ast::Expr) -> Vec<VarCapture> {
             var_captures
         }
         Expr::Unary(UnaryOp { rhs, .. }) => get_var_captures_from_expr(rhs),
-        Expr::Call(Call { args, callee }) => {
+        Expr::Call(Call { args, callee, .. }) => {
             let mut var_captures = args
                 .iter()
                 .flat_map(get_var_captures_from_expr)
@@ -376,27 +390,29 @@ fn get_var_captures_from_expr(expr: &ast::Expr) -> Vec<VarCapture> {
 
             var_captures
         }
-        Expr::Access(Access { index, subscripted }) => {
+        Expr::Access(Access {
+            index, subscripted, ..
+        }) => {
             let mut var_captures = get_var_captures_from_expr(index);
             var_captures.extend(get_var_captures_from_expr(subscripted));
 
             var_captures
         }
-        Expr::Assign(Assign { name, value }) => {
+        Expr::Assign(Assign { name, value, .. }) => {
             let mut var_captures = get_var_captures_from_expr(name);
             var_captures.extend(get_var_captures_from_expr(value));
 
             var_captures
         }
-        Expr::List(List { elements }) => elements
+        Expr::List(List { elements, .. }) => elements
             .iter()
             .flat_map(get_var_captures_from_expr)
             .collect(),
-        Expr::AssociativeArray(AssociativeArray { elements }) => elements
+        Expr::AssociativeArray(AssociativeArray { elements, .. }) => elements
             .iter()
             .flat_map(|(_, value)| get_var_captures_from_expr(value))
             .collect(),
-        Expr::Grouping(Grouping { expr }) => get_var_captures_from_expr(expr),
+        Expr::Grouping(Grouping { expr, .. }) => get_var_captures_from_expr(expr),
         Expr::Literal(_) => vec![],
         Expr::Variable(_) => vec![],
     }
@@ -424,7 +440,7 @@ fn get_var_captures_from_fn_body(decl: &ast::Decl) -> Vec<VarCapture> {
 
     match decl {
         Decl::Function(FunctionDecl { body, .. }) => match body.as_ref() {
-            Stmt::Block(Block(block)) => get_var_captures_from_ast(block),
+            Stmt::Block(Block { inner, .. }) => get_var_captures_from_ast(inner),
             _ => unreachable!(),
         },
         _ => vec![],
@@ -471,6 +487,7 @@ fn get_free_vars_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<FreeVarRef> {
             body,
             item,
             iterable,
+            ..
         }) => {
             let free_vars_in_body = if item.name != name {
                 get_free_vars_in_stmt(body, name)
@@ -485,11 +502,14 @@ fn get_free_vars_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<FreeVarRef> {
                 .chain(free_vars_in_iterable)
                 .collect::<Vec<_>>()
         }
-        Stmt::Block(ast::Block(ast::Ast(block))) => block
+        Stmt::Block(ast::Block {
+            inner: ast::Ast { inner, .. },
+            ..
+        }) => inner
             .iter()
             .flat_map(|stmt| get_free_vars_in_stmt(stmt, name))
             .collect::<Vec<_>>(),
-        Stmt::Return(ast::Return(expr)) => match expr {
+        Stmt::Return(ast::Return { value, .. }) => match value {
             Some(expr) => get_free_vars_in_expr(expr, name),
             None => vec![],
         },
@@ -514,7 +534,7 @@ fn get_free_vars_in_expr(expr: &ast::Expr, name: &str) -> Vec<FreeVarRef> {
             references
         }
         Expr::Unary(ast::UnaryOp { rhs, .. }) => get_free_vars_in_expr(rhs, name),
-        Expr::Call(ast::Call { args, callee }) => {
+        Expr::Call(ast::Call { args, callee, .. }) => {
             let mut references = args
                 .iter()
                 .flat_map(|arg| get_free_vars_in_expr(arg, name))
@@ -524,7 +544,9 @@ fn get_free_vars_in_expr(expr: &ast::Expr, name: &str) -> Vec<FreeVarRef> {
 
             references
         }
-        Expr::Access(ast::Access { index, subscripted }) => {
+        Expr::Access(ast::Access {
+            index, subscripted, ..
+        }) => {
             let mut references = get_free_vars_in_expr(index, name);
 
             references.extend(get_free_vars_in_expr(subscripted, name));
@@ -534,6 +556,7 @@ fn get_free_vars_in_expr(expr: &ast::Expr, name: &str) -> Vec<FreeVarRef> {
         Expr::Assign(ast::Assign {
             name: var_name,
             value,
+            ..
         }) => {
             let mut references = get_free_vars_in_expr(var_name, name);
 
@@ -541,15 +564,15 @@ fn get_free_vars_in_expr(expr: &ast::Expr, name: &str) -> Vec<FreeVarRef> {
 
             references
         }
-        Expr::List(ast::List { elements }) => elements
+        Expr::List(ast::List { elements, .. }) => elements
             .iter()
             .flat_map(|e| get_free_vars_in_expr(e, name))
             .collect(),
-        Expr::AssociativeArray(ast::AssociativeArray { elements }) => elements
+        Expr::AssociativeArray(ast::AssociativeArray { elements, .. }) => elements
             .iter()
             .flat_map(|(_, value)| get_free_vars_in_expr(value, name))
             .collect(),
-        Expr::Grouping(ast::Grouping { expr }) => get_free_vars_in_expr(expr, name),
+        Expr::Grouping(ast::Grouping { expr, .. }) => get_free_vars_in_expr(expr, name),
         Expr::Literal(_) => vec![],
         Expr::Variable(_) => vec![],
     }
@@ -575,6 +598,7 @@ fn get_free_vars_in_fn_body(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> 
             cond,
             then,
             or_else,
+            ..
         }) => {
             let cond_references = get_var_refs_in_expr(cond, name)
                 .into_iter()
@@ -592,7 +616,7 @@ fn get_free_vars_in_fn_body(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> 
                 .chain(or_else_references)
                 .collect::<Vec<_>>()
         }
-        Stmt::While(ast::While { cond, body }) => {
+        Stmt::While(ast::While { cond, body, .. }) => {
             let cond_references = get_var_refs_in_expr(cond, name)
                 .into_iter()
                 .map(|expr| (expr, closure_fn));
@@ -612,16 +636,21 @@ fn get_free_vars_in_fn_body(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> 
                 .chain(body_references)
                 .collect::<Vec<_>>()
         }
-        Stmt::Block(ast::Block(ast::Ast(block))) => block
+        Stmt::Block(ast::Block {
+            inner: ast::Ast { inner: block, .. },
+            ..
+        }) => block
             .iter()
             .take_while(|stmt| !matches!(stmt, Stmt::Decl(decl) if decl.get_name() == name))
             .flat_map(|stmt| get_free_vars_in_fn_body(stmt, name, closure_fn))
             .collect::<Vec<_>>(),
-        Stmt::Return(ast::Return(Some(expr))) => get_var_refs_in_expr(expr, name)
+        Stmt::Return(ast::Return {
+            value: Some(expr), ..
+        }) => get_var_refs_in_expr(expr, name)
             .iter()
             .map(|expr| (*expr, closure_fn))
             .collect::<Vec<_>>(),
-        Stmt::Return(ast::Return(None)) => vec![],
+        Stmt::Return(ast::Return { value: None, .. }) => vec![],
         Stmt::Break(_) => vec![],
         Stmt::Continue(_) => vec![],
     }
@@ -636,31 +665,34 @@ fn get_var_refs_in_expr(expr: &ast::Expr, name: &str) -> Vec<usize> {
             .chain(get_var_refs_in_expr(rhs, name))
             .collect(),
         Unary(ast::UnaryOp { rhs, .. }) => get_var_refs_in_expr(rhs, name),
-        Call(ast::Call { args, callee }) => args
+        Call(ast::Call { args, callee, .. }) => args
             .iter()
             .flat_map(|arg| get_var_refs_in_expr(arg, name))
             .chain(get_var_refs_in_expr(callee, name))
             .collect::<Vec<_>>(),
-        Access(ast::Access { index, subscripted }) => get_var_refs_in_expr(index, name)
+        Access(ast::Access {
+            index, subscripted, ..
+        }) => get_var_refs_in_expr(index, name)
             .into_iter()
             .chain(get_var_refs_in_expr(subscripted, name))
             .collect(),
         Assign(ast::Assign {
             name: var_name,
             value,
+            ..
         }) => get_var_refs_in_expr(var_name, name)
             .into_iter()
             .chain(get_var_refs_in_expr(value, name))
             .collect(),
-        List(ast::List { elements }) => elements
+        List(ast::List { elements, .. }) => elements
             .iter()
             .flat_map(|e| get_var_refs_in_expr(e, name))
             .collect(),
-        AssociativeArray(ast::AssociativeArray { elements }) => elements
+        AssociativeArray(ast::AssociativeArray { elements, .. }) => elements
             .iter()
             .flat_map(|(_, value)| get_var_refs_in_expr(value, name))
             .collect(),
-        Grouping(ast::Grouping { expr }) => get_var_refs_in_expr(expr, name),
+        Grouping(ast::Grouping { expr, .. }) => get_var_refs_in_expr(expr, name),
         Literal(_) => vec![],
         AnonymousFunction(ast::AnonymousFunction { body, params, .. }) => {
             if params.iter().any(|param| param.name == name) {
@@ -668,7 +700,10 @@ fn get_var_refs_in_expr(expr: &ast::Expr, name: &str) -> Vec<usize> {
             }
 
             match body.as_ref() {
-                ast::Stmt::Block(ast::Block(ast::Ast(block))) => block
+                ast::Stmt::Block(ast::Block {
+                    inner: ast::Ast { inner, .. },
+                    ..
+                }) => inner
                     .iter()
                     .flat_map(|stmt| get_var_refs_in_stmt(stmt, name))
                     .collect(),
@@ -700,7 +735,10 @@ fn get_var_refs_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<usize> {
             }
 
             match body.as_ref() {
-                ast::Stmt::Block(ast::Block(ast::Ast(block))) => block
+                ast::Stmt::Block(ast::Block {
+                    inner: ast::Ast { inner, .. },
+                    ..
+                }) => inner
                     .iter()
                     .flat_map(|stmt| get_var_refs_in_stmt(stmt, name))
                     .collect(),
@@ -712,6 +750,7 @@ fn get_var_refs_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<usize> {
             cond,
             then,
             or_else,
+            ..
         }) => {
             let cond_references = get_var_refs_in_expr(cond, name);
             let then_references = get_var_refs_in_stmt(then, name);
@@ -727,7 +766,7 @@ fn get_var_refs_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<usize> {
                 .chain(or_else_references)
                 .collect()
         }
-        While(ast::While { cond, body }) => {
+        While(ast::While { cond, body, .. }) => {
             let cond_references = get_var_refs_in_expr(cond, name);
 
             let body_references = get_var_refs_in_stmt(body, name);
@@ -743,11 +782,14 @@ fn get_var_refs_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<usize> {
                 .chain(body_references)
                 .collect()
         }
-        Block(ast::Block(ast::Ast(block))) => block
+        Block(ast::Block {
+            inner: ast::Ast { inner, .. },
+            ..
+        }) => inner
             .iter()
             .flat_map(|stmt| get_var_refs_in_stmt(stmt, name))
             .collect(),
-        Return(ast::Return(expr)) => match expr {
+        Return(ast::Return { value, .. }) => match value {
             Some(expr) => get_var_refs_in_expr(expr, name),
             None => vec![],
         },

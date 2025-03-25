@@ -5,4 +5,3 @@ edition = "2021"
 
 [dependencies]
 thiserror = { workspace = true }
-peekmore = { workspace = true }
