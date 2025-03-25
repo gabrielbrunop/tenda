@@ -3,16 +3,18 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
+use crate::token::TokenSpan;
+
 #[derive(Error, Debug)]
 pub struct LexicalError {
-    pub line: usize,
+    pub span: TokenSpan,
     #[source]
     pub source: LexicalErrorKind,
 }
 
 impl Display for LexicalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (na linha {})", self.source, self.line)
+        write!(f, "{} (na posição {})", self.source, self.span.start)
     }
 }
 
@@ -26,15 +28,4 @@ pub enum LexicalErrorKind {
 
     #[error("caractere inesperado: {0}")]
     UnexpectedChar(char),
-}
-
-#[macro_export]
-macro_rules! lexical_error {
-    ($kind:expr, $line:expr) => {{
-        use LexicalErrorKind::*;
-        LexicalError {
-            source: $kind,
-            line: $line,
-        }
-    }};
 }

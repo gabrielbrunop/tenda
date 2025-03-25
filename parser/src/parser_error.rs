@@ -1,14 +1,37 @@
 use core::fmt;
+use scanner::token::{Token, TokenSpan};
 use std::fmt::Display;
-
-use scanner::token::Token;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Vec<ParserError>>;
 
+#[derive(Debug)]
+pub struct ParserErrorSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl From<TokenSpan> for ParserErrorSpan {
+    fn from(span: TokenSpan) -> Self {
+        ParserErrorSpan {
+            start: span.start,
+            end: span.end,
+        }
+    }
+}
+
+impl From<AstSpan> for ParserErrorSpan {
+    fn from(span: AstSpan) -> Self {
+        ParserErrorSpan {
+            start: span.start,
+            end: span.end,
+        }
+    }
+}
+
 #[derive(Error, Debug)]
 pub struct ParserError {
-    pub line: usize,
+    pub span: ParserErrorSpan,
     pub context: Option<String>,
     #[source]
     pub source: ParserErrorKind,
@@ -17,15 +40,15 @@ pub struct ParserError {
 impl Display for ParserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.context {
-            Some(context) => write!(f, "{} (na linha {})", context, self.line),
-            None => write!(f, "{} (na linha {})", self.source, self.line),
+            Some(context) => write!(f, "{}", context),
+            None => write!(f, "{}", self.source),
         }
     }
 }
 
 #[derive(Error, Debug, PartialEq, Clone)]
 pub enum ParserErrorKind {
-    #[error("fim inesperado de input")]
+    #[error("fim inesperado de entrada")]
     UnexpectedEoi,
 
     #[error("esperado ')'")]
@@ -61,19 +84,19 @@ pub enum ParserErrorKind {
 
 #[macro_export]
 macro_rules! parser_err {
-    ($kind:expr, $line:expr) => {{
+    ($kind:expr, $span:expr) => {{
         use ParserErrorKind::*;
         ParserError {
             source: $kind,
-            line: $line,
+            span: $span.into(),
             context: None,
         }
     }};
-    ($kind:expr, $line:expr, $context:expr) => {{
+    ($kind:expr, $span:expr, $context:expr) => {{
         use ParserErrorKind::*;
         ParserError {
             source: $kind,
-            line: $line,
+            span: $span.into(),
             context: Some($context),
         }
     }};
@@ -82,15 +105,10 @@ macro_rules! parser_err {
 macro_rules! unexpected_token {
     ($token:expr) => {{
         let token = $token;
-        parser_err!(UnexpectedToken(token.clone_ref()), token.line)
+        parser_err!(UnexpectedToken(token.clone_ref()), token.span)
     }};
 }
 
-macro_rules! unexpected_eoi {
-    ($self:ident) => {
-        parser_err!(UnexpectedEoi, $self.tokens.get_last_line())
-    };
-}
-
-pub(crate) use unexpected_eoi;
 pub(crate) use unexpected_token;
+
+use crate::ast::AstSpan;

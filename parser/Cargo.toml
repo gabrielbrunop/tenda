@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 scanner = { path = "../scanner" }
 thiserror = { workspace = true }
+peekmore = { workspace = true }

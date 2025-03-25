@@ -28,7 +28,7 @@ impl Environment {
         match self.state.get_mut(&name) {
             Some(val) => match val {
                 StoredValue::Shared(val) => {
-                    *val.borrow_mut() = value.clone_value();
+                    *val.borrow_mut() = value.extract_value();
                 }
                 StoredValue::Unique(_) => {
                     self.state.insert(name, value);
@@ -40,15 +40,15 @@ impl Environment {
         }
     }
 
-    pub fn set_return(&mut self, value: StoredValue) {
+    pub fn set_return_value(&mut self, value: StoredValue) {
         self.return_value = Some(value);
     }
 
-    pub fn get_return(&self) -> Option<&StoredValue> {
+    pub fn get_return_value(&self) -> Option<&StoredValue> {
         self.return_value.as_ref()
     }
 
-    pub fn clear_return(&mut self) {
+    pub fn clear_return_value(&mut self) {
         self.return_value = None;
     }
 }
@@ -83,7 +83,7 @@ impl StoredValue {
         StoredValue::Shared(Rc::new(RefCell::new(value)))
     }
 
-    pub fn clone_value(&self) -> Value {
+    pub fn extract_value(&self) -> Value {
         match self {
             StoredValue::Unique(val) => val.clone(),
             StoredValue::Shared(val) => val.borrow().clone(),

@@ -22,12 +22,12 @@ impl Stack {
         }
     }
 
-    pub fn local_exists(&self, name: &String) -> bool {
-        self.get_innermost().has(name)
+    pub fn is_name_in_local_scope(&self, name: &String) -> bool {
+        self.get_innermost_scope().has(name)
     }
 
     pub fn define(&mut self, name: String, value: StoredValue) -> Result<()> {
-        let scope = self.get_innermost_mut();
+        let scope = self.get_innermost_scope_mut();
 
         if scope.has(&name) {
             return Err(StackError::AlreadyDeclared);
@@ -38,7 +38,7 @@ impl Stack {
         Ok(())
     }
 
-    pub fn set(&mut self, name: String, value: StoredValue) -> Result<()> {
+    pub fn assign(&mut self, name: String, value: StoredValue) -> Result<()> {
         let scope = self
             .scopes
             .iter_mut()
@@ -54,7 +54,7 @@ impl Stack {
         }
     }
 
-    pub fn find(&mut self, name: &String) -> Option<&StoredValue> {
+    pub fn lookup(&mut self, name: &String) -> Option<&StoredValue> {
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.get(name) {
                 return Some(var);
@@ -69,40 +69,42 @@ impl Stack {
     }
 
     pub fn pop(&mut self) {
-        if self.get_innermost().get_return().is_some() {
-            self.move_return_up();
+        if self.get_innermost_scope().get_return_value().is_some() {
+            self.shift_return_to_upper_scope();
         }
 
         self.scopes.pop();
     }
 
-    pub fn set_return(&mut self, value: StoredValue) {
-        self.get_innermost_mut().set_return(value);
+    pub fn set_return_value(&mut self, value: StoredValue) {
+        self.get_innermost_scope_mut().set_return_value(value);
     }
 
-    pub fn has_return(&self) -> bool {
-        self.get_innermost().get_return().is_some()
+    pub fn has_return_value(&self) -> bool {
+        self.get_innermost_scope().get_return_value().is_some()
     }
 
-    pub fn consume_return(&mut self) -> Option<StoredValue> {
-        let value = self.get_innermost().get_return().cloned();
-        self.get_innermost_mut().clear_return();
+    pub fn consume_return_value(&mut self) -> Option<StoredValue> {
+        let value = self.get_innermost_scope().get_return_value().cloned();
+
+        self.get_innermost_scope_mut().clear_return_value();
+
         value
     }
 
-    pub fn set_break(&mut self, value: bool) {
+    pub fn set_loop_break_flag(&mut self, value: bool) {
         self.has_break = value;
     }
 
-    pub fn has_break(&self) -> bool {
+    pub fn has_loop_break_flag(&self) -> bool {
         self.has_break
     }
 
-    pub fn set_continue(&mut self, value: bool) {
+    pub fn set_loop_continue_flag(&mut self, value: bool) {
         self.has_continue = value;
     }
 
-    pub fn has_continue(&self) -> bool {
+    pub fn has_loop_continue_flag(&self) -> bool {
         self.has_continue
     }
 
@@ -112,18 +114,18 @@ impl Stack {
 }
 
 impl Stack {
-    fn get_innermost(&self) -> &Environment {
+    fn get_innermost_scope(&self) -> &Environment {
         self.scopes.last().unwrap_or(&self.global)
     }
 
-    fn get_innermost_mut(&mut self) -> &mut Environment {
+    fn get_innermost_scope_mut(&mut self) -> &mut Environment {
         self.scopes.last_mut().unwrap_or(&mut self.global)
     }
 
-    fn move_return_up(&mut self) {
+    fn shift_return_to_upper_scope(&mut self) {
         let len = self.scopes.len();
 
-        let return_value = match self.get_innermost().get_return().cloned() {
+        let return_value = match self.get_innermost_scope().get_return_value().cloned() {
             Some(value) => value,
             None => return,
         };
@@ -136,7 +138,7 @@ impl Stack {
             None => return,
         };
 
-        scope_above.set_return(return_value.clone());
+        scope_above.set_return_value(return_value.clone());
     }
 }
 

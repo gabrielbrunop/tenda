@@ -37,8 +37,15 @@ fn main() -> io::Result<()> {
 
     if args.len() > 1 {
         let path = &args[1];
-        let code = std::fs::read_to_string(path)?;
-        run_source(code);
+        let file_content = std::fs::read_to_string(path);
+
+        match file_content {
+            Ok(code) => run_source(code),
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => eprintln!("Arquivo não encontrado: {}", path),
+                _ => eprintln!("Erro ao ler arquivo: {}", err),
+            },
+        }
 
         return Ok(());
     }

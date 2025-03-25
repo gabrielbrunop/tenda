@@ -1,20 +1,16 @@
-use crate::lexical_error;
 use crate::scanner_error::{LexicalError, LexicalErrorKind};
-use crate::token::{token, Literal, Token, TokenKind};
+use crate::source_iter::SourceIter;
+use crate::token::{Literal, Token, TokenKind};
 use std::char;
-use std::iter::Peekable;
-use std::str::Chars;
 
 pub struct Scanner<'a> {
-    source: Peekable<Chars<'a>>,
-    line: usize,
+    source: SourceIter<'a>,
 }
 
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Scanner<'a> {
         Scanner {
-            source: source.chars().peekable(),
-            line: 1,
+            source: SourceIter::new(source),
         }
     }
 
@@ -23,69 +19,8 @@ impl<'a> Scanner<'a> {
         let mut errors = Vec::new();
         let mut had_error = false;
 
-        macro_rules! ignore_char {
-            () => {
-                Ok(None)
-            };
-        }
-
         while let Some(c) = self.source.next() {
-            let token: Result<Option<Token>, LexicalError> = match c {
-                '\n' => {
-                    self.line += 1;
-                    match tokens.last() {
-                        Some(token) if token.kind != TokenKind::Newline => {
-                            token!(Newline, "\n", self.line - 1).into()
-                        }
-                        _ => ignore_char!(),
-                    }
-                }
-                c if c.is_whitespace() => Ok(None),
-                '(' => token!(LeftParen, "(", self.line).into(),
-                ')' => token!(RightParen, ")", self.line).into(),
-                '[' => token!(LeftBracket, "[", self.line).into(),
-                ']' => token!(RightBracket, "]", self.line).into(),
-                '{' => token!(LeftBrace, "{", self.line).into(),
-                '}' => token!(RightBrace, "}", self.line).into(),
-                ':' => token!(Colon, ":", self.line).into(),
-                '+' => token!(Plus, "+", self.line).into(),
-                '-' => token!(Minus, "-", self.line).into(),
-                '*' => token!(Star, "*", self.line).into(),
-                '^' => token!(Caret, "^", self.line).into(),
-                '%' => token!(Percent, "%", self.line).into(),
-                '=' => token!(EqualSign, "=", self.line).into(),
-                '"' => self.consume_string(c).map(Some),
-                ',' => token!(Comma, ",", self.line).into(),
-                '.' => token!(Dot, ".", self.line).into(),
-                '>' => match self.source.peek() {
-                    Some('=') => {
-                        self.source.next();
-                        token!(GreaterOrEqual, ">", self.line).into()
-                    }
-                    _ => token!(Greater, ">", self.line).into(),
-                },
-                '<' => match self.source.peek() {
-                    Some('=') => {
-                        self.source.next();
-                        token!(LessOrEqual, ">", self.line).into()
-                    }
-                    _ => token!(Less, ">", self.line).into(),
-                },
-                c if c.is_ascii_digit() => self.consume_number(c).map(Some),
-                c if c.is_alphabetic() || c == '_' => self.consume_identifier(c).map(Some),
-                '/' => match self.source.peek() {
-                    Some('/') => {
-                        self.consume_comment();
-                        ignore_char!()
-                    }
-                    Some('*') => {
-                        self.consume_multiline_comment();
-                        ignore_char!()
-                    }
-                    _ => token!(Slash, "/", self.line).into(),
-                },
-                _ => Err(lexical_error!(UnexpectedChar(c), self.line)),
-            };
+            let token = self.consume_token(c, tokens.last());
 
             match token {
                 Ok(Some(value)) => {
@@ -100,12 +35,87 @@ impl<'a> Scanner<'a> {
             };
         }
 
-        tokens.push(Token::eoi(self.line));
+        tokens.push(self.source.eof());
 
         if errors.is_empty() {
             Ok(tokens)
         } else {
             Err(errors)
+        }
+    }
+
+    fn consume_token(
+        &mut self,
+        char: char,
+        previous_token: Option<&Token>,
+    ) -> Result<Option<Token>, LexicalError> {
+        match char {
+            '\n' => match previous_token {
+                Some(token) if token.kind != TokenKind::Newline => {
+                    self.source.consume_token(TokenKind::Newline, "\n").into()
+                }
+                _ => {
+                    self.source.ignore_char();
+                    Ok(None)
+                }
+            },
+            c if c.is_whitespace() => Ok(None),
+            '(' => self.source.consume_token(TokenKind::LeftParen, "(").into(),
+            ')' => self.source.consume_token(TokenKind::RightParen, ")").into(),
+            '[' => self
+                .source
+                .consume_token(TokenKind::LeftBracket, "[")
+                .into(),
+            ']' => self
+                .source
+                .consume_token(TokenKind::RightBracket, "]")
+                .into(),
+            '{' => self.source.consume_token(TokenKind::LeftBrace, "{").into(),
+            '}' => self.source.consume_token(TokenKind::RightBrace, "}").into(),
+            ':' => self.source.consume_token(TokenKind::Colon, ":").into(),
+            '+' => self.source.consume_token(TokenKind::Plus, "+").into(),
+            '-' => self.source.consume_token(TokenKind::Minus, "-").into(),
+            '*' => self.source.consume_token(TokenKind::Star, "*").into(),
+            '^' => self.source.consume_token(TokenKind::Caret, "^").into(),
+            '%' => self.source.consume_token(TokenKind::Percent, "%").into(),
+            '=' => self.source.consume_token(TokenKind::EqualSign, "=").into(),
+            '"' => self.consume_string(char).map(Some),
+            ',' => self.source.consume_token(TokenKind::Comma, ",").into(),
+            '.' => self.source.consume_token(TokenKind::Dot, ".").into(),
+            '>' => match self.source.peek() {
+                Some('=') => {
+                    self.source.next();
+                    self.source
+                        .consume_token(TokenKind::GreaterOrEqual, ">")
+                        .into()
+                }
+                _ => self.source.consume_token(TokenKind::Greater, ">").into(),
+            },
+            '<' => match self.source.peek() {
+                Some('=') => {
+                    self.source.next();
+                    self.source
+                        .consume_token(TokenKind::LessOrEqual, ">")
+                        .into()
+                }
+                _ => self.source.consume_token(TokenKind::Less, ">").into(),
+            },
+            c if c.is_ascii_digit() => self.consume_number(c).map(Some),
+            c if c.is_alphabetic() || c == '_' => self.consume_identifier(c).map(Some),
+            '/' => match self.source.peek() {
+                Some('/') => {
+                    self.consume_comment();
+                    Ok(None)
+                }
+                Some('*') => {
+                    self.consume_multiline_comment();
+                    Ok(None)
+                }
+                _ => self.source.consume_token(TokenKind::Slash, "/").into(),
+            },
+            _ => Err(self
+                .source
+                .lexical_error(LexicalErrorKind::UnexpectedChar(char))),
         }
     }
 
@@ -120,7 +130,9 @@ impl<'a> Scanner<'a> {
                     break;
                 }
                 '\n' => {
-                    return Err(lexical_error!(UnexpectedStringEol, self.line));
+                    return Err(self
+                        .source
+                        .lexical_error(LexicalErrorKind::UnexpectedStringEol));
                 }
                 _ => {
                     string.push(peeked);
@@ -130,7 +142,12 @@ impl<'a> Scanner<'a> {
         }
 
         let string = string[1..].to_string();
-        let token = token!(String, &string, self.line, Literal::String(string));
+
+        let token = self.source.consume_token_with_literal(
+            TokenKind::String,
+            string.clone(),
+            Literal::String(string),
+        );
 
         Ok(token)
     }
@@ -146,7 +163,9 @@ impl<'a> Scanner<'a> {
 
             match peeked {
                 c if is_unexpected(c) => {
-                    return Err(lexical_error!(UnexpectedChar(c), self.line));
+                    return Err(self
+                        .source
+                        .lexical_error(LexicalErrorKind::UnexpectedChar(c)));
                 }
                 c if c.is_numeric() || c == '.' => {
                     if c == '.' {
@@ -164,11 +183,18 @@ impl<'a> Scanner<'a> {
             number.starts_with('0') && !number.starts_with("0.") && number != "0";
 
         if illegal_leading_zero {
-            return Err(lexical_error!(LeadingZeroNumberLiterals, self.line));
+            return Err(self
+                .source
+                .lexical_error(LexicalErrorKind::LeadingZeroNumberLiterals));
         }
 
         let number: f64 = number.parse().unwrap();
-        let token = token!(Number, &number, self.line, Literal::Number(number));
+
+        let token = self.source.consume_token_with_literal(
+            TokenKind::Number,
+            number.to_string(),
+            Literal::Number(number),
+        );
 
         Ok(token)
     }
@@ -188,46 +214,45 @@ impl<'a> Scanner<'a> {
         }
 
         let token = match identifier.as_str() {
-            Literal::TRUE_LITERAL => {
-                token!(
-                    True,
-                    Literal::TRUE_LITERAL,
-                    self.line,
-                    Literal::Boolean(true)
-                )
-            }
-            Literal::FALSE_LITERAL => token!(
-                False,
-                Literal::FALSE_LITERAL,
-                self.line,
-                Literal::Boolean(false)
+            Literal::TRUE_LITERAL => self.source.consume_token_with_literal(
+                TokenKind::True,
+                Literal::TRUE_LITERAL.to_string(),
+                Literal::Boolean(true),
             ),
-            Literal::NIL_LITERAL => token!(Nil, Literal::NIL_LITERAL, self.line, Literal::Nil),
-            "função" => token!(Function, "função", self.line),
-            "não" => token!(Not, "não", self.line),
-            "é" => token!(Equals, "é", self.line),
-            "seja" => token!(Let, "seja", self.line),
-            "se" => token!(If, "se", self.line),
-            "então" => token!(Then, "então", self.line),
-            "retorna" => token!(Return, "retorna", self.line),
-            "senão" => token!(Else, "senão", self.line),
-            "fim" => token!(BlockEnd, "fim", self.line),
-            "ou" => token!(Or, "ou", self.line),
-            "e" => token!(And, "e", self.line),
-            "até" => token!(Until, "até", self.line),
-            "para" => token!(For, "para", self.line),
-            "cada" => token!(Each, "cada", self.line),
-            "em" => token!(In, "em", self.line),
-            "tem" => token!(Has, "tem", self.line),
-            "enquanto" => token!(While, "enquanto", self.line),
-            "faça" => token!(Do, "faça", self.line),
-            "pare" => token!(Break, "pare", self.line),
-            "continue" => token!(Continue, "continue", self.line),
-            identifier => token!(
-                Identifier,
-                identifier,
-                self.line,
-                Literal::String(identifier.to_string())
+            Literal::FALSE_LITERAL => self.source.consume_token_with_literal(
+                TokenKind::False,
+                Literal::FALSE_LITERAL.to_string(),
+                Literal::Boolean(false),
+            ),
+            Literal::NIL_LITERAL => self.source.consume_token_with_literal(
+                TokenKind::Nil,
+                Literal::NIL_LITERAL.to_string(),
+                Literal::Nil,
+            ),
+            "função" => self.source.consume_token(TokenKind::Function, "função"),
+            "não" => self.source.consume_token(TokenKind::Not, "não"),
+            "é" => self.source.consume_token(TokenKind::Equals, "é"),
+            "seja" => self.source.consume_token(TokenKind::Let, "seja"),
+            "se" => self.source.consume_token(TokenKind::If, "se"),
+            "então" => self.source.consume_token(TokenKind::Then, "então"),
+            "retorna" => self.source.consume_token(TokenKind::Return, "retorna"),
+            "senão" => self.source.consume_token(TokenKind::Else, "senão"),
+            "fim" => self.source.consume_token(TokenKind::BlockEnd, "fim"),
+            "ou" => self.source.consume_token(TokenKind::Or, "ou"),
+            "e" => self.source.consume_token(TokenKind::And, "e"),
+            "até" => self.source.consume_token(TokenKind::Until, "até"),
+            "para" => self.source.consume_token(TokenKind::For, "para"),
+            "cada" => self.source.consume_token(TokenKind::Each, "cada"),
+            "em" => self.source.consume_token(TokenKind::In, "em"),
+            "tem" => self.source.consume_token(TokenKind::Has, "tem"),
+            "enquanto" => self.source.consume_token(TokenKind::While, "enquanto"),
+            "faça" => self.source.consume_token(TokenKind::Do, "faça"),
+            "pare" => self.source.consume_token(TokenKind::Break, "pare"),
+            "continue" => self.source.consume_token(TokenKind::Continue, "continue"),
+            identifier => self.source.consume_token_with_literal(
+                TokenKind::Identifier,
+                identifier.to_string(),
+                Literal::String(identifier.to_string()),
             ),
         };
 
@@ -242,6 +267,8 @@ impl<'a> Scanner<'a> {
 
             self.source.next();
         }
+
+        self.source.ignore_char();
     }
 
     fn consume_multiline_comment(&mut self) {
@@ -250,6 +277,8 @@ impl<'a> Scanner<'a> {
                 break;
             }
         }
+
+        self.source.ignore_char();
     }
 }
 
