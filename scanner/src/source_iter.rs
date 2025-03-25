@@ -69,7 +69,7 @@ impl<'a> SourceIter<'a> {
     }
 }
 
-impl<'a> Iterator for SourceIter<'a> {
+impl Iterator for SourceIter<'_> {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
