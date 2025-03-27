@@ -14,7 +14,7 @@ struct BlockValidator;
 impl Validator for BlockValidator {
     fn validate(&self, input: &str) -> ValidationResult {
         let tokens = Scanner::new(input).scan().unwrap();
-        let mut parser = Parser::new(&tokens);
+        let mut parser = Parser::new(&tokens, None);
 
         match parser.parse() {
             Ok(_) => ValidationResult::Complete,
@@ -40,7 +40,7 @@ fn main() -> io::Result<()> {
         let file_content = std::fs::read_to_string(path);
 
         match file_content {
-            Ok(code) => run_source(code),
+            Ok(code) => run_source(code, path.to_string()),
             Err(err) => match err.kind() {
                 std::io::ErrorKind::NotFound => eprintln!("Arquivo não encontrado: {}", path),
                 _ => eprintln!("Erro ao ler arquivo: {}", err),
@@ -60,7 +60,7 @@ fn main() -> io::Result<()> {
 
     let mut buffer = String::new();
     stdin.read_to_string(&mut buffer)?;
-    run_source(buffer);
+    run_source(buffer, "stdin".to_string());
 
     Ok(())
 }
@@ -82,17 +82,25 @@ fn start_repl() {
     let platform = Platform;
     let mut runtime = Runtime::new(platform);
     let mut exiting = false;
+    let mut count = 0;
 
     loop {
         let sig = rl.read_line(&prompt);
+
         match sig {
             Ok(Signal::Success(line)) if line.trim() == ".sair" => break,
             Ok(Signal::Success(line)) => {
                 exiting = false;
 
-                let output = runtime.run(line);
+                let input_name = format!("(entrada #{})", count);
+                let output = runtime.run(line, input_name);
 
-                println!("{}", output.unwrap_or_else(|err| err));
+                count += 1;
+
+                match output {
+                    Ok(output) => println!("{}", output),
+                    Err(err) => err.print_to_stderr(),
+                }
             }
             Ok(Signal::CtrlC) if exiting => break,
             Ok(Signal::CtrlC) => {
@@ -113,13 +121,13 @@ fn start_repl() {
     }
 }
 
-fn run_source(source: String) {
+fn run_source(source: String, name: String) {
     let platform = Platform;
     let mut runtime = Runtime::new(platform);
-    let output = runtime.run(source);
+    let output = runtime.run(source, name);
 
     if let Err(err) = output {
-        eprintln!("{}", err)
+        err.print_to_stderr();
     };
 }
 

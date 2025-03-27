@@ -2,6 +2,7 @@ pub mod associative_array;
 pub mod builtins;
 pub mod date;
 pub mod environment;
+pub mod frame;
 pub mod function;
 pub mod interpreter;
 pub mod platform;

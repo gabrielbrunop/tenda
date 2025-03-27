@@ -1,10 +1,10 @@
 use crate::date::Date;
 use crate::environment::StoredValue;
 use crate::function::{params, Function};
-use crate::platform;
-use crate::runtime_error::{runtime_err, type_err, Result, RuntimeErrorKind};
+use crate::runtime_error::RuntimeError;
 use crate::stack::Stack;
 use crate::value::Value;
+use crate::{platform, value};
 
 macro_rules! global {
     ($stack:ident, $builtin:expr) => {{
@@ -56,14 +56,12 @@ macro_rules! builtin_fn {
         Value::Function(Function::new_builtin(
             params![$($param),*],
             $body,
-            None,
         ))
     };
     ($body:expr) => {
         Value::Function(Function::new_builtin(
             Vec::new(),
             $body,
-            None,
         ))
     };
 }
@@ -100,9 +98,21 @@ macro_rules! success_object {
 
 macro_rules! ensure {
     ($val:expr, $variant:ident($binding:pat) => $body:expr) => {{
+        use crate::runtime_error::RuntimeError;
+        use crate::value::Value;
+        use crate::value::ValueType;
+
         match $val {
             Value::$variant($binding) => $body,
-            value => return type_err!($variant, value.kind()),
+            value => {
+                return Err(Box::new(RuntimeError::UnexpectedTypeError {
+                    expected: ValueType::$variant,
+                    found: value.kind(),
+                    source_code: None,
+                    span: None,
+                    help: None,
+                }))
+            }
         }
     }};
 }
@@ -229,7 +239,12 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                 let index = ensure!(args!(args, 1), Number(value) => *value as usize);
 
                 if list.len() <= index {
-                    return runtime_err!(IndexOutOfBounds { index, len: list.len() });
+                    return Err(Box::new(RuntimeError::IndexOutOfBounds {
+                        index,
+                        len: list.len(),
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 let element = list.remove(index);
@@ -241,7 +256,12 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                 let index = ensure!(args!(args, 1), Number(value) => *value as usize);
 
                 if list.len() <= index {
-                    return runtime_err!(IndexOutOfBounds { index, len: list.len() });
+                    return Err(Box::new(RuntimeError::IndexOutOfBounds {
+                        index,
+                        len: list.len(),
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 Ok(list[index].clone())
@@ -277,11 +297,20 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                 let end = ensure!(args!(args, 2), Number(value) => *value as usize);
 
                 if start > end {
-                    return runtime_err!(InvalidRangeBounds { bound: end as f64 });
+                    return Err(Box::new(RuntimeError::InvalidRangeBounds {
+                        bound: end as f64,
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 if end >= list.len() {
-                    return runtime_err!(IndexOutOfBounds { index: end, len: list.len() });
+                    return Err(Box::new(RuntimeError::IndexOutOfBounds {
+                        index: end,
+                        len: list.len(),
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 let extracted = list[start..=end].to_vec();
@@ -294,15 +323,9 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 for (i, value) in list.iter().enumerate() {
                     let i = Value::Number(i as f64);
-                    let args = vec![value, &i].into_iter();
-                    let params = function
-                        .get_params()
-                        .iter()
-                        .zip(args)
-                        .map(|(param_name, arg_value)| (param_name.clone(), arg_value.clone()))
-                        .collect();
+                    let args = vec![value.clone(), i];
 
-                    function.call(params, interpreter)?;
+                    interpreter.call_function(function.clone(), args, None)?;
                 }
 
                 Ok(Value::Nil)
@@ -310,7 +333,13 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
             "de_intervalo" => builtin_fn!(["intervalo"], |args, _, _| {
                 let (from, to) = match args!(args, 0) {
                     Value::Range(from, start) => (from, start),
-                    value => return type_err!(Range, value.kind()),
+                    value => return Err(Box::new(RuntimeError::UnexpectedTypeError {
+                        expected: value::ValueType::Range,
+                        found: value.kind(),
+                        source_code: None,
+                        span: None,
+                        help: None,
+                    }))
                 };
 
                 let list = (*from as i64..=*to as i64)
@@ -323,23 +352,16 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let function = ensure!(args!(args, 1), Function(function) => function);
 
-                let transformed: Result<Vec<Value>> = list.iter().try_fold(Vec::new(), |mut acc, value| {
-                    let args = vec![value].into_iter();
-                    let params = function
-                        .get_params()
-                        .iter()
-                        .zip(args)
-                        .map(|(param_name, arg_value)| (param_name.clone(), arg_value.clone()))
-                        .collect();
+                let mut new_list = vec![];
 
-                    let result = function.call(params, interpreter)?;
+                for value in list.iter() {
+                    let args = vec![value.clone()];
+                    let result = interpreter.call_function(function.clone(), args, None)?;
 
-                    acc.push(result);
+                    new_list.push(result);
+                }
 
-                    Ok(acc)
-                });
-
-                Ok(Value::List(Rc::new(RefCell::new(transformed?))))
+                Ok(Value::List(Rc::new(RefCell::new(new_list))))
             })
         })
     );
@@ -561,9 +583,11 @@ fn setup_math_global_bindings(stack: &mut Stack) {
                 let int_n = n as i64;
 
                 if n < 0.0 || (n - int_n as f64).abs() > f64::EPSILON {
-                    return runtime_err!(InvalidArgument {
-                        value: Value::Number(n)
-                    });
+                    return Err(Box::new(RuntimeError::InvalidArgument {
+                        value: Value::Number(n),
+                        source_code: None,
+                        span: None,
+                    }));
                 }
 
                 let mut result = 1f64;
@@ -598,10 +622,12 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                 let len = ensure!(args!(args, 2), Number(value) => *value as usize);
 
                 if start >= text.len() {
-                    return runtime_err!(IndexOutOfBounds {
+                    return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: start,
-                        len: text.len()
-                    });
+                        len: text.len(),
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 Ok(Value::String(text[start..start + len].to_string()))
@@ -677,14 +703,20 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                 let end = ensure!(args!(args, 2), Number(value) => *value as usize);
 
                 if start > end {
-                    return runtime_err!(InvalidRangeBounds { bound: end as f64 });
+                    return Err(Box::new(RuntimeError::InvalidRangeBounds {
+                        bound: end as f64,
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 if end >= text.len() {
-                    return runtime_err!(IndexOutOfBounds {
+                    return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: end,
-                        len: text.len()
-                    });
+                        len: text.len(),
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 Ok(Value::String(text[start..=end].to_string()))
@@ -700,10 +732,12 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                 let len = ensure!(args!(args, 2), Number(value) => *value as usize);
 
                 if start >= text.len() {
-                    return runtime_err!(IndexOutOfBounds {
+                    return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: start,
-                        len: text.len()
-                    });
+                        len: text.len(),
+                        source_code: None,
+                        span: None
+                    }));
                 }
 
                 Ok(Value::String(
@@ -909,7 +943,7 @@ fn setup_date_global_bindings(stack: &mut Stack) {
 
                  match Date::from_iso_string(text) {
                     Ok(date) => Ok(Value::Date(date)),
-                    Err(kind) => Ok(date_error_to_error_object(kind.source))
+                    Err(kind) => Ok(date_error_to_error_object(*kind))
                 }
             }),
             "de_timestamp" => builtin_fn!(["número"], |args, _, _| {
@@ -917,7 +951,7 @@ fn setup_date_global_bindings(stack: &mut Stack) {
 
                 match Date::from_timestamp_millis(timestamp, None) {
                     Ok(date) => Ok(Value::Date(date)),
-                    Err(kind) => Ok(date_error_to_error_object(kind.source))
+                    Err(kind) => Ok(date_error_to_error_object(*kind))
                 }
             }),
             "com_região" => builtin_fn!(["data", "região"], |args, _, _| {
@@ -926,7 +960,7 @@ fn setup_date_global_bindings(stack: &mut Stack) {
 
                 match date.with_named_timezone(offset) {
                     Ok(date) => Ok(Value::Date(date)),
-                    Err(kind) => Ok(date_error_to_error_object(kind.source))
+                    Err(kind) => Ok(date_error_to_error_object(*kind))
                 }
             }),
             "desvio_fuso_horário" => builtin_fn!(["data"], |args, _, _| {
@@ -994,8 +1028,8 @@ fn io_error_to_error_object(kind: platform::FileErrorKind) -> Value {
     }
 }
 
-fn date_error_to_error_object(kind: RuntimeErrorKind) -> Value {
-    use RuntimeErrorKind::*;
+fn date_error_to_error_object(kind: RuntimeError) -> Value {
+    use RuntimeError::*;
 
     match kind {
         InvalidTimestamp { .. } => error_object!("TIMESTAMP_INVÁLIDO"),

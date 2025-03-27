@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use scanner::token::{self, Token, TokenKind};
 
 use crate::{
@@ -13,14 +15,17 @@ pub struct Parser<'a> {
     tokens: TokenIterator<'a>,
     scope: ScopeTracker,
     uid_counter: usize,
+    source: Rc<ast::NamedSource>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(source: &'a [Token]) -> Parser<'a> {
+    pub fn new(stream: &'a [Token], source: Option<Rc<ast::NamedSource>>) -> Parser<'a> {
         Parser {
-            tokens: source.into(),
+            tokens: stream.into(),
             scope: ScopeTracker::new(),
             uid_counter: 0,
+            source: source
+                .unwrap_or_else(|| Rc::new(ast::NamedSource::new("".to_string(), "".to_string()))),
         }
     }
 
@@ -138,7 +143,7 @@ impl<'a> Parser<'a> {
         }?;
 
         let span_end = end_token.span.end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let block_stmt = ast::Block::new(stmt_list.into(), span);
         let block_stmt = ast::Stmt::Block(block_stmt);
@@ -173,7 +178,7 @@ impl<'a> Parser<'a> {
                 else_branch.get_span().end
             });
 
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
         let stmt = ast::Cond::new(condition, then_branch, else_branch, span);
 
         Ok(ast::Stmt::Cond(stmt))
@@ -191,7 +196,7 @@ impl<'a> Parser<'a> {
         let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
 
         let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let while_stmt = ast::While::new(condition, body, span);
         let while_stmt = ast::Stmt::While(while_stmt);
@@ -219,7 +224,7 @@ impl<'a> Parser<'a> {
         let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
 
         let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let for_each_item = ast::ForEachItem::new(name, self.gen_uid(), name_span);
         let for_each_stmt = ast::ForEach::new(for_each_item, iterable, body, span);
@@ -237,7 +242,7 @@ impl<'a> Parser<'a> {
             self.parse_block_contents(token_vec![BlockEnd], BlockScope::Function, None)?;
 
         let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let function_decl = ast::FunctionDecl::new(name, parameters, body, self.gen_uid(), span);
         let function_decl = ast::Decl::Function(function_decl);
@@ -255,7 +260,7 @@ impl<'a> Parser<'a> {
         let expr = self.parse_expression()?;
 
         let span_end = expr.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let local_decl = ast::LocalDecl::new(name, expr, self.gen_uid(), span);
         let local_decl = ast::Decl::Local(local_decl);
@@ -279,7 +284,7 @@ impl<'a> Parser<'a> {
         let span_end = expr
             .as_ref()
             .map_or(return_token.span.end, |expr| expr.get_span().end);
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let return_stmt = ast::Return::new(expr, span);
 
@@ -293,7 +298,7 @@ impl<'a> Parser<'a> {
             return Err(vec![parser_err!(IllegalBreak, break_token.span)]);
         }
 
-        let break_stmt = ast::Break::new(break_token.span.into());
+        let break_stmt = ast::Break::new(AstSpan::from_token(break_token, self.source.clone()));
         let break_stmt = ast::Stmt::Break(break_stmt);
 
         Ok(break_stmt)
@@ -306,7 +311,8 @@ impl<'a> Parser<'a> {
             return Err(vec![parser_err!(IllegalContinue, continue_token.span)]);
         }
 
-        let continue_stmt = ast::Continue::new(continue_token.span.into());
+        let continue_stmt =
+            ast::Continue::new(AstSpan::from_token(continue_token, self.source.clone()));
         let continue_stmt = ast::Stmt::Continue(continue_stmt);
 
         Ok(continue_stmt)
@@ -328,7 +334,7 @@ impl<'a> Parser<'a> {
                 ast::Expr::Variable(_) | ast::Expr::Access(_) => {
                     let span_start = expr.get_span().start;
                     let span_end = value.get_span().end;
-                    let span = ast::AstSpan::new(span_start, span_end);
+                    let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
                     let assign_expr = ast::Assign::new(expr, value, span);
                     let assign_expr = ast::Expr::Assign(assign_expr);
@@ -354,7 +360,7 @@ impl<'a> Parser<'a> {
 
             let span_start = lhs.get_span().start;
             let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end);
+            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -396,7 +402,7 @@ impl<'a> Parser<'a> {
 
                 let span_start = lhs.get_span().start;
                 let span_end = rhs.get_span().end;
-                let span = ast::AstSpan::new(span_start, span_end);
+                let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
                 let binary_op = ast::BinaryOp::new(lhs, op, rhs, span);
 
@@ -421,7 +427,7 @@ impl<'a> Parser<'a> {
 
             let span_start = lhs.get_span().start;
             let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end);
+            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -439,7 +445,7 @@ impl<'a> Parser<'a> {
 
             let span_start = lhs.get_span().start;
             let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end);
+            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -458,7 +464,7 @@ impl<'a> Parser<'a> {
 
             let span_start = lhs.get_span().start;
             let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end);
+            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -480,7 +486,7 @@ impl<'a> Parser<'a> {
 
             let span_start = lhs.get_span().start;
             let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end);
+            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -499,7 +505,7 @@ impl<'a> Parser<'a> {
 
             let span_start = lhs.get_span().start;
             let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end);
+            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -515,7 +521,7 @@ impl<'a> Parser<'a> {
 
             let span_start = op.span.start;
             let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end);
+            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
             let unary_op = ast::UnaryOp::new(op.into(), rhs, span);
 
@@ -568,7 +574,7 @@ impl<'a> Parser<'a> {
 
         let span_start = name.get_span().start;
         let span_end = right_paran.span.end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let call_expr = ast::Call::new(name, arguments, span);
         let call_expr = ast::Expr::Call(call_expr);
@@ -592,7 +598,7 @@ impl<'a> Parser<'a> {
 
         let span_start = name.get_span().start;
         let span_end = closing_bracket.span.end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let access_expr = ast::Access::new(name, index, span);
         let access_expr = ast::Expr::Access(access_expr);
@@ -608,7 +614,7 @@ impl<'a> Parser<'a> {
             _ => unreachable!(),
         };
 
-        let span: ast::AstSpan = token.span.into();
+        let span = ast::AstSpan::from_token(token, self.source.clone());
 
         match token.kind {
             Number | True | False | String | Nil => self.parse_literal(),
@@ -631,8 +637,11 @@ impl<'a> Parser<'a> {
     fn parse_literal(&mut self) -> Result<ast::Expr> {
         let token = self.tokens.next().unwrap();
 
-        let literal_expr =
-            ast::Literal::new(token.literal.as_ref().unwrap().clone(), token.span.into());
+        let literal_expr = ast::Literal::new(
+            token.literal.as_ref().unwrap().clone(),
+            ast::AstSpan::from_token(token, self.source.clone()),
+        );
+
         let literal_expr = ast::Expr::Literal(literal_expr);
 
         Ok(literal_expr)
@@ -640,7 +649,7 @@ impl<'a> Parser<'a> {
 
     fn parse_variable(&mut self) -> Result<ast::Expr> {
         let token = self.tokens.next().unwrap();
-        let span: ast::AstSpan = token.span.into();
+        let span = ast::AstSpan::from_token(token, self.source.clone());
 
         let name = match token.literal.as_ref().unwrap() {
             token::Literal::String(string) => string,
@@ -672,7 +681,7 @@ impl<'a> Parser<'a> {
 
         let span_start = token.span.start;
         let span_end = closing_paren.span.end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let grouping_expr = ast::Grouping::new(expr, span);
         let grouping_expr = ast::Expr::Grouping(grouping_expr);
@@ -689,7 +698,7 @@ impl<'a> Parser<'a> {
 
         let span_start = function_token.span.start;
         let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let function_expr = ast::AnonymousFunction::new(parameters, body, self.gen_uid(), span);
         let function_expr = ast::Expr::AnonymousFunction(function_expr);
@@ -791,7 +800,7 @@ impl<'a> Parser<'a> {
         };
 
         let span_end = closing_bracket.span.end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let elements = elements.into_iter().collect();
         let list_expr = ast::List::new(elements, span);
@@ -807,9 +816,10 @@ impl<'a> Parser<'a> {
         if !self.tokens.is_next_token(TokenKind::RightBrace) {
             loop {
                 let key = match self.tokens.consume_one_of(token_stream![Number, String]) {
-                    Some(token) => {
-                        ast::Literal::new(token.literal.clone().unwrap(), token.span.into())
-                    }
+                    Some(token) => ast::Literal::new(
+                        token.literal.clone().unwrap(),
+                        ast::AstSpan::from_token(&token, self.source.clone()),
+                    ),
                     None => return Err(vec![unexpected_token!(self.tokens.next().unwrap())]),
                 };
 
@@ -843,7 +853,7 @@ impl<'a> Parser<'a> {
         };
 
         let span_end = closing_brace.span.end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let elements = elements.into_iter().collect();
         let associative_array_expr = ast::AssociativeArray::new(elements, span);
@@ -861,7 +871,7 @@ impl<'a> Parser<'a> {
 
         let span_start = name.get_span().start;
         let span_end = index_expr.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end);
+        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
 
         let access_expr = ast::Access::new(name, index_expr, span);
         let mut access_expr = ast::Expr::Access(access_expr);
@@ -896,7 +906,10 @@ impl Parser<'_> {
         match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Identifier => {
                 match token.literal.as_ref().unwrap() {
-                    token::Literal::String(string) => Ok((string.to_string(), token.span.into())),
+                    token::Literal::String(string) => Ok((
+                        string.to_string(),
+                        ast::AstSpan::from_token(token, self.source.clone()),
+                    )),
                     _ => unreachable!(),
                 }
             }

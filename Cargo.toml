@@ -5,3 +5,4 @@ resolver = "2"
 [workspace.dependencies]
 peekmore = "1.3.0"
 thiserror = "1.0"
+miette = "7.5.0"
