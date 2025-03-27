@@ -74,7 +74,7 @@ impl Display for Value {
                 String(value) => format!("\"{}\"", value),
                 Function(value) => format!(
                     "<função {}({})>",
-                    value.get_fn_ptr(),
+                    value.id,
                     value
                         .get_params()
                         .iter()

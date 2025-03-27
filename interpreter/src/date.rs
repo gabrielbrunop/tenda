@@ -4,7 +4,7 @@ use chrono::{
 use chrono_tz::Tz;
 use std::ops::{Add, Sub};
 
-use crate::runtime_error::{runtime_err, RuntimeError};
+use crate::runtime_error::RuntimeError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Date {
@@ -13,7 +13,7 @@ pub struct Date {
 }
 
 impl Date {
-    pub fn from_timestamp_millis(ts: i64, tz: Option<i32>) -> Result<Self, RuntimeError> {
+    pub fn from_timestamp_millis(ts: i64, tz: Option<i32>) -> Result<Self, Box<RuntimeError>> {
         let tz = tz.map(|offset| FixedOffset::east_opt(offset).unwrap());
 
         match Utc.timestamp_millis_opt(ts) {
@@ -21,14 +21,24 @@ impl Date {
                 ts,
                 tz: tz.unwrap_or(FixedOffset::east_opt(0).unwrap()),
             }),
-            _ => runtime_err!(InvalidTimestamp { timestamp: ts }),
+            _ => Err(Box::new(RuntimeError::InvalidTimestamp {
+                timestamp: ts,
+                source_code: None,
+                span: None,
+            })),
         }
     }
 
-    pub fn from_iso_string(s: &str) -> Result<Self, RuntimeError> {
+    pub fn from_iso_string(s: &str) -> Result<Self, Box<RuntimeError>> {
         let fixed_dt = match chrono::DateTime::parse_from_rfc3339(s) {
             Ok(dt) => dt,
-            Err(e) => return runtime_err!(DateIsoParseError(e)),
+            Err(e) => {
+                return Err(Box::new(RuntimeError::DateIsoParseError {
+                    source: e,
+                    source_code: None,
+                    span: None,
+                }))
+            }
         };
 
         let utc_ts = fixed_dt.with_timezone(&Utc).timestamp_millis();
@@ -40,13 +50,15 @@ impl Date {
         })
     }
 
-    pub fn with_named_timezone(&self, tz_str: &str) -> Result<Self, RuntimeError> {
+    pub fn with_named_timezone(&self, tz_str: &str) -> Result<Self, Box<RuntimeError>> {
         let named_zone = match tz_str.parse::<Tz>() {
             Ok(z) => z,
             Err(_) => {
-                return runtime_err!(InvalidTimeZoneString {
-                    tz_str: tz_str.into()
-                })
+                return Err(Box::new(RuntimeError::InvalidTimeZoneString {
+                    tz_str: tz_str.into(),
+                    source_code: None,
+                    span: None,
+                }));
             }
         };
 

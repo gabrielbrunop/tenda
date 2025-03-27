@@ -1,13 +1,13 @@
 use thiserror::Error;
 
-use crate::environment::{Environment, StoredValue};
+use crate::{environment::StoredValue, frame::Frame};
 
 type Result<T> = std::result::Result<T, StackError>;
 
 #[derive(Debug)]
 pub struct Stack {
-    global: Environment,
-    scopes: Vec<Environment>,
+    global: Frame,
+    frame: Vec<Frame>,
     has_break: bool,
     has_continue: bool,
 }
@@ -15,39 +15,39 @@ pub struct Stack {
 impl Stack {
     pub fn new() -> Self {
         Stack {
-            global: Environment::new(),
-            scopes: vec![],
+            global: Frame::new(),
+            frame: vec![],
             has_break: false,
             has_continue: false,
         }
     }
 
     pub fn is_name_in_local_scope(&self, name: &String) -> bool {
-        self.get_innermost_scope().has(name)
+        self.get_innermost_frame().env.has(name)
     }
 
     pub fn define(&mut self, name: String, value: StoredValue) -> Result<()> {
         let scope = self.get_innermost_scope_mut();
 
-        if scope.has(&name) {
+        if scope.env.has(&name) {
             return Err(StackError::AlreadyDeclared);
         }
 
-        scope.set(name, value);
+        scope.env.set(name, value);
 
         Ok(())
     }
 
     pub fn assign(&mut self, name: String, value: StoredValue) -> Result<()> {
-        let scope = self
-            .scopes
+        let frame = self
+            .frame
             .iter_mut()
             .rev()
-            .find(|scope| scope.has(&name))
+            .find(|frame| frame.env.has(&name))
             .unwrap_or(&mut self.global);
 
-        if scope.has(&name) {
-            scope.set(name, value);
+        if frame.env.has(&name) {
+            frame.env.set(name, value);
             Ok(())
         } else {
             Err(StackError::AssignToUndefined(name))
@@ -55,25 +55,25 @@ impl Stack {
     }
 
     pub fn lookup(&mut self, name: &String) -> Option<&StoredValue> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(var) = scope.get(name) {
+        for frame in self.frame.iter().rev() {
+            if let Some(var) = frame.env.get(name) {
                 return Some(var);
             }
         }
 
-        self.global.get(name)
+        self.global.env.get(name)
     }
 
-    pub fn push(&mut self, environment: Environment) {
-        self.scopes.push(environment);
+    pub fn push(&mut self, frame: Frame) {
+        self.frame.push(frame);
     }
 
     pub fn pop(&mut self) {
-        if self.get_innermost_scope().get_return_value().is_some() {
-            self.shift_return_to_upper_scope();
+        if self.get_innermost_frame().get_return_value().is_some() {
+            self.shift_return_to_upper_frame();
         }
 
-        self.scopes.pop();
+        self.frame.pop();
     }
 
     pub fn set_return_value(&mut self, value: StoredValue) {
@@ -81,11 +81,11 @@ impl Stack {
     }
 
     pub fn has_return_value(&self) -> bool {
-        self.get_innermost_scope().get_return_value().is_some()
+        self.get_innermost_frame().get_return_value().is_some()
     }
 
     pub fn consume_return_value(&mut self) -> Option<StoredValue> {
-        let value = self.get_innermost_scope().get_return_value().cloned();
+        let value = self.get_innermost_frame().get_return_value().cloned();
 
         self.get_innermost_scope_mut().clear_return_value();
 
@@ -108,24 +108,24 @@ impl Stack {
         self.has_continue
     }
 
-    pub fn global(&self) -> &Environment {
+    pub fn global(&self) -> &Frame {
         &self.global
     }
 }
 
 impl Stack {
-    fn get_innermost_scope(&self) -> &Environment {
-        self.scopes.last().unwrap_or(&self.global)
+    fn get_innermost_frame(&self) -> &Frame {
+        self.frame.last().unwrap_or(&self.global)
     }
 
-    fn get_innermost_scope_mut(&mut self) -> &mut Environment {
-        self.scopes.last_mut().unwrap_or(&mut self.global)
+    fn get_innermost_scope_mut(&mut self) -> &mut Frame {
+        self.frame.last_mut().unwrap_or(&mut self.global)
     }
 
-    fn shift_return_to_upper_scope(&mut self) {
-        let len = self.scopes.len();
+    fn shift_return_to_upper_frame(&mut self) {
+        let len = self.frame.len();
 
-        let return_value = match self.get_innermost_scope().get_return_value().cloned() {
+        let return_value = match self.get_innermost_frame().get_return_value().cloned() {
             Some(value) => value,
             None => return,
         };
@@ -133,7 +133,7 @@ impl Stack {
         let last_index = len - 1;
         let decremented_index = last_index - 1;
 
-        let scope_above = match self.scopes.get_mut(decremented_index) {
+        let scope_above = match self.frame.get_mut(decremented_index) {
             Some(scope) => scope,
             None => return,
         };
@@ -143,14 +143,14 @@ impl Stack {
 }
 
 impl<'a> IntoIterator for &'a Stack {
-    type Item = &'a Environment;
-    type IntoIter = std::vec::IntoIter<&'a Environment>;
+    type Item = &'a Frame;
+    type IntoIter = std::vec::IntoIter<&'a Frame>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let mut scopes: Vec<&Environment> = Vec::with_capacity(self.scopes.len() + 1);
-        scopes.push(&self.global);
-        scopes.extend(self.scopes.iter());
-        scopes.into_iter()
+        let mut frames: Vec<&Frame> = Vec::with_capacity(self.frame.len() + 1);
+        frames.push(&self.global);
+        frames.extend(self.frame.iter());
+        frames.into_iter()
     }
 }
 

@@ -1,23 +1,60 @@
-use scanner::token::{Token, TokenKind, TokenSpan};
+use std::rc::Rc;
+
+use scanner::token::{Token, TokenKind};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AstSpan {
     pub start: usize,
     pub end: usize,
+    pub source: Rc<NamedSource>,
 }
 
 impl AstSpan {
-    pub fn new(start: usize, end: usize) -> Self {
-        AstSpan { start, end }
+    pub fn new(start: usize, end: usize, source: Rc<NamedSource>) -> Self {
+        AstSpan { start, end, source }
+    }
+
+    pub fn from_token(token: &Token, source: Rc<NamedSource>) -> Self {
+        AstSpan {
+            start: token.span.start,
+            end: token.span.end,
+            source,
+        }
     }
 }
 
-impl From<TokenSpan> for AstSpan {
-    fn from(span: TokenSpan) -> Self {
-        AstSpan {
-            start: span.start,
-            end: span.end,
-        }
+impl From<&AstSpan> for miette::SourceSpan {
+    fn from(val: &AstSpan) -> Self {
+        let length = val.end - val.start;
+        miette::SourceSpan::new(val.start.into(), length)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct NamedSource {
+    pub name: String,
+    pub source: String,
+}
+
+impl NamedSource {
+    pub fn new(name: String, source: String) -> Self {
+        NamedSource { name, source }
+    }
+}
+
+impl From<NamedSource> for miette::NamedSource<String> {
+    fn from(val: NamedSource) -> Self {
+        miette::NamedSource::new(val.name, val.source)
+    }
+}
+
+pub trait RcNamedSourceExt {
+    fn as_optional(&self) -> Option<NamedSource>;
+}
+
+impl RcNamedSourceExt for Rc<NamedSource> {
+    fn as_optional(&self) -> Option<NamedSource> {
+        Some(self.as_ref().clone())
     }
 }
 
@@ -48,11 +85,19 @@ impl IntoIterator for Ast {
 impl From<Vec<Stmt>> for Ast {
     fn from(value: Vec<Stmt>) -> Self {
         let span = if value.is_empty() {
-            AstSpan { start: 0, end: 0 }
+            AstSpan {
+                start: 0,
+                end: 0,
+                source: Rc::new(NamedSource {
+                    name: "".to_string(),
+                    source: "".to_string(),
+                }),
+            }
         } else {
             AstSpan {
                 start: value[0].get_span().start,
                 end: value[value.len() - 1].get_span().end,
+                source: value[0].get_span().source.clone(),
             }
         };
 

@@ -7,3 +7,4 @@ edition = "2021"
 scanner = { path = "../scanner" }
 thiserror = { workspace = true }
 peekmore = { workspace = true }
+miette = { workspace = true }

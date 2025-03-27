@@ -5,14 +5,12 @@ use super::value::Value;
 #[derive(Debug, Clone)]
 pub struct Environment {
     state: HashMap<String, StoredValue>,
-    return_value: Option<StoredValue>,
 }
 
 impl Environment {
     pub fn new() -> Self {
         Environment {
             state: HashMap::new(),
-            return_value: None,
         }
     }
 
@@ -38,18 +36,6 @@ impl Environment {
                 self.state.insert(name, value);
             }
         }
-    }
-
-    pub fn set_return_value(&mut self, value: StoredValue) {
-        self.return_value = Some(value);
-    }
-
-    pub fn get_return_value(&self) -> Option<&StoredValue> {
-        self.return_value.as_ref()
-    }
-
-    pub fn clear_return_value(&mut self) {
-        self.return_value = None;
     }
 }
 
