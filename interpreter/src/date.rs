@@ -23,7 +23,6 @@ impl Date {
             }),
             _ => Err(Box::new(RuntimeError::InvalidTimestamp {
                 timestamp: ts,
-                source_code: None,
                 span: None,
             })),
         }
@@ -35,7 +34,6 @@ impl Date {
             Err(e) => {
                 return Err(Box::new(RuntimeError::DateIsoParseError {
                     source: e,
-                    source_code: None,
                     span: None,
                 }))
             }
@@ -56,7 +54,6 @@ impl Date {
             Err(_) => {
                 return Err(Box::new(RuntimeError::InvalidTimeZoneString {
                     tz_str: tz_str.into(),
-                    source_code: None,
                     span: None,
                 }));
             }

@@ -1,11 +1,14 @@
+use common::report::Report;
+use common::source::IdentifiedSource;
+use interpreter::interpreter::Interpreter;
 use parser::parser::Parser;
-use parser::parser_error::ParserErrorKind;
+use parser::parser_error::ParserError;
 use platform::Platform;
 use reedline::{
     default_emacs_keybindings, DefaultPrompt, Reedline, Signal, ValidationResult, Validator,
 };
-use runtime::Runtime;
 use scanner::scanner::Scanner;
+use scanner::scanner_error::LexicalError;
 use std::io::{IsTerminal, Read};
 use std::{env, io};
 
@@ -13,16 +16,37 @@ struct BlockValidator;
 
 impl Validator for BlockValidator {
     fn validate(&self, input: &str) -> ValidationResult {
-        let tokens = Scanner::new(input).scan().unwrap();
-        let mut parser = Parser::new(&tokens, None);
+        let dummy_source_id = IdentifiedSource::dummy();
+
+        let tokens = match Scanner::new(input, dummy_source_id).scan() {
+            Ok(tokens) => tokens,
+            Err(errors) => {
+                if errors
+                    .iter()
+                    .any(|e| matches!(e, LexicalError::UnexpectedEoi { .. }))
+                {
+                    return ValidationResult::Incomplete;
+                } else {
+                    return ValidationResult::Complete;
+                }
+            }
+        };
+
+        let mut parser = Parser::new(&tokens, dummy_source_id);
 
         match parser.parse() {
             Ok(_) => ValidationResult::Complete,
             Err(errors) => {
-                if errors
-                    .iter()
-                    .any(|e| e.source == ParserErrorKind::UnexpectedEoi)
-                {
+                if errors.iter().any(|e| {
+                    matches!(
+                        e,
+                        ParserError::UnexpectedEoi { .. }
+                            | ParserError::MissingBraces { .. }
+                            | ParserError::MissingParentheses { .. }
+                            | ParserError::MissingBrackets { .. }
+                            | ParserError::MissingColon { .. }
+                    )
+                }) {
                     ValidationResult::Incomplete
                 } else {
                     ValidationResult::Complete
@@ -36,11 +60,11 @@ fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() > 1 {
-        let path = &args[1];
+        let path: &'static str = Box::leak(args[1].clone().into_boxed_str());
         let file_content = std::fs::read_to_string(path);
 
         match file_content {
-            Ok(code) => run_source(code, path.to_string()),
+            Ok(source) => run_source(&source, path),
             Err(err) => match err.kind() {
                 std::io::ErrorKind::NotFound => eprintln!("Arquivo não encontrado: {}", path),
                 _ => eprintln!("Erro ao ler arquivo: {}", err),
@@ -60,7 +84,7 @@ fn main() -> io::Result<()> {
 
     let mut buffer = String::new();
     stdin.read_to_string(&mut buffer)?;
-    run_source(buffer, "stdin".to_string());
+    run_source(&buffer, "stdin");
 
     Ok(())
 }
@@ -80,9 +104,8 @@ fn start_repl() {
     );
 
     let platform = Platform;
-    let mut runtime = Runtime::new(platform);
+    let mut runtime = Interpreter::new(platform);
     let mut exiting = false;
-    let mut count = 0;
 
     loop {
         let sig = rl.read_line(&prompt);
@@ -92,14 +115,38 @@ fn start_repl() {
             Ok(Signal::Success(line)) => {
                 exiting = false;
 
-                let input_name = format!("(entrada #{})", count);
-                let output = runtime.run(line, input_name);
+                let source_id = IdentifiedSource::new();
+                let cache = (source_id, ariadne::Source::from(line.clone()));
 
-                count += 1;
+                let tokens = match Scanner::new(&line, source_id).scan() {
+                    Ok(tokens) => tokens,
+                    Err(errs) => {
+                        for err in errs {
+                            err.to_report().eprint(cache.clone()).unwrap();
+                        }
 
-                match output {
-                    Ok(output) => println!("{}", output),
-                    Err(err) => err.print_to_stderr(),
+                        continue;
+                    }
+                };
+
+                let ast = match Parser::new(&tokens, source_id).parse() {
+                    Ok(ast) => ast,
+                    Err(errs) => {
+                        for err in errs {
+                            err.to_report().eprint(cache.clone()).unwrap();
+                        }
+
+                        continue;
+                    }
+                };
+
+                match runtime.eval(&ast) {
+                    Ok(result) => {
+                        println!("{}", result);
+                    }
+                    Err(err) => {
+                        err.to_report().eprint(cache.clone()).unwrap();
+                    }
                 }
             }
             Ok(Signal::CtrlC) if exiting => break,
@@ -121,15 +168,41 @@ fn start_repl() {
     }
 }
 
-fn run_source(source: String, name: String) {
+fn run_source(source: &str, name: &'static str) {
     let platform = Platform;
-    let mut runtime = Runtime::new(platform);
-    let output = runtime.run(source, name);
 
-    if let Err(err) = output {
-        err.print_to_stderr();
+    let mut source_id = IdentifiedSource::new();
+    source_id.set_name(name);
+
+    let cache = (source_id, ariadne::Source::from(source));
+
+    let tokens = match Scanner::new(source, source_id).scan() {
+        Ok(tokens) => tokens,
+        Err(errs) => {
+            for err in errs {
+                err.to_report().eprint(cache.clone()).unwrap();
+            }
+
+            return;
+        }
     };
+
+    let ast = match Parser::new(&tokens, source_id).parse() {
+        Ok(ast) => ast,
+        Err(errs) => {
+            for err in errs {
+                err.to_report().eprint(cache.clone()).unwrap();
+            }
+
+            return;
+        }
+    };
+
+    let mut runtime = Interpreter::new(platform);
+
+    if let Err(err) = runtime.eval(&ast) {
+        err.to_report().eprint(cache.clone()).unwrap();
+    }
 }
 
 mod platform;
-mod runtime;

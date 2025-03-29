@@ -106,7 +106,33 @@ impl TokenIterator<'_> {
             }
         }
 
+        self.tokens.reset_cursor();
+
         false
+    }
+
+    pub fn is_next_eof(&mut self) -> bool {
+        self.tokens.reset_cursor();
+
+        while let Some(token) = self.tokens.peek() {
+            if token.kind == TokenKind::Newline {
+                self.tokens.advance_cursor();
+            } else {
+                break;
+            }
+        }
+
+        let is_eof = matches!(
+            self.tokens.peek(),
+            None | Some(Token {
+                kind: TokenKind::Eof,
+                ..
+            })
+        );
+
+        self.tokens.reset_cursor();
+
+        is_eof
     }
 
     pub fn last_token(&self) -> &Token {
@@ -138,7 +164,7 @@ impl<'a> From<&'a [Token]> for TokenIterator<'a> {
         TokenIterator {
             tokens: value.iter().peekmore(),
             ignoring_newline_counter: Rc::new(RefCell::new(0)),
-            last_token: value.last().expect("Token list should not be empty"),
+            last_token: value.last().expect("token list should not be empty"),
         }
     }
 }

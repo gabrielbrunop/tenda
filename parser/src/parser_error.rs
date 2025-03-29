@@ -1,114 +1,60 @@
-use core::fmt;
-use scanner::token::{Token, TokenSpan};
-use std::fmt::Display;
+use common::span::SourceSpan;
+use macros::Report;
+use scanner::token::Token;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Vec<ParserError>>;
 
-#[derive(Debug)]
-pub struct ParserErrorSpan {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl From<TokenSpan> for ParserErrorSpan {
-    fn from(span: TokenSpan) -> Self {
-        ParserErrorSpan {
-            start: span.start,
-            end: span.end,
-        }
-    }
-}
-
-impl From<AstSpan> for ParserErrorSpan {
-    fn from(span: AstSpan) -> Self {
-        ParserErrorSpan {
-            start: span.start,
-            end: span.end,
-        }
-    }
-}
-
-#[derive(Error, Debug)]
-pub struct ParserError {
-    pub span: ParserErrorSpan,
-    pub context: Option<String>,
-    #[source]
-    pub source: ParserErrorKind,
-}
-
-impl Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.context {
-            Some(context) => write!(f, "{}", context),
-            None => write!(f, "{}", self.source),
-        }
-    }
-}
-
-#[derive(Error, Debug, PartialEq, Clone)]
-pub enum ParserErrorKind {
+#[derive(Error, Debug, PartialEq, Clone, Report)]
+pub enum ParserError {
     #[error("fim inesperado de entrada")]
-    UnexpectedEoi,
+    UnexpectedEoi { span: SourceSpan },
 
     #[error("esperado ')'")]
-    MissingParentheses,
+    MissingParentheses { span: SourceSpan },
 
     #[error("esperado ']'")]
-    MissingBrackets,
+    MissingBrackets { span: SourceSpan },
 
     #[error("esperado '}}'")]
-    MissingBraces,
+    MissingBraces { span: SourceSpan },
 
     #[error("esperado ':'")]
-    MissingColon,
+    MissingColon { span: SourceSpan },
 
-    #[error("token inesperado: {}", .0.lexeme)]
-    UnexpectedToken(Token),
+    #[error("token inesperado: {}", .token.lexeme.escape_default())]
+    UnexpectedToken { token: Token, span: SourceSpan },
 
     #[error("o valor à direita do '=' não é um valor válido para receber atribuições")]
-    InvalidAssignmentTarget(Token),
+    InvalidAssignmentTarget { token: Token, span: SourceSpan },
 
     #[error("retorno fora de uma função")]
-    IllegalReturn,
+    IllegalReturn { span: SourceSpan },
 
     #[error("'pare' fora de uma estrutura de repetição")]
-    IllegalBreak,
+    IllegalBreak { span: SourceSpan },
 
     #[error("'continue' fora de uma estrutura de repetição")]
-    IllegalContinue,
+    IllegalContinue { span: SourceSpan },
 
-    #[error("parâmetro '{0}' duplicado na função")]
-    DuplicateParameter(String),
-}
-
-#[macro_export]
-macro_rules! parser_err {
-    ($kind:expr, $span:expr) => {{
-        use ParserErrorKind::*;
-        ParserError {
-            source: $kind,
-            span: $span.into(),
-            context: None,
-        }
-    }};
-    ($kind:expr, $span:expr, $context:expr) => {{
-        use ParserErrorKind::*;
-        ParserError {
-            source: $kind,
-            span: $span.into(),
-            context: Some($context),
-        }
-    }};
+    #[error("parâmetro '{}' duplicado na função", .name)]
+    DuplicateParameter { name: String, span: SourceSpan },
 }
 
 macro_rules! unexpected_token {
     ($token:expr) => {{
         let token = $token;
-        parser_err!(UnexpectedToken(token.clone_ref()), token.span)
+
+        match token.kind {
+            TokenKind::Eof => ParserError::UnexpectedEoi {
+                span: token.span.clone(),
+            },
+            _ => ParserError::UnexpectedToken {
+                token: token.clone_ref(),
+                span: token.span.clone(),
+            },
+        }
     }};
 }
 
 pub(crate) use unexpected_token;
-
-use crate::ast::AstSpan;

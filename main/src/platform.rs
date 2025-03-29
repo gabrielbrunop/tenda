@@ -1,6 +1,5 @@
-use std::io::Write;
-
 use chrono::Local;
+use std::io::Write;
 
 #[derive(Debug)]
 pub struct Platform;
@@ -25,6 +24,7 @@ impl interpreter::platform::Platform for Platform {
 
     fn print(&self, message: &str) {
         print!("{}", message);
+
         std::io::stdout().flush().unwrap();
     }
 

@@ -1,11 +1,13 @@
-use std::rc::Rc;
-
+use common::{
+    source::IdentifiedSource,
+    span::{SourceSpan, Span},
+};
 use scanner::token::{self, Token, TokenKind};
 
 use crate::{
-    ast::{self, AstSpan, FunctionParam},
-    closures, parser_err,
-    parser_error::{unexpected_token, ParserError, ParserErrorKind, Result},
+    ast::{self, FunctionParam},
+    closures,
+    parser_error::{unexpected_token, ParserError, Result},
     scope_tracker::{BlockScope, ScopeTracker},
     token_iter::TokenIterator,
     token_stream, token_vec,
@@ -15,17 +17,16 @@ pub struct Parser<'a> {
     tokens: TokenIterator<'a>,
     scope: ScopeTracker,
     uid_counter: usize,
-    source: Rc<ast::NamedSource>,
+    source_id: IdentifiedSource,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(stream: &'a [Token], source: Option<Rc<ast::NamedSource>>) -> Parser<'a> {
+    pub fn new(stream: &'a [Token], source_id: IdentifiedSource) -> Parser<'a> {
         Parser {
             tokens: stream.into(),
             scope: ScopeTracker::new(),
             uid_counter: 0,
-            source: source
-                .unwrap_or_else(|| Rc::new(ast::NamedSource::new("".to_string(), "".to_string()))),
+            source_id,
         }
     }
 
@@ -47,21 +48,28 @@ impl<'a> Parser<'a> {
         let mut stmt_list = vec![];
         let mut errors: Vec<ParserError> = vec![];
 
-        while let Some(token) = self.tokens.peek() {
-            if token.kind == TokenKind::Eof {
+        let span_start = match self.tokens.peek() {
+            Some(token) => token.span.start(),
+            None => self.tokens.last_token().span.end(),
+        };
+
+        while self.tokens.peek().is_some() {
+            if self.tokens.is_next_eof() {
                 break;
             }
 
             match self.parse_statement() {
                 Ok(stmt) => stmt_list.push(stmt),
                 Err(e) => {
-                    if e.iter()
-                        .any(|err| matches!(err.source, ParserErrorKind::UnexpectedEoi))
-                    {
-                        break;
-                    }
+                    let has_unexpected_eoi = e
+                        .iter()
+                        .any(|err| matches!(err, ParserError::UnexpectedEoi { .. }));
 
                     e.into_iter().for_each(|err| errors.push(err));
+
+                    if has_unexpected_eoi {
+                        break;
+                    }
                 }
             }
         }
@@ -69,7 +77,14 @@ impl<'a> Parser<'a> {
         if !errors.is_empty() {
             Err(errors)
         } else {
-            Ok(stmt_list.into())
+            let span_end = stmt_list
+                .last()
+                .map_or(span_start, |stmt| stmt.get_span().end());
+
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
+            let ast = ast::Ast::from(stmt_list, span);
+
+            Ok(ast)
         }
     }
 
@@ -106,7 +121,7 @@ impl<'a> Parser<'a> {
         end_token_types: Vec<TokenKind>,
         scope: BlockScope,
     ) -> Result<(ast::Stmt, TokenKind)> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
 
         self.parse_block_contents(end_token_types, scope, Some(span_start))
     }
@@ -124,7 +139,18 @@ impl<'a> Parser<'a> {
 
         self.consume_newline().ok();
 
-        let span_start = span_start.unwrap_or_else(|| self.tokens.peek().unwrap().span.start);
+        let block_first_token_span = match self.tokens.peek() {
+            Some(token) => &token.span,
+            None => {
+                return Err(vec![ParserError::UnexpectedEoi {
+                    span: self.tokens.last_token().span.clone(),
+                }])
+            }
+        };
+
+        let span_start = span_start.unwrap_or_else(|| block_first_token_span.start());
+        let inner_span_start = block_first_token_span.start();
+        let mut current_inner_span_end = block_first_token_span.end();
 
         let end_token = loop {
             let token = match self.tokens.peek() {
@@ -136,23 +162,27 @@ impl<'a> Parser<'a> {
                 break Ok(self.tokens.next().unwrap());
             }
 
+            current_inner_span_end = token.span.end();
+
             match self.parse_statement() {
                 Ok(stmt) => stmt_list.push(stmt),
                 Err(e) => break Err(e),
             };
         }?;
 
-        let span_end = end_token.span.end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_end = end_token.span.end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
+        let inner_span = SourceSpan::new(inner_span_start, current_inner_span_end, self.source_id);
 
-        let block_stmt = ast::Block::new(stmt_list.into(), span);
+        let ast = ast::Ast::from(stmt_list, inner_span);
+        let block_stmt = ast::Block::new(ast, span);
         let block_stmt = ast::Stmt::Block(block_stmt);
 
         Ok((block_stmt, end_token.kind))
     }
 
     fn parse_if_statement(&mut self) -> Result<ast::Stmt> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
         let condition = self.parse_expression()?;
 
         let (then_branch, block_end_delimiter) = match self.tokens.peek() {
@@ -174,18 +204,18 @@ impl<'a> Parser<'a> {
 
         let span_end = else_branch
             .as_ref()
-            .map_or(then_branch.get_span().end, |else_branch| {
-                else_branch.get_span().end
+            .map_or(then_branch.get_span().end(), |else_branch| {
+                else_branch.get_span().end()
             });
 
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
         let stmt = ast::Cond::new(condition, then_branch, else_branch, span);
 
         Ok(ast::Stmt::Cond(stmt))
     }
 
     fn parse_while_statement(&mut self) -> Result<ast::Stmt> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
         let condition = self.parse_expression()?;
 
         if !self.tokens.is_next_token(TokenKind::Do) {
@@ -195,8 +225,8 @@ impl<'a> Parser<'a> {
 
         let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
 
-        let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_end = body.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let while_stmt = ast::While::new(condition, body, span);
         let while_stmt = ast::Stmt::While(while_stmt);
@@ -205,7 +235,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_for_each_statement(&mut self) -> Result<ast::Stmt> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
 
         self.skip_token(TokenKind::Each)?;
 
@@ -223,8 +253,8 @@ impl<'a> Parser<'a> {
 
         let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
 
-        let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_end = body.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let for_each_item = ast::ForEachItem::new(name, self.gen_uid(), name_span);
         let for_each_stmt = ast::ForEach::new(for_each_item, iterable, body, span);
@@ -234,15 +264,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_declaration(&mut self) -> Result<ast::Stmt> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
 
         let (name, _) = self.consume_identifier()?;
-        let parameters = self.parse_function_parameters_signature(Some(&name))?;
+        let parameters = self.parse_function_parameters_signature()?;
+
         let (body, _) =
             self.parse_block_contents(token_vec![BlockEnd], BlockScope::Function, None)?;
 
-        let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_end = body.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let function_decl = ast::FunctionDecl::new(name, parameters, body, self.gen_uid(), span);
         let function_decl = ast::Decl::Function(function_decl);
@@ -252,15 +283,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_declaration(&mut self) -> Result<ast::Stmt> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
         let (name, _) = self.consume_identifier()?;
 
         self.skip_token(TokenKind::EqualSign)?;
 
         let expr = self.parse_expression()?;
 
-        let span_end = expr.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_end = expr.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let local_decl = ast::LocalDecl::new(name, expr, self.gen_uid(), span);
         let local_decl = ast::Decl::Local(local_decl);
@@ -272,7 +303,9 @@ impl<'a> Parser<'a> {
         let return_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Function) {
-            return Err(vec![parser_err!(IllegalReturn, return_token.span)]);
+            return Err(vec![ParserError::IllegalReturn {
+                span: return_token.span.clone(),
+            }]);
         }
 
         let expr = match self.tokens.peek() {
@@ -280,11 +313,11 @@ impl<'a> Parser<'a> {
             _ => None,
         };
 
-        let span_start = return_token.span.start;
+        let span_start = return_token.span.start();
         let span_end = expr
             .as_ref()
-            .map_or(return_token.span.end, |expr| expr.get_span().end);
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            .map_or(return_token.span.end(), |expr| expr.get_span().end());
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let return_stmt = ast::Return::new(expr, span);
 
@@ -295,10 +328,12 @@ impl<'a> Parser<'a> {
         let break_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Loop) {
-            return Err(vec![parser_err!(IllegalBreak, break_token.span)]);
+            return Err(vec![ParserError::IllegalBreak {
+                span: break_token.span.clone(),
+            }]);
         }
 
-        let break_stmt = ast::Break::new(AstSpan::from_token(break_token, self.source.clone()));
+        let break_stmt = ast::Break::new(break_token.span.clone());
         let break_stmt = ast::Stmt::Break(break_stmt);
 
         Ok(break_stmt)
@@ -308,11 +343,12 @@ impl<'a> Parser<'a> {
         let continue_token = self.tokens.next().unwrap();
 
         if !self.scope.has_scope(BlockScope::Loop) {
-            return Err(vec![parser_err!(IllegalContinue, continue_token.span)]);
+            return Err(vec![ParserError::IllegalContinue {
+                span: continue_token.span.clone(),
+            }]);
         }
 
-        let continue_stmt =
-            ast::Continue::new(AstSpan::from_token(continue_token, self.source.clone()));
+        let continue_stmt = ast::Continue::new(continue_token.span.clone());
         let continue_stmt = ast::Stmt::Continue(continue_stmt);
 
         Ok(continue_stmt)
@@ -332,19 +368,19 @@ impl<'a> Parser<'a> {
 
             return match expr {
                 ast::Expr::Variable(_) | ast::Expr::Access(_) => {
-                    let span_start = expr.get_span().start;
-                    let span_end = value.get_span().end;
-                    let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+                    let span_start = expr.get_span().start();
+                    let span_end = value.get_span().end();
+                    let span = SourceSpan::new(span_start, span_end, self.source_id);
 
                     let assign_expr = ast::Assign::new(expr, value, span);
                     let assign_expr = ast::Expr::Assign(assign_expr);
 
                     Ok(assign_expr)
                 }
-                _ => Err(vec![parser_err!(
-                    InvalidAssignmentTarget(equal_sign.clone_ref()),
-                    equal_sign.span
-                )]),
+                _ => Err(vec![ParserError::InvalidAssignmentTarget {
+                    span: equal_sign.span.clone(),
+                    token: equal_sign.clone_ref(),
+                }]),
             };
         }
 
@@ -358,9 +394,9 @@ impl<'a> Parser<'a> {
             let lhs = expr;
             let rhs = self.parse_equality()?;
 
-            let span_start = lhs.get_span().start;
-            let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            let span_start = lhs.get_span().start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -400,9 +436,9 @@ impl<'a> Parser<'a> {
                 let lhs = expr;
                 let rhs = self.parse_comparison()?;
 
-                let span_start = lhs.get_span().start;
-                let span_end = rhs.get_span().end;
-                let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+                let span_start = lhs.get_span().start();
+                let span_end = rhs.get_span().end();
+                let span = SourceSpan::new(span_start, span_end, self.source_id);
 
                 let binary_op = ast::BinaryOp::new(lhs, op, rhs, span);
 
@@ -425,9 +461,9 @@ impl<'a> Parser<'a> {
             let lhs = expr;
             let rhs = self.parse_range()?;
 
-            let span_start = lhs.get_span().start;
-            let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            let span_start = lhs.get_span().start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -443,9 +479,9 @@ impl<'a> Parser<'a> {
         if let Some(op) = self.tokens.consume_one_of(token_stream![Until]) {
             let rhs = self.parse_expression()?;
 
-            let span_start = lhs.get_span().start;
-            let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            let span_start = lhs.get_span().start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -462,9 +498,9 @@ impl<'a> Parser<'a> {
             let lhs = expr;
             let rhs = self.parse_factor()?;
 
-            let span_start = lhs.get_span().start;
-            let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            let span_start = lhs.get_span().start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -484,9 +520,9 @@ impl<'a> Parser<'a> {
             let lhs = expr;
             let rhs = self.parse_exponent()?;
 
-            let span_start = lhs.get_span().start;
-            let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            let span_start = lhs.get_span().start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -503,9 +539,9 @@ impl<'a> Parser<'a> {
             let lhs = expr;
             let rhs = self.parse_unary()?;
 
-            let span_start = lhs.get_span().start;
-            let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            let span_start = lhs.get_span().start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
 
             let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
 
@@ -519,9 +555,9 @@ impl<'a> Parser<'a> {
         if let Some(op) = self.tokens.consume_one_of(token_stream![Minus, Not]) {
             let rhs = self.parse_unary()?;
 
-            let span_start = op.span.start;
-            let span_end = rhs.get_span().end;
-            let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+            let span_start = op.span.start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
 
             let unary_op = ast::UnaryOp::new(op.into(), rhs, span);
 
@@ -564,17 +600,15 @@ impl<'a> Parser<'a> {
         let right_paran = match self.tokens.consume_one_of(token_stream![RightParen]) {
             Some(token) => token,
             _ => {
-                return Err(vec![parser_err!(
-                    MissingParentheses,
-                    self.tokens.next().unwrap().span,
-                    "esperado ')' após chamada de função".to_string()
-                )])
+                return Err(vec![ParserError::MissingParentheses {
+                    span: self.tokens.next().unwrap().span.clone(),
+                }]);
             }
         };
 
-        let span_start = name.get_span().start;
-        let span_end = right_paran.span.end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_start = name.get_span().start();
+        let span_end = right_paran.span.end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let call_expr = ast::Call::new(name, arguments, span);
         let call_expr = ast::Expr::Call(call_expr);
@@ -588,17 +622,15 @@ impl<'a> Parser<'a> {
         let closing_bracket = match self.tokens.consume_one_of(token_stream![RightBracket]) {
             Some(token) => token,
             _ => {
-                return Err(vec![parser_err!(
-                    MissingBrackets,
-                    self.tokens.next().unwrap().span,
-                    "esperado ']' em indexação".to_string()
-                )])
+                return Err(vec![ParserError::MissingBrackets {
+                    span: self.tokens.next().unwrap().span.clone(),
+                }]);
             }
         };
 
-        let span_start = name.get_span().start;
-        let span_end = closing_bracket.span.end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_start = name.get_span().start();
+        let span_end = closing_bracket.span.end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let access_expr = ast::Access::new(name, index, span);
         let access_expr = ast::Expr::Access(access_expr);
@@ -614,7 +646,7 @@ impl<'a> Parser<'a> {
             _ => unreachable!(),
         };
 
-        let span = ast::AstSpan::from_token(token, self.source.clone());
+        let span = token.span.clone();
 
         match token.kind {
             Number | True | False | String | Nil => self.parse_literal(),
@@ -625,7 +657,7 @@ impl<'a> Parser<'a> {
             Function => self.parse_anonymous_function(),
             Eof => {
                 self.tokens.next().unwrap();
-                Err(vec![parser_err!(UnexpectedEoi, span)])
+                Err(vec![ParserError::UnexpectedEoi { span }])
             }
             _ => {
                 let token = self.tokens.next().unwrap();
@@ -639,7 +671,7 @@ impl<'a> Parser<'a> {
 
         let literal_expr = ast::Literal::new(
             token.literal.as_ref().unwrap().clone(),
-            ast::AstSpan::from_token(token, self.source.clone()),
+            token.clone().span.clone(),
         );
 
         let literal_expr = ast::Expr::Literal(literal_expr);
@@ -649,7 +681,7 @@ impl<'a> Parser<'a> {
 
     fn parse_variable(&mut self) -> Result<ast::Expr> {
         let token = self.tokens.next().unwrap();
-        let span = ast::AstSpan::from_token(token, self.source.clone());
+        let span = token.span.clone();
 
         let name = match token.literal.as_ref().unwrap() {
             token::Literal::String(string) => string,
@@ -676,12 +708,16 @@ impl<'a> Parser<'a> {
 
         let closing_paren = match self.tokens.consume_one_of(token_stream![RightParen]) {
             Some(token) => token,
-            _ => return Err(vec![parser_err!(MissingParentheses, token.span)]),
+            _ => {
+                return Err(vec![ParserError::MissingParentheses {
+                    span: self.tokens.next().unwrap().span.clone(),
+                }])
+            }
         };
 
-        let span_start = token.span.start;
-        let span_end = closing_paren.span.end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_start = token.span.start();
+        let span_end = closing_paren.span.end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let grouping_expr = ast::Grouping::new(expr, span);
         let grouping_expr = ast::Expr::Grouping(grouping_expr);
@@ -692,13 +728,13 @@ impl<'a> Parser<'a> {
     fn parse_anonymous_function(&mut self) -> Result<ast::Expr> {
         let function_token = self.tokens.next().unwrap();
 
-        let parameters = self.parse_function_parameters_signature(None)?;
+        let parameters = self.parse_function_parameters_signature()?;
         let (body, _) =
             self.parse_block_contents(token_vec![BlockEnd], BlockScope::Function, None)?;
 
-        let span_start = function_token.span.start;
-        let span_end = body.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_start = function_token.span.start();
+        let span_end = body.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let function_expr = ast::AnonymousFunction::new(parameters, body, self.gen_uid(), span);
         let function_expr = ast::Expr::AnonymousFunction(function_expr);
@@ -706,10 +742,7 @@ impl<'a> Parser<'a> {
         Ok(function_expr)
     }
 
-    fn parse_function_parameters_signature(
-        &mut self,
-        function_name: Option<&str>,
-    ) -> Result<Vec<ast::FunctionParam>> {
+    fn parse_function_parameters_signature(&mut self) -> Result<Vec<ast::FunctionParam>> {
         self.skip_token(TokenKind::LeftParen)?;
 
         let _guard = self.tokens.set_ignoring_newline();
@@ -717,18 +750,16 @@ impl<'a> Parser<'a> {
         let parameters = match self.tokens.consume_one_of(token_stream![RightParen]) {
             Some(_) => vec![],
             None => {
-                let parameters = self.parse_function_parameters(function_name)?;
+                let parameters = self.parse_function_parameters()?;
 
                 if self
                     .tokens
                     .consume_one_of(token_stream![RightParen])
                     .is_none()
                 {
-                    return Err(vec![parser_err!(
-                        MissingParentheses,
-                        self.tokens.next().unwrap().span,
-                        "esperado ')' após declaração de função".to_string()
-                    )]);
+                    return Err(vec![ParserError::MissingParentheses {
+                        span: self.tokens.next().unwrap().span.clone(),
+                    }]);
                 }
 
                 parameters
@@ -738,30 +769,17 @@ impl<'a> Parser<'a> {
         Ok(parameters)
     }
 
-    fn parse_function_parameters(
-        &mut self,
-        function_name: Option<&str>,
-    ) -> Result<Vec<FunctionParam>> {
+    fn parse_function_parameters(&mut self) -> Result<Vec<FunctionParam>> {
         let mut parameters: Vec<FunctionParam> = vec![];
 
         loop {
             let (param_name, param_span) = self.consume_identifier()?;
 
             if parameters.iter().any(|p| p.name == param_name) {
-                let err = match function_name {
-                    Some(name) => parser_err!(
-                        DuplicateParameter(param_name.clone()),
-                        param_span,
-                        format!("parâmetro '{}' duplicado na função '{}'", param_name, name)
-                    ),
-                    None => parser_err!(
-                        DuplicateParameter(param_name.clone()),
-                        param_span,
-                        format!("parâmetro '{}' duplicado", param_name)
-                    ),
-                };
-
-                return Err(vec![err]);
+                return Err(vec![ParserError::DuplicateParameter {
+                    name: param_name.clone(),
+                    span: param_span,
+                }]);
             }
 
             parameters.push(FunctionParam::new(param_name, self.gen_uid(), param_span));
@@ -775,7 +793,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_list(&mut self) -> Result<ast::Expr> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
         let mut elements = vec![];
 
         if !self.tokens.is_next_token(TokenKind::RightBracket) {
@@ -791,16 +809,14 @@ impl<'a> Parser<'a> {
         let closing_bracket = match self.tokens.consume_one_of(token_stream![RightBracket]) {
             Some(token) => token,
             _ => {
-                return Err(vec![parser_err!(
-                    MissingBrackets,
-                    self.tokens.next().unwrap().span,
-                    "esperado ']' ao final de lista".to_string()
-                )])
+                return Err(vec![ParserError::MissingBrackets {
+                    span: self.tokens.next().unwrap().span.clone(),
+                }]);
             }
         };
 
-        let span_end = closing_bracket.span.end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_end = closing_bracket.span.end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let elements = elements.into_iter().collect();
         let list_expr = ast::List::new(elements, span);
@@ -810,25 +826,22 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_associative_array(&mut self) -> Result<ast::Expr> {
-        let span_start = self.tokens.next().unwrap().span.start;
+        let span_start = self.tokens.next().unwrap().span.start();
         let mut elements = vec![];
 
         if !self.tokens.is_next_token(TokenKind::RightBrace) {
             loop {
                 let key = match self.tokens.consume_one_of(token_stream![Number, String]) {
-                    Some(token) => ast::Literal::new(
-                        token.literal.clone().unwrap(),
-                        ast::AstSpan::from_token(&token, self.source.clone()),
-                    ),
+                    Some(token) => {
+                        ast::Literal::new(token.literal.clone().unwrap(), token.span.clone())
+                    }
                     None => return Err(vec![unexpected_token!(self.tokens.next().unwrap())]),
                 };
 
                 if self.tokens.consume_one_of(token_stream![Colon]).is_none() {
-                    return Err(vec![parser_err!(
-                        MissingColon,
-                        self.tokens.next().unwrap().span,
-                        "esperado ':' após chave de dicionário".to_string()
-                    )]);
+                    return Err(vec![ParserError::MissingColon {
+                        span: self.tokens.next().unwrap().span.clone(),
+                    }]);
                 }
 
                 let value = self.parse_expression()?;
@@ -844,16 +857,14 @@ impl<'a> Parser<'a> {
         let closing_brace = match self.tokens.consume_one_of(token_stream![RightBrace]) {
             Some(token) => token,
             _ => {
-                return Err(vec![parser_err!(
-                    MissingBraces,
-                    self.tokens.next().unwrap().span,
-                    "esperado '}' ao final de dicionário".to_string()
-                )])
+                return Err(vec![ParserError::MissingBraces {
+                    span: self.tokens.next().unwrap().span.clone(),
+                }]);
             }
         };
 
-        let span_end = closing_brace.span.end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_end = closing_brace.span.end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let elements = elements.into_iter().collect();
         let associative_array_expr = ast::AssociativeArray::new(elements, span);
@@ -869,9 +880,9 @@ impl<'a> Parser<'a> {
         let index_expr = ast::Literal::new(field, field_span);
         let index_expr = ast::Expr::Literal(index_expr);
 
-        let span_start = name.get_span().start;
-        let span_end = index_expr.get_span().end;
-        let span = ast::AstSpan::new(span_start, span_end, self.source.clone());
+        let span_start = name.get_span().start();
+        let span_end = index_expr.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
 
         let access_expr = ast::Access::new(name, index_expr, span);
         let mut access_expr = ast::Expr::Access(access_expr);
@@ -895,43 +906,37 @@ impl Parser<'_> {
         match self.tokens.peek() {
             Some(token) if matches!(token.kind, Eof | BlockEnd) => Ok(()),
             Some(token) => Err(vec![unexpected_token!(token)]),
-            None => Err(vec![parser_err!(
-                UnexpectedEoi,
-                self.tokens.last_token().span
-            )]),
+            None => Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]),
         }
     }
 
-    fn consume_identifier(&mut self) -> Result<(String, AstSpan)> {
+    fn consume_identifier(&mut self) -> Result<(String, SourceSpan)> {
         match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Identifier => {
                 match token.literal.as_ref().unwrap() {
-                    token::Literal::String(string) => Ok((
-                        string.to_string(),
-                        ast::AstSpan::from_token(token, self.source.clone()),
-                    )),
+                    token::Literal::String(string) => Ok((string.to_string(), token.span.clone())),
                     _ => unreachable!(),
                 }
             }
             Some(token) => Err(vec![unexpected_token!(token)]),
-            None => Err(vec![parser_err!(
-                UnexpectedEoi,
-                self.tokens.last_token().span
-            )]),
+            None => Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]),
         }
     }
 
     fn skip_token(&mut self, token_kind: TokenKind) -> Result<&Token> {
         match self.tokens.next() {
             Some(token) if token.kind == token_kind => Ok(token),
-            Some(token) if token.kind == TokenKind::Eof => {
-                Err(vec![parser_err!(UnexpectedEoi, token.span)])
-            }
+            Some(token) if token.kind == TokenKind::Eof => Err(vec![ParserError::UnexpectedEoi {
+                span: token.span.clone(),
+            }]),
             Some(token) => Err(vec![unexpected_token!(token)]),
-            None => Err(vec![parser_err!(
-                UnexpectedEoi,
-                self.tokens.last_token().span
-            )]),
+            None => Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]),
         }
     }
 

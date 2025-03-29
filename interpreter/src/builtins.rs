@@ -108,7 +108,6 @@ macro_rules! ensure {
                 return Err(Box::new(RuntimeError::UnexpectedTypeError {
                     expected: ValueType::$variant,
                     found: value.kind(),
-                    source_code: None,
                     span: None,
                     help: None,
                 }))
@@ -242,7 +241,6 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index,
                         len: list.len(),
-                        source_code: None,
                         span: None
                     }));
                 }
@@ -259,7 +257,6 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index,
                         len: list.len(),
-                        source_code: None,
                         span: None
                     }));
                 }
@@ -299,7 +296,6 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                 if start > end {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: end as f64,
-                        source_code: None,
                         span: None
                     }));
                 }
@@ -308,7 +304,6 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: end,
                         len: list.len(),
-                        source_code: None,
                         span: None
                     }));
                 }
@@ -336,7 +331,6 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     value => return Err(Box::new(RuntimeError::UnexpectedTypeError {
                         expected: value::ValueType::Range,
                         found: value.kind(),
-                        source_code: None,
                         span: None,
                         help: None,
                     }))
@@ -585,7 +579,6 @@ fn setup_math_global_bindings(stack: &mut Stack) {
                 if n < 0.0 || (n - int_n as f64).abs() > f64::EPSILON {
                     return Err(Box::new(RuntimeError::InvalidArgument {
                         value: Value::Number(n),
-                        source_code: None,
                         span: None,
                     }));
                 }
@@ -625,7 +618,6 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: start,
                         len: text.len(),
-                        source_code: None,
                         span: None
                     }));
                 }
@@ -705,7 +697,6 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                 if start > end {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: end as f64,
-                        source_code: None,
                         span: None
                     }));
                 }
@@ -714,7 +705,6 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: end,
                         len: text.len(),
-                        source_code: None,
                         span: None
                     }));
                 }
@@ -735,7 +725,6 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: start,
                         len: text.len(),
-                        source_code: None,
                         span: None
                     }));
                 }

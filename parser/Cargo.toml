@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 scanner = { path = "../scanner" }
+common = { path = "../common" }
+macros = { path = "../macros" }
 thiserror = { workspace = true }
 peekmore = { workspace = true }
-miette = { workspace = true }
+ariadne = { workspace = true }
