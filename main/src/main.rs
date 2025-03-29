@@ -37,16 +37,11 @@ impl Validator for BlockValidator {
         match parser.parse() {
             Ok(_) => ValidationResult::Complete,
             Err(errors) => {
-                if errors.iter().any(|e| {
-                    matches!(
-                        e,
-                        ParserError::UnexpectedEoi { .. }
-                            | ParserError::MissingBraces { .. }
-                            | ParserError::MissingParentheses { .. }
-                            | ParserError::MissingBrackets { .. }
-                            | ParserError::MissingColon { .. }
-                    )
-                }) {
+                let has_eoi = errors
+                    .iter()
+                    .any(|e| matches!(e, ParserError::UnexpectedEoi { .. }));
+
+                if has_eoi {
                     ValidationResult::Incomplete
                 } else {
                     ValidationResult::Complete

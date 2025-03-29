@@ -37,10 +37,9 @@ impl TokenIterator<'_> {
         }
 
         let skipped = self.tokens.cursor();
+        let expected: Vec<TokenKind> = token_types.cloned().collect();
 
         if let Some(token) = self.tokens.peek() {
-            let expected: Vec<TokenKind> = token_types.cloned().collect();
-
             if expected.iter().any(|t| *t == token.kind) {
                 for _ in 0..skipped {
                     self.tokens.next();
@@ -133,6 +132,54 @@ impl TokenIterator<'_> {
         self.tokens.reset_cursor();
 
         is_eof
+    }
+
+    pub fn is_next_valid(&mut self) -> bool {
+        self.tokens.reset_cursor();
+
+        while let Some(token) = self.tokens.peek() {
+            if token.kind == TokenKind::Newline && *self.ignoring_newline_counter.borrow() > 0 {
+                self.tokens.advance_cursor();
+            } else {
+                break;
+            }
+        }
+
+        let is_next_valid = !matches!(
+            self.tokens.peek(),
+            None | Some(Token {
+                kind: TokenKind::Eof,
+                ..
+            })
+        );
+
+        self.tokens.reset_cursor();
+
+        is_next_valid
+    }
+
+    pub fn advance_until(&mut self, token_type: Iter<TokenKind>) {
+        let token_types: Vec<TokenKind> = token_type.cloned().collect();
+
+        while let Some(token) = self.tokens.peek() {
+            if token_types.iter().any(|t| *t == token.kind) {
+                break;
+            }
+
+            self.tokens.next();
+        }
+    }
+
+    pub fn advance_while(&mut self, token_type: Iter<TokenKind>) {
+        let token_types: Vec<TokenKind> = token_type.cloned().collect();
+
+        while let Some(token) = self.tokens.peek() {
+            if token_types.iter().any(|t| *t == token.kind) {
+                self.tokens.next();
+            } else {
+                break;
+            }
+        }
     }
 
     pub fn last_token(&self) -> &Token {

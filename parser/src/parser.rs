@@ -53,23 +53,13 @@ impl<'a> Parser<'a> {
             None => self.tokens.last_token().span.end(),
         };
 
-        while self.tokens.peek().is_some() {
-            if self.tokens.is_next_eof() {
-                break;
-            }
-
+        while self.tokens.is_next_valid() {
             match self.parse_statement() {
                 Ok(stmt) => stmt_list.push(stmt),
                 Err(e) => {
-                    let has_unexpected_eoi = e
-                        .iter()
-                        .any(|err| matches!(err, ParserError::UnexpectedEoi { .. }));
+                    errors.extend(e);
 
-                    e.into_iter().for_each(|err| errors.push(err));
-
-                    if has_unexpected_eoi {
-                        break;
-                    }
+                    break;
                 }
             }
         }
@@ -91,7 +81,7 @@ impl<'a> Parser<'a> {
     fn parse_statement(&mut self) -> Result<ast::Stmt> {
         let token = match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Newline => {
-                self.tokens.next().unwrap();
+                self.tokens.advance_while(token_stream![Newline]);
 
                 return self.parse_statement();
             }
@@ -111,7 +101,20 @@ impl<'a> Parser<'a> {
             _ => self.parse_expression().map(ast::Stmt::Expr),
         }?;
 
-        self.consume_newline()?;
+        match self.tokens.peek() {
+            Some(token) if token.kind == TokenKind::Newline => {
+                self.tokens.advance_while(token_stream![Newline]);
+            }
+            Some(token)
+                if matches!(
+                    token.kind,
+                    TokenKind::Eof | TokenKind::BlockEnd | TokenKind::Else
+                ) => {}
+            Some(token) => {
+                return Err(vec![unexpected_token!(token)]);
+            }
+            None => unreachable!(),
+        }
 
         Ok(result)
     }
@@ -135,9 +138,7 @@ impl<'a> Parser<'a> {
         let _guard = self.scope.guard(scope);
         let _newline_guard = self.tokens.halt_ignoring_newline();
 
-        let mut stmt_list = vec![];
-
-        self.consume_newline().ok();
+        self.tokens.advance_while(token_stream![Newline]);
 
         let block_first_token_span = match self.tokens.peek() {
             Some(token) => &token.span,
@@ -151,6 +152,8 @@ impl<'a> Parser<'a> {
         let span_start = span_start.unwrap_or_else(|| block_first_token_span.start());
         let inner_span_start = block_first_token_span.start();
         let mut current_inner_span_end = block_first_token_span.end();
+
+        let mut stmt_list = vec![];
 
         let end_token = loop {
             let token = match self.tokens.peek() {
@@ -597,6 +600,12 @@ impl<'a> Parser<'a> {
             }
         }
 
+        if self.tokens.is_next_eof() {
+            return Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]);
+        }
+
         let right_paran = match self.tokens.consume_one_of(token_stream![RightParen]) {
             Some(token) => token,
             _ => {
@@ -618,6 +627,12 @@ impl<'a> Parser<'a> {
 
     fn parse_access(&mut self, name: ast::Expr) -> Result<ast::Expr> {
         let index = self.parse_expression()?;
+
+        if self.tokens.is_next_eof() {
+            return Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]);
+        }
 
         let closing_bracket = match self.tokens.consume_one_of(token_stream![RightBracket]) {
             Some(token) => token,
@@ -747,6 +762,12 @@ impl<'a> Parser<'a> {
 
         let _guard = self.tokens.set_ignoring_newline();
 
+        if self.tokens.is_next_eof() {
+            return Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]);
+        }
+
         let parameters = match self.tokens.consume_one_of(token_stream![RightParen]) {
             Some(_) => vec![],
             None => {
@@ -806,6 +827,12 @@ impl<'a> Parser<'a> {
             }
         }
 
+        if self.tokens.is_next_eof() {
+            return Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]);
+        }
+
         let closing_bracket = match self.tokens.consume_one_of(token_stream![RightBracket]) {
             Some(token) => token,
             _ => {
@@ -854,6 +881,12 @@ impl<'a> Parser<'a> {
             }
         }
 
+        if self.tokens.is_next_eof() {
+            return Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]);
+        }
+
         let closing_brace = match self.tokens.consume_one_of(token_stream![RightBrace]) {
             Some(token) => token,
             _ => {
@@ -896,22 +929,6 @@ impl<'a> Parser<'a> {
 }
 
 impl Parser<'_> {
-    fn consume_newline(&mut self) -> Result<()> {
-        use TokenKind::*;
-
-        if self.tokens.consume_one_of(token_stream![Newline]).is_some() {
-            return Ok(());
-        }
-
-        match self.tokens.peek() {
-            Some(token) if matches!(token.kind, Eof | BlockEnd) => Ok(()),
-            Some(token) => Err(vec![unexpected_token!(token)]),
-            None => Err(vec![ParserError::UnexpectedEoi {
-                span: self.tokens.last_token().span.clone(),
-            }]),
-        }
-    }
-
     fn consume_identifier(&mut self) -> Result<(String, SourceSpan)> {
         match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Identifier => {

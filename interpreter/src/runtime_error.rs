@@ -40,7 +40,7 @@ pub enum RuntimeError {
         help: Option<String>,
     },
 
-    #[error("variável identifica com {0} já está declarada neste escopo", .var_name)]
+    #[error("variável identificada por {0} já está declarada neste escopo", .var_name)]
     AlreadyDeclared {
         var_name: String,
         span: Option<SourceSpan>,
