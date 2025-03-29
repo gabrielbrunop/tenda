@@ -1,4 +1,6 @@
-use crate::scanner_error::{LexicalError, LexicalErrorKind};
+use common::source::IdentifiedSource;
+
+use crate::scanner_error::LexicalError;
 use crate::source_iter::SourceIter;
 use crate::token::{Literal, Token, TokenKind};
 use std::char;
@@ -8,9 +10,9 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
-    pub fn new(source: &'a str) -> Scanner<'a> {
+    pub fn new(source: &'a str, source_id: IdentifiedSource) -> Scanner<'a> {
         Scanner {
-            source: SourceIter::new(source),
+            source: SourceIter::new(source, source_id),
         }
     }
 
@@ -35,7 +37,7 @@ impl<'a> Scanner<'a> {
             };
         }
 
-        tokens.push(self.source.eof());
+        tokens.push(self.source.consume_eof());
 
         if errors.is_empty() {
             Ok(tokens)
@@ -59,7 +61,10 @@ impl<'a> Scanner<'a> {
                     Ok(None)
                 }
             },
-            c if c.is_whitespace() => Ok(None),
+            c if c.is_whitespace() => {
+                self.source.ignore_char();
+                Ok(None)
+            }
             '(' => self.source.consume_token(TokenKind::LeftParen, "(").into(),
             ')' => self.source.consume_token(TokenKind::RightParen, ")").into(),
             '[' => self
@@ -95,10 +100,10 @@ impl<'a> Scanner<'a> {
                 Some('=') => {
                     self.source.next();
                     self.source
-                        .consume_token(TokenKind::LessOrEqual, ">")
+                        .consume_token(TokenKind::LessOrEqual, "<")
                         .into()
                 }
-                _ => self.source.consume_token(TokenKind::Less, ">").into(),
+                _ => self.source.consume_token(TokenKind::Less, "<").into(),
             },
             c if c.is_ascii_digit() => self.consume_number(c).map(Some),
             c if c.is_alphabetic() || c == '_' => self.consume_identifier(c).map(Some),
@@ -113,9 +118,10 @@ impl<'a> Scanner<'a> {
                 }
                 _ => self.source.consume_token(TokenKind::Slash, "/").into(),
             },
-            _ => Err(self
-                .source
-                .lexical_error(LexicalErrorKind::UnexpectedChar(char))),
+            _ => Err(LexicalError::UnexpectedChar {
+                character: char,
+                span: self.source.consume_span(),
+            }),
         }
     }
 
@@ -130,15 +136,21 @@ impl<'a> Scanner<'a> {
                     break;
                 }
                 '\n' => {
-                    return Err(self
-                        .source
-                        .lexical_error(LexicalErrorKind::UnexpectedStringEol));
+                    return Err(LexicalError::UnexpectedStringEol {
+                        span: self.source.consume_span(),
+                    });
                 }
                 _ => {
                     string.push(peeked);
                     self.source.next();
                 }
             }
+        }
+
+        if self.source.peek().is_none() {
+            return Err(LexicalError::UnexpectedEoi {
+                span: self.source.consume_span(),
+            });
         }
 
         let string = string[1..].to_string();
@@ -163,9 +175,10 @@ impl<'a> Scanner<'a> {
 
             match peeked {
                 c if is_unexpected(c) => {
-                    return Err(self
-                        .source
-                        .lexical_error(LexicalErrorKind::UnexpectedChar(c)));
+                    return Err(LexicalError::UnexpectedChar {
+                        character: c,
+                        span: self.source.consume_span(),
+                    });
                 }
                 c if c.is_numeric() || c == '.' => {
                     if c == '.' {
@@ -183,9 +196,9 @@ impl<'a> Scanner<'a> {
             number.starts_with('0') && !number.starts_with("0.") && number != "0";
 
         if illegal_leading_zero {
-            return Err(self
-                .source
-                .lexical_error(LexicalErrorKind::LeadingZeroNumberLiterals));
+            return Err(LexicalError::LeadingZeroNumberLiterals {
+                span: self.source.consume_span(),
+            });
         }
 
         let number: f64 = number.parse().unwrap();

@@ -1,3 +1,5 @@
+use common::report::Report;
+use common::span::SourceSpan;
 use parser::ast::{self, Access, DeclVisitor, ExprVisitor, StmtVisitor};
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
@@ -8,7 +10,7 @@ use crate::{
     frame::Frame,
     function::{Function, FunctionObject},
     platform::{self},
-    runtime_error::{err_span, span_src, Result, RuntimeError},
+    runtime_error::{Result, RuntimeError},
     stack::Stack,
     value::{Value, ValueType},
 };
@@ -176,8 +178,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
         if !iterable.is_iterable() {
             return Err(Box::new(RuntimeError::NotIterable {
                 value: iterable.kind(),
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
             }));
         }
 
@@ -232,8 +233,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
             return Err(Box::new(RuntimeError::AlreadyDeclared {
                 var_name: name,
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
             }));
         }
 
@@ -294,8 +294,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!("não é possível somar '{}' e '{}'", lhs, rhs)),
                     }));
                 }
@@ -308,8 +307,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!("não é possível subtrair '{}' de '{}'", rhs, lhs)),
                     }));
                 }
@@ -320,8 +318,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível multiplicar '{}' por '{}'",
                             lhs, rhs
@@ -332,8 +329,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             Divide => match (lhs, rhs) {
                 (Number(_), Number(0.0)) => {
                     return Err(Box::new(RuntimeError::DivisionByZero {
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                     }));
                 }
                 (Number(lhs), Number(rhs)) => Number(lhs / rhs),
@@ -341,8 +337,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!("não é possível dividir '{}' por '{}'", lhs, rhs)),
                     }));
                 }
@@ -353,8 +348,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível elevar '{}' à potência de '{}'",
                             lhs, rhs
@@ -368,8 +362,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível encontrar o resto da divisão de '{}' por '{}'",
                             lhs, rhs
@@ -413,8 +406,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
                             lhs, rhs
@@ -430,8 +422,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
                             lhs, rhs
@@ -447,8 +438,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
                             lhs, rhs
@@ -464,8 +454,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
                             lhs,
@@ -492,15 +481,13 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 (Number(lhs), Number(_)) if lhs != lhs.trunc() || !lhs.is_finite() => {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: lhs,
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                     }));
                 }
                 (Number(_), Number(rhs)) if rhs != rhs.trunc() || !rhs.is_finite() => {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: rhs,
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                     }));
                 }
                 (Number(lhs), Number(rhs)) => Value::Range(lhs as usize, rhs as usize),
@@ -508,8 +495,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível criar um intervalo entre '{}' e '{}'",
                             lhs, rhs
@@ -531,8 +517,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível verificar se '{}' contém '{}'",
                             lhs, rhs
@@ -554,8 +539,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::TypeMismatch {
                         first: lhs.kind(),
                         second: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível verificar se '{}' não contém '{}'",
                             lhs, rhs
@@ -568,8 +552,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
         match expr {
             Number(value) if value.abs() == f64::INFINITY => {
                 Err(Box::new(RuntimeError::NumberOverflow {
-                    source_code: span_src!(span),
-                    span: err_span!(span),
+                    span: Some(span.clone()),
                 }))
             }
             _ => Ok(expr),
@@ -591,8 +574,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     return Err(Box::new(RuntimeError::UnexpectedTypeError {
                         expected: ValueType::Number,
                         found: rhs.kind(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "não é possível negar valor de tipo '{}'; esperado '{}'",
                             rhs.kind(),
@@ -622,16 +604,14 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 Err(Box::new(RuntimeError::WrongNumberOfArguments {
                     expected: func.get_params().len(),
                     found: args.len(),
-                    source_code: span_src!(span),
-                    span: err_span!(span),
+                    span: Some(span.clone()),
                 }))
             }
             Value::Function(func) => self.call_function(func, args, Some(span)),
             _ => Err(Box::new(RuntimeError::UnexpectedTypeError {
                 expected: ValueType::Function,
                 found: callee.kind(),
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
                 help: Some(format!(
                     "não é possível chamar '{}' como função",
                     callee.kind()
@@ -656,9 +636,8 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                 self.visit_associative_array_access(associative_array.borrow().clone(), index)
             }
             value => Err(Box::new(RuntimeError::WrongIndexType {
-                value,
-                source_code: span_src!(span),
-                span: err_span!(span),
+                value: value.kind(),
+                span: Some(span.clone()),
             })),
         }
     }
@@ -694,8 +673,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
             .map(|v| v.extract_value())
             .ok_or(Box::new(RuntimeError::UndefinedReference {
                 var_name: name.clone(),
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
                 help: None,
             }))
     }
@@ -719,8 +697,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                     Ok(_) => Ok(value),
                     Err(_) => Err(Box::new(RuntimeError::UndefinedReference {
                         var_name: name.clone(),
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                         help: Some(format!(
                             "a variável identificada por '{}' precisa ser definida com `seja`",
                             name
@@ -747,13 +724,11 @@ impl ExprVisitor<Result<Value>> for Interpreter {
                         self.visit_associative_array_assign(&mut associative_array, index, value)
                     }
                     Value::String(_) => Err(Box::new(RuntimeError::ImmutableString {
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        span: Some(span.clone()),
                     })),
                     value => Err(Box::new(RuntimeError::WrongIndexType {
-                        value,
-                        source_code: span_src!(span),
-                        span: err_span!(span),
+                        value: value.kind(),
+                        span: Some(span.clone()),
                     })),
                 }
             }
@@ -807,8 +782,7 @@ impl Interpreter {
             return Err(Box::new(RuntimeError::IndexOutOfBounds {
                 index,
                 len: list.len(),
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
             }));
         }
 
@@ -825,8 +799,7 @@ impl Interpreter {
             Err(Box::new(RuntimeError::IndexOutOfBounds {
                 index,
                 len: string.len(),
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
             }))
         }
     }
@@ -849,8 +822,7 @@ impl Interpreter {
             Some(value) => Ok(value.clone()),
             None => Err(Box::new(RuntimeError::AssociativeArrayKeyNotFound {
                 key: index,
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
             })),
         }
     }
@@ -864,14 +836,12 @@ impl Interpreter {
             Value::Number(value) if !value.is_finite() || value.trunc() != value => {
                 Err(Box::new(RuntimeError::InvalidNumberAssociativeArrayKey {
                     key: value,
-                    source_code: None,
                     span: None,
                 }))
             }
             Value::Number(value) => Ok(AssociativeArrayKey::Number(value as i64)),
             val => Err(Box::new(RuntimeError::InvalidTypeAssociativeArrayKey {
                 key: val.kind(),
-                source_code: None,
                 span: None,
             })),
         }
@@ -895,8 +865,7 @@ impl Interpreter {
                 return Err(Box::new(RuntimeError::UnexpectedTypeError {
                     expected: ValueType::Number,
                     found: val.kind(),
-                    source_code: span_src!(value_span),
-                    span: err_span!(value_span),
+                    span: Some(value_span.clone()),
                     help: Some(format!(
                         "não é possível indexar uma lista com '{}'; esperado '{}'",
                         val.kind(),
@@ -910,8 +879,7 @@ impl Interpreter {
             return Err(Box::new(RuntimeError::IndexOutOfBounds {
                 index,
                 len: list.len(),
-                source_code: span_src!(index_span),
-                span: err_span!(index_span),
+                span: Some(index_span.clone()),
             }));
         }
 
@@ -949,16 +917,14 @@ impl Interpreter {
             Value::Number(num) if !num.is_finite() || num.trunc() != num || num < 0.0 => {
                 Err(Box::new(RuntimeError::InvalidIndex {
                     index: num,
-                    source_code: span_src!(span),
-                    span: err_span!(span),
+                    span: Some(span.clone()),
                 }))
             }
             Value::Number(num) => Ok(num as usize),
             val => Err(Box::new(RuntimeError::UnexpectedTypeError {
                 expected: ValueType::Number,
                 found: val.kind(),
-                source_code: span_src!(span),
-                span: err_span!(span),
+                span: Some(span.clone()),
                 help: Some(format!(
                     "não é possível indexar com '{}'; esperado '{}'",
                     val.kind(),
@@ -994,7 +960,7 @@ impl Interpreter {
         &mut self,
         func: Function,
         args: Vec<Value>,
-        span: Option<&ast::AstSpan>,
+        span: Option<&SourceSpan>,
     ) -> Result<Value> {
         let args = func
             .get_params()

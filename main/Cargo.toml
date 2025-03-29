@@ -7,7 +7,8 @@ edition = "2021"
 interpreter = { path = "../interpreter" }
 parser = { path = "../parser" }
 scanner = { path = "../scanner" }
+common = { path = "../common" }
+ariadne = { workspace = true }
 reedline = "0.39.0"
 rand = "0.9.0"
 chrono = "0.4.40"
-miette = { version = "7.5.0", features = ["fancy"] }

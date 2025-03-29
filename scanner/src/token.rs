@@ -1,28 +1,11 @@
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct TokenSpan {
-    pub start: usize,
-    pub end: usize,
-    pub line: usize,
-    pub col: usize,
-}
-
-impl TokenSpan {
-    pub fn new(start: usize, end: usize, line: usize, col: usize) -> Self {
-        TokenSpan {
-            start,
-            end,
-            line,
-            col,
-        }
-    }
-}
+use common::span::SourceSpan;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
     pub literal: Option<Literal>,
-    pub span: TokenSpan,
+    pub span: SourceSpan,
 }
 
 impl Token {
@@ -30,7 +13,7 @@ impl Token {
         kind: TokenKind,
         lexeme: String,
         literal: Option<Literal>,
-        span: TokenSpan,
+        span: SourceSpan,
     ) -> Token {
         Token {
             kind,
@@ -40,10 +23,8 @@ impl Token {
         }
     }
 
-    pub fn eoi(span: TokenSpan) -> Token {
-        const EOT: i32 = 0x04;
-
-        Token::new(TokenKind::Eof, EOT.to_string(), None, span)
+    pub fn eoi(span: SourceSpan) -> Token {
+        Token::new(TokenKind::Eof, "EOF".to_string(), None, span)
     }
 
     pub fn clone_ref(&self) -> Token {

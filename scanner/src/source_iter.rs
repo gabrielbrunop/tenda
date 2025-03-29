@@ -1,36 +1,28 @@
+use common::{source::IdentifiedSource, span::SourceSpan};
 use std::iter::Peekable;
 use std::str::Chars;
 
-use crate::{
-    scanner_error::{LexicalError, LexicalErrorKind},
-    token::{Literal, Token, TokenKind, TokenSpan},
-};
+use crate::token::{Literal, Token, TokenKind};
 
 pub struct SourceIter<'a> {
     iter: Peekable<Chars<'a>>,
+    source_id: IdentifiedSource,
     start_position: usize,
     end_position: usize,
-    line: usize,
-    col: usize,
 }
 
 impl<'a> SourceIter<'a> {
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str, source_id: IdentifiedSource) -> Self {
         Self {
             iter: input.chars().peekable(),
+            source_id,
             start_position: 0,
             end_position: 0,
-            line: 1,
-            col: 1,
         }
     }
 
     pub fn consume_token(&mut self, kind: TokenKind, lexeme: &str) -> Token {
-        let span = TokenSpan::new(self.start_position, self.end_position, self.line, self.col);
-
-        self.start_position = self.end_position;
-
-        Token::new(kind, lexeme.to_string(), None, span)
+        Token::new(kind, lexeme.to_string(), None, self.consume_span())
     }
 
     pub fn consume_token_with_literal(
@@ -39,25 +31,19 @@ impl<'a> SourceIter<'a> {
         lexeme: String,
         literal: Literal,
     ) -> Token {
-        let span = TokenSpan::new(self.start_position, self.end_position, self.line, self.col);
+        Token::new(kind, lexeme, Some(literal), self.consume_span())
+    }
+
+    pub fn consume_eof(&mut self) -> Token {
+        Token::eoi(self.consume_span())
+    }
+
+    pub fn consume_span(&mut self) -> SourceSpan {
+        let span = SourceSpan::new(self.start_position, self.end_position, self.source_id);
 
         self.start_position = self.end_position;
 
-        Token::new(kind, lexeme, Some(literal), span)
-    }
-
-    pub fn eof(&self) -> Token {
-        let span = TokenSpan::new(self.start_position, self.end_position, self.line, self.col);
-
-        Token::eoi(span)
-    }
-
-    pub fn lexical_error(&mut self, kind: LexicalErrorKind) -> LexicalError {
-        let span = TokenSpan::new(self.start_position, self.end_position, self.line, self.col);
-
-        self.start_position = self.end_position;
-
-        LexicalError { span, source: kind }
+        span
     }
 
     pub fn ignore_char(&mut self) {
@@ -74,14 +60,7 @@ impl Iterator for SourceIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(c) = self.iter.next() {
-            self.end_position += c.len_utf8();
-
-            if c == '\n' {
-                self.line += 1;
-                self.col = 1;
-            } else {
-                self.col += 1;
-            }
+            self.end_position += 1;
 
             Some(c)
         } else {

@@ -1,75 +1,22 @@
-use std::rc::Rc;
-
+use common::span::SourceSpan;
 use scanner::token::{Token, TokenKind};
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct AstSpan {
-    pub start: usize,
-    pub end: usize,
-    pub source: Rc<NamedSource>,
-}
-
-impl AstSpan {
-    pub fn new(start: usize, end: usize, source: Rc<NamedSource>) -> Self {
-        AstSpan { start, end, source }
-    }
-
-    pub fn from_token(token: &Token, source: Rc<NamedSource>) -> Self {
-        AstSpan {
-            start: token.span.start,
-            end: token.span.end,
-            source,
-        }
-    }
-}
-
-impl From<&AstSpan> for miette::SourceSpan {
-    fn from(val: &AstSpan) -> Self {
-        let length = val.end - val.start;
-        miette::SourceSpan::new(val.start.into(), length)
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct NamedSource {
-    pub name: String,
-    pub source: String,
-}
-
-impl NamedSource {
-    pub fn new(name: String, source: String) -> Self {
-        NamedSource { name, source }
-    }
-}
-
-impl From<NamedSource> for miette::NamedSource<String> {
-    fn from(val: NamedSource) -> Self {
-        miette::NamedSource::new(val.name, val.source)
-    }
-}
-
-pub trait RcNamedSourceExt {
-    fn as_optional(&self) -> Option<NamedSource>;
-}
-
-impl RcNamedSourceExt for Rc<NamedSource> {
-    fn as_optional(&self) -> Option<NamedSource> {
-        Some(self.as_ref().clone())
-    }
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Ast {
     pub inner: Vec<Stmt>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Ast {
-    pub fn new(span: AstSpan) -> Self {
+    pub fn new(span: SourceSpan) -> Self {
         Ast {
             inner: vec![],
             span,
         }
+    }
+
+    pub fn from(inner: Vec<Stmt>, span: SourceSpan) -> Self {
+        Ast { inner, span }
     }
 }
 
@@ -79,29 +26,6 @@ impl IntoIterator for Ast {
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
-    }
-}
-
-impl From<Vec<Stmt>> for Ast {
-    fn from(value: Vec<Stmt>) -> Self {
-        let span = if value.is_empty() {
-            AstSpan {
-                start: 0,
-                end: 0,
-                source: Rc::new(NamedSource {
-                    name: "".to_string(),
-                    source: "".to_string(),
-                }),
-            }
-        } else {
-            AstSpan {
-                start: value[0].get_span().start,
-                end: value[value.len() - 1].get_span().end,
-                source: value[0].get_span().source.clone(),
-            }
-        };
-
-        Ast { inner: value, span }
     }
 }
 
@@ -119,7 +43,7 @@ pub enum Stmt {
 }
 
 impl Stmt {
-    pub fn get_span(&self) -> &AstSpan {
+    pub fn get_span(&self) -> &SourceSpan {
         match self {
             Stmt::Expr(expr) => expr.get_span(),
             Stmt::Decl(decl) => match decl {
@@ -152,33 +76,33 @@ pub trait StmtVisitor<T> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Return {
     pub value: Option<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Return {
-    pub fn new(value: Option<Expr>, span: AstSpan) -> Self {
+    pub fn new(value: Option<Expr>, span: SourceSpan) -> Self {
         Return { value, span }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Break {
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Break {
-    pub fn new(span: AstSpan) -> Self {
+    pub fn new(span: SourceSpan) -> Self {
         Break { span }
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Continue {
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Continue {
-    pub fn new(span: AstSpan) -> Self {
+    pub fn new(span: SourceSpan) -> Self {
         Continue { span }
     }
 }
@@ -186,11 +110,11 @@ impl Continue {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Block {
     pub inner: Ast,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Block {
-    pub fn new(inner: Ast, span: AstSpan) -> Self {
+    pub fn new(inner: Ast, span: SourceSpan) -> Self {
         Block { inner, span }
     }
 }
@@ -228,11 +152,11 @@ pub struct LocalDecl {
     pub value: Expr,
     pub captured: bool,
     pub uid: usize,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl LocalDecl {
-    pub fn new(name: String, value: Expr, uid: usize, span: AstSpan) -> Self {
+    pub fn new(name: String, value: Expr, uid: usize, span: SourceSpan) -> Self {
         LocalDecl {
             name,
             value,
@@ -248,11 +172,11 @@ pub struct FunctionParam {
     pub name: String,
     pub uid: usize,
     pub captured: bool,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl FunctionParam {
-    pub fn new(name: String, uid: usize, span: AstSpan) -> Self {
+    pub fn new(name: String, uid: usize, span: SourceSpan) -> Self {
         FunctionParam {
             name,
             uid,
@@ -270,7 +194,7 @@ pub struct FunctionDecl {
     pub free_vars: Vec<String>,
     pub captured: bool,
     pub uid: usize,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl FunctionDecl {
@@ -279,7 +203,7 @@ impl FunctionDecl {
         params: Vec<FunctionParam>,
         body: Stmt,
         uid: usize,
-        span: AstSpan,
+        span: SourceSpan,
     ) -> Self {
         FunctionDecl {
             name,
@@ -298,11 +222,11 @@ pub struct Cond {
     pub cond: Expr,
     pub then: Box<Stmt>,
     pub or_else: Option<Box<Stmt>>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Cond {
-    pub fn new(cond: Expr, then: Stmt, or_else: Option<Stmt>, span: AstSpan) -> Self {
+    pub fn new(cond: Expr, then: Stmt, or_else: Option<Stmt>, span: SourceSpan) -> Self {
         Cond {
             cond,
             then: Box::new(then),
@@ -316,11 +240,11 @@ impl Cond {
 pub struct While {
     pub cond: Expr,
     pub body: Box<Stmt>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl While {
-    pub fn new(cond: Expr, body: Stmt, span: AstSpan) -> Self {
+    pub fn new(cond: Expr, body: Stmt, span: SourceSpan) -> Self {
         While {
             cond,
             body: Box::new(body),
@@ -334,11 +258,11 @@ pub struct ForEachItem {
     pub name: String,
     pub uid: usize,
     pub captured: bool,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl ForEachItem {
-    pub fn new(name: String, uid: usize, span: AstSpan) -> Self {
+    pub fn new(name: String, uid: usize, span: SourceSpan) -> Self {
         ForEachItem {
             name,
             uid,
@@ -353,11 +277,11 @@ pub struct ForEach {
     pub item: ForEachItem,
     pub iterable: Expr,
     pub body: Box<Stmt>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl ForEach {
-    pub fn new(item: ForEachItem, iterable: Expr, body: Stmt, span: AstSpan) -> Self {
+    pub fn new(item: ForEachItem, iterable: Expr, body: Stmt, span: SourceSpan) -> Self {
         ForEach {
             item,
             iterable,
@@ -383,7 +307,7 @@ pub enum Expr {
 }
 
 impl Expr {
-    pub fn get_span(&self) -> &AstSpan {
+    pub fn get_span(&self) -> &SourceSpan {
         match self {
             Expr::Binary(binary_op) => &binary_op.span,
             Expr::Unary(unary_op) => &unary_op.span,
@@ -419,11 +343,11 @@ pub struct BinaryOp {
     pub lhs: Box<Expr>,
     pub op: BinaryOperator,
     pub rhs: Box<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl BinaryOp {
-    pub fn new(lhs: Expr, op: BinaryOperator, rhs: Expr, span: AstSpan) -> Self {
+    pub fn new(lhs: Expr, op: BinaryOperator, rhs: Expr, span: SourceSpan) -> Self {
         BinaryOp {
             lhs: Box::new(lhs),
             op,
@@ -437,11 +361,11 @@ impl BinaryOp {
 pub struct UnaryOp {
     pub op: UnaryOperator,
     pub rhs: Box<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl UnaryOp {
-    pub fn new(op: UnaryOperator, rhs: Expr, span: AstSpan) -> Self {
+    pub fn new(op: UnaryOperator, rhs: Expr, span: SourceSpan) -> Self {
         UnaryOp {
             op,
             rhs: Box::new(rhs),
@@ -454,11 +378,11 @@ impl UnaryOp {
 pub struct Call {
     pub callee: Box<Expr>,
     pub args: Vec<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Call {
-    pub fn new(callee: Expr, args: Vec<Expr>, span: AstSpan) -> Self {
+    pub fn new(callee: Expr, args: Vec<Expr>, span: SourceSpan) -> Self {
         Call {
             callee: Box::new(callee),
             args,
@@ -471,11 +395,11 @@ impl Call {
 pub struct Assign {
     pub name: Box<Expr>,
     pub value: Box<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Assign {
-    pub fn new(name: Expr, value: Expr, span: AstSpan) -> Self {
+    pub fn new(name: Expr, value: Expr, span: SourceSpan) -> Self {
         Assign {
             name: Box::new(name),
             value: Box::new(value),
@@ -488,11 +412,11 @@ impl Assign {
 pub struct Access {
     pub subscripted: Box<Expr>,
     pub index: Box<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Access {
-    pub fn new(subscripted: Expr, index: Expr, span: AstSpan) -> Self {
+    pub fn new(subscripted: Expr, index: Expr, span: SourceSpan) -> Self {
         Access {
             subscripted: Box::new(subscripted),
             index: Box::new(index),
@@ -504,11 +428,11 @@ impl Access {
 #[derive(Debug, PartialEq, Clone)]
 pub struct List {
     pub elements: Vec<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl List {
-    pub fn new(elements: Vec<Expr>, span: AstSpan) -> Self {
+    pub fn new(elements: Vec<Expr>, span: SourceSpan) -> Self {
         List { elements, span }
     }
 }
@@ -516,11 +440,11 @@ impl List {
 #[derive(Debug, PartialEq, Clone)]
 pub struct AssociativeArray {
     pub elements: Vec<(Literal, Expr)>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl AssociativeArray {
-    pub fn new(elements: Vec<(Literal, Expr)>, span: AstSpan) -> Self {
+    pub fn new(elements: Vec<(Literal, Expr)>, span: SourceSpan) -> Self {
         AssociativeArray { elements, span }
     }
 }
@@ -528,11 +452,11 @@ impl AssociativeArray {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Grouping {
     pub expr: Box<Expr>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Grouping {
-    pub fn new(expr: Expr, span: AstSpan) -> Self {
+    pub fn new(expr: Expr, span: SourceSpan) -> Self {
         Grouping {
             expr: Box::new(expr),
             span,
@@ -543,11 +467,11 @@ impl Grouping {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Literal {
     pub value: scanner::token::Literal,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Literal {
-    pub fn new(value: scanner::token::Literal, span: AstSpan) -> Self {
+    pub fn new(value: scanner::token::Literal, span: SourceSpan) -> Self {
         Literal { value, span }
     }
 }
@@ -557,11 +481,11 @@ pub struct Variable {
     pub name: String,
     pub uid: usize,
     pub captured: bool,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl Variable {
-    pub fn new(name: String, id: usize, span: AstSpan) -> Self {
+    pub fn new(name: String, id: usize, span: SourceSpan) -> Self {
         Variable {
             name,
             uid: id,
@@ -577,11 +501,11 @@ pub struct AnonymousFunction {
     pub body: Box<Stmt>,
     pub uid: usize,
     pub free_vars: Vec<String>,
-    pub span: AstSpan,
+    pub span: SourceSpan,
 }
 
 impl AnonymousFunction {
-    pub fn new(params: Vec<FunctionParam>, body: Stmt, uid: usize, span: AstSpan) -> Self {
+    pub fn new(params: Vec<FunctionParam>, body: Stmt, uid: usize, span: SourceSpan) -> Self {
         AnonymousFunction {
             params,
             body: Box::new(body),

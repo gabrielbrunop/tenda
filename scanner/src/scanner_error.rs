@@ -1,31 +1,18 @@
-use core::fmt;
-use std::fmt::Display;
-
+use common::span::SourceSpan;
+use macros::Report;
 use thiserror::Error;
 
-use crate::token::TokenSpan;
-
-#[derive(Error, Debug)]
-pub struct LexicalError {
-    pub span: TokenSpan,
-    #[source]
-    pub source: LexicalErrorKind,
-}
-
-impl Display for LexicalError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} (na posição {})", self.source, self.span.start)
-    }
-}
-
-#[derive(Error, Debug, PartialEq, Clone)]
-pub enum LexicalErrorKind {
+#[derive(Error, Debug, PartialEq, Clone, Report)]
+pub enum LexicalError {
     #[error("zeros à esquerda em literais numéricos não são permitidos")]
-    LeadingZeroNumberLiterals,
+    LeadingZeroNumberLiterals { span: SourceSpan },
 
     #[error("fim de linha inesperado em texto")]
-    UnexpectedStringEol,
+    UnexpectedStringEol { span: SourceSpan },
 
-    #[error("caractere inesperado: {0}")]
-    UnexpectedChar(char),
+    #[error("caractere inesperado: {}", .character)]
+    UnexpectedChar { character: char, span: SourceSpan },
+
+    #[error("fim inesperado de entrada")]
+    UnexpectedEoi { span: SourceSpan },
 }

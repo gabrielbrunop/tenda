@@ -6,8 +6,10 @@ edition = "2021"
 [dependencies]
 parser = { path = "../parser" }
 scanner = { path = "../scanner" }
+common = { path = "../common" }
+macros = { path = "../macros" }
 thiserror = { workspace = true }
-miette = { workspace = true }
+ariadne = { workspace = true }
 indexmap = "1.7.0"
 chrono = "0.4.40"
 chrono-tz = "0.10.1"
