@@ -11,7 +11,7 @@ use crate::{
     function::{Function, FunctionObject},
     platform::{self},
     runtime_error::{Result, RuntimeError},
-    stack::Stack,
+    stack::{Stack, StackError},
     value::{Value, ValueType},
 };
 
@@ -228,15 +228,6 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             name, value, span, ..
         } = local;
 
-        if self.stack.is_name_in_local_scope(name) {
-            let name = name.to_string();
-
-            return Err(Box::new(RuntimeError::AlreadyDeclared {
-                var_name: name,
-                span: Some(span.clone()),
-            }));
-        }
-
         let value = self.visit_expr(value)?;
 
         let value = match local.captured {
@@ -244,9 +235,16 @@ impl DeclVisitor<Result<Value>> for Interpreter {
             false => StoredValue::new(value),
         };
 
-        let _ = self.stack.define(name.clone(), value);
-
-        Ok(Value::Nil)
+        match self.stack.define(name.clone(), value) {
+            Ok(_) => Ok(Value::Nil),
+            Err(err) => match err {
+                StackError::AlreadyDeclared => Err(Box::new(RuntimeError::AlreadyDeclared {
+                    var_name: name.to_string(),
+                    span: Some(span.clone()),
+                })),
+                _ => unreachable!(),
+            },
+        }
     }
 
     fn visit_function(&mut self, function: &ast::FunctionDecl) -> Result<Value> {
@@ -256,11 +254,19 @@ impl DeclVisitor<Result<Value>> for Interpreter {
 
         let func = self.create_function(params, body.clone());
 
-        let _ = self
+        match self
             .stack
-            .define(name.clone(), StoredValue::new(Value::Function(func)));
-
-        Ok(Value::Nil)
+            .define(name.clone(), StoredValue::new(Value::Function(func)))
+        {
+            Ok(_) => Ok(Value::Nil),
+            Err(err) => match err {
+                StackError::AlreadyDeclared => Err(Box::new(RuntimeError::AlreadyDeclared {
+                    var_name: name.to_string(),
+                    span: Some(function.span.clone()),
+                })),
+                _ => unreachable!(),
+            },
+        }
     }
 }
 
@@ -695,14 +701,19 @@ impl ExprVisitor<Result<Value>> for Interpreter {
 
                 match result {
                     Ok(_) => Ok(value),
-                    Err(_) => Err(Box::new(RuntimeError::UndefinedReference {
-                        var_name: name.clone(),
-                        span: Some(span.clone()),
-                        help: Some(format!(
-                            "a variável identificada por '{}' precisa ser definida com `seja`",
-                            name
-                        )),
-                    })),
+                    Err(err) => match err {
+                        StackError::AssignToUndefined(name) => {
+                            Err(Box::new(RuntimeError::UndefinedReference {
+                                var_name: name.clone(),
+                                span: Some(span.clone()),
+                                help: Some(format!(
+                                    "a variável identificada por '{}' precisa ser definida com `seja`",
+                                    name
+                                )),
+                            }))
+                        }
+                        _ => unreachable!(),
+                    },
                 }
             }
             ast::Expr::Access(ast::Access {
@@ -969,10 +980,10 @@ impl Interpreter {
             .map(|(a, b)| (a.clone(), b))
             .collect();
 
-        let mut frame = Frame::new();
-        frame.env = *func.get_env();
+        let mut context_frame = Frame::new();
+        context_frame.env = *func.get_env();
 
-        self.stack.push(frame);
+        self.stack.push(context_frame);
 
         let result = match func.object {
             FunctionObject::Builtin { func_ptr, env, .. } => func_ptr(args, self, env),
