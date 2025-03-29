@@ -122,10 +122,12 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     .get_span()
                     .expect("`to_report()` called on error variant without a span");
                 let help = self.get_help();
-
                 let kind = ariadne::ReportKind::Custom("erro", ariadne::Color::Red);
+                let config = ariadne::Config::default()
+                    .with_index_type(ariadne::IndexType::Byte);
 
                 let mut builder = ariadne::Report::build(kind, span.clone())
+                    .with_config(config)
                     .with_message(message)
                     .with_label(
                         ariadne::Label::new(span.clone())

@@ -60,7 +60,7 @@ impl Iterator for SourceIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(c) = self.iter.next() {
-            self.end_position += 1;
+            self.end_position += c.len_utf8();
 
             Some(c)
         } else {
