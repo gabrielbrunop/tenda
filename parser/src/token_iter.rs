@@ -1,5 +1,5 @@
 use peekmore::{PeekMore, PeekMoreIterator};
-use scanner::token::{Token, TokenKind};
+use scanner::{Token, TokenKind};
 use std::{cell::RefCell, ops::Neg, rc::Rc, slice::Iter};
 
 #[derive(Debug)]
@@ -158,18 +158,6 @@ impl TokenIterator<'_> {
         is_next_valid
     }
 
-    pub fn advance_until(&mut self, token_type: Iter<TokenKind>) {
-        let token_types: Vec<TokenKind> = token_type.cloned().collect();
-
-        while let Some(token) = self.tokens.peek() {
-            if token_types.iter().any(|t| *t == token.kind) {
-                break;
-            }
-
-            self.tokens.next();
-        }
-    }
-
     pub fn advance_while(&mut self, token_type: Iter<TokenKind>) {
         let token_types: Vec<TokenKind> = token_type.cloned().collect();
 
@@ -241,7 +229,7 @@ impl Drop for NewlineGuard {
 macro_rules! token_stream {
     ($($kind:expr),*) => {
         {
-            use scanner::token::TokenKind::*;
+            use scanner::TokenKind::*;
             vec![$($kind),*].iter()
         }
     };
@@ -251,7 +239,7 @@ macro_rules! token_stream {
 macro_rules! token_vec {
     ($($kind:expr),*) => {
         {
-            use scanner::token::TokenKind::*;
+            use scanner::TokenKind::*;
             vec![$($kind),*]
         }
     };

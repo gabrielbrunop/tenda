@@ -1,11 +1,12 @@
 use chrono::Local;
 use std::io::Write;
+use tenda_core::*;
 
 #[derive(Debug)]
 pub struct Platform;
 
-fn map_file_error_kind(kind: std::io::ErrorKind) -> interpreter::platform::FileErrorKind {
-    use interpreter::platform::FileErrorKind;
+fn map_file_error_kind(kind: std::io::ErrorKind) -> runtime::FileErrorKind {
+    use runtime::FileErrorKind;
     use std::io;
 
     match kind {
@@ -17,7 +18,7 @@ fn map_file_error_kind(kind: std::io::ErrorKind) -> interpreter::platform::FileE
     }
 }
 
-impl interpreter::platform::Platform for Platform {
+impl runtime::Platform for Platform {
     fn println(&self, message: &str) {
         println!("{}", message);
     }
@@ -36,32 +37,28 @@ impl interpreter::platform::Platform for Platform {
         rand::random()
     }
 
-    fn read_file(&self, path: &str) -> Result<String, interpreter::platform::FileErrorKind> {
+    fn read_file(&self, path: &str) -> Result<String, runtime::FileErrorKind> {
         match std::fs::read_to_string(path) {
             Ok(content) => Ok(content),
             Err(error) => Err(map_file_error_kind(error.kind())),
         }
     }
 
-    fn write_file(
-        &self,
-        path: &str,
-        content: &str,
-    ) -> Result<(), interpreter::platform::FileErrorKind> {
+    fn write_file(&self, path: &str, content: &str) -> Result<(), runtime::FileErrorKind> {
         match std::fs::write(path, content) {
             Ok(_) => Ok(()),
             Err(error) => Err(map_file_error_kind(error.kind())),
         }
     }
 
-    fn remove_file(&self, path: &str) -> Result<(), interpreter::platform::FileErrorKind> {
+    fn remove_file(&self, path: &str) -> Result<(), runtime::FileErrorKind> {
         match std::fs::remove_file(path) {
             Ok(_) => Ok(()),
             Err(error) => Err(map_file_error_kind(error.kind())),
         }
     }
 
-    fn list_files(&self, path: &str) -> Result<Vec<String>, interpreter::platform::FileErrorKind> {
+    fn list_files(&self, path: &str) -> Result<Vec<String>, runtime::FileErrorKind> {
         match std::fs::read_dir(path) {
             Ok(entries) => Ok(entries
                 .filter_map(|entry| entry.ok().map(|entry| entry.file_name()))
@@ -71,21 +68,21 @@ impl interpreter::platform::Platform for Platform {
         }
     }
 
-    fn create_dir(&self, path: &str) -> Result<(), interpreter::platform::FileErrorKind> {
+    fn create_dir(&self, path: &str) -> Result<(), runtime::FileErrorKind> {
         match std::fs::create_dir(path) {
             Ok(_) => Ok(()),
             Err(error) => Err(map_file_error_kind(error.kind())),
         }
     }
 
-    fn remove_dir(&self, path: &str) -> Result<(), interpreter::platform::FileErrorKind> {
+    fn remove_dir(&self, path: &str) -> Result<(), runtime::FileErrorKind> {
         match std::fs::remove_dir(path) {
             Ok(_) => Ok(()),
             Err(error) => Err(map_file_error_kind(error.kind())),
         }
     }
 
-    fn list_dirs(&self, path: &str) -> Result<Vec<String>, interpreter::platform::FileErrorKind> {
+    fn list_dirs(&self, path: &str) -> Result<Vec<String>, runtime::FileErrorKind> {
         match std::fs::read_dir(path) {
             Ok(entries) => Ok(entries
                 .filter_map(|entry| entry.ok().map(|entry| entry.file_name()))
@@ -95,18 +92,14 @@ impl interpreter::platform::Platform for Platform {
         }
     }
 
-    fn current_dir(&self) -> Result<String, interpreter::platform::FileErrorKind> {
+    fn current_dir(&self) -> Result<String, runtime::FileErrorKind> {
         match std::env::current_dir() {
             Ok(path) => Ok(path.to_string_lossy().to_string()),
             Err(error) => Err(map_file_error_kind(error.kind())),
         }
     }
 
-    fn file_append(
-        &self,
-        path: &str,
-        content: &str,
-    ) -> Result<(), interpreter::platform::FileErrorKind> {
+    fn file_append(&self, path: &str, content: &str) -> Result<(), runtime::FileErrorKind> {
         match std::fs::OpenOptions::new().append(true).open(path) {
             Ok(mut file) => match file.write_all(content.as_bytes()) {
                 Ok(_) => Ok(()),

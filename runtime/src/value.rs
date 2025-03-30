@@ -1,9 +1,8 @@
+use scanner::Literal;
 use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
-
-use scanner::token::Literal;
 
 use crate::associative_array::{AssociativeArray, AssociativeArrayKey};
 use crate::date::Date;

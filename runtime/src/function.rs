@@ -1,8 +1,8 @@
-use parser::ast::{self, Stmt};
+use parser::ast;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::environment::Environment;
-use crate::interpreter::Interpreter;
+use crate::runtime::Runtime;
 
 use super::runtime_error::Result;
 use super::value::Value;
@@ -16,7 +16,11 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(params: Vec<FunctionParam>, captured_env: Environment, body: Box<Stmt>) -> Self {
+    pub fn new(
+        params: Vec<FunctionParam>,
+        captured_env: Environment,
+        body: Box<ast::Stmt>,
+    ) -> Self {
         let unique_id = FUNCTION_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         Function {
@@ -72,7 +76,7 @@ impl From<ast::FunctionParam> for FunctionParam {
 
 type BuiltinFunctionPointer = fn(
     params: Vec<(FunctionParam, Value)>,
-    interpreter: &mut Interpreter,
+    runtime: &mut Runtime,
     context: Box<Environment>,
 ) -> Result<Value>;
 
@@ -81,7 +85,7 @@ pub enum FunctionObject {
     UserDefined {
         params: Vec<FunctionParam>,
         env: Box<Environment>,
-        body: Box<Stmt>,
+        body: Box<ast::Stmt>,
     },
     Builtin {
         params: Vec<FunctionParam>,
@@ -91,7 +95,11 @@ pub enum FunctionObject {
 }
 
 impl FunctionObject {
-    pub fn new(params: Vec<FunctionParam>, context: Box<Environment>, body: Box<Stmt>) -> Self {
+    pub fn new(
+        params: Vec<FunctionParam>,
+        context: Box<Environment>,
+        body: Box<ast::Stmt>,
+    ) -> Self {
         FunctionObject::UserDefined {
             params,
             body,

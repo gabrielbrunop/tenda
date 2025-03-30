@@ -1,6 +1,6 @@
 use common::report::Report;
 use common::span::SourceSpan;
-use parser::ast::{self, Access, DeclVisitor, ExprVisitor, StmtVisitor};
+use parser::{self, ast, ast::DeclVisitor, ast::ExprVisitor, ast::StmtVisitor};
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use crate::{
@@ -16,18 +16,18 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Interpreter {
+pub struct Runtime {
     stack: Stack,
     platform: Box<dyn platform::Platform>,
 }
 
-impl Interpreter {
+impl Runtime {
     pub fn new(platform: impl platform::Platform + 'static) -> Self {
         let mut stack = Stack::new();
 
         builtins::setup_native_bindings(&mut stack);
 
-        Interpreter {
+        Runtime {
             stack,
             platform: Box::new(platform),
         }
@@ -79,7 +79,7 @@ impl Interpreter {
     }
 }
 
-impl StmtVisitor<Result<Value>> for Interpreter {
+impl StmtVisitor<Result<Value>> for Runtime {
     fn visit_decl(&mut self, decl: &ast::Decl) -> Result<Value> {
         use ast::Decl::*;
 
@@ -222,7 +222,7 @@ impl StmtVisitor<Result<Value>> for Interpreter {
     }
 }
 
-impl DeclVisitor<Result<Value>> for Interpreter {
+impl DeclVisitor<Result<Value>> for Runtime {
     fn visit_local(&mut self, local: &ast::LocalDecl) -> Result<Value> {
         let ast::LocalDecl {
             name, value, span, ..
@@ -270,7 +270,7 @@ impl DeclVisitor<Result<Value>> for Interpreter {
     }
 }
 
-impl ExprVisitor<Result<Value>> for Interpreter {
+impl ExprVisitor<Result<Value>> for Runtime {
     fn visit_binary(&mut self, binary: &ast::BinaryOp) -> Result<Value> {
         let ast::BinaryOp {
             lhs, op, rhs, span, ..
@@ -627,7 +627,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     }
 
     fn visit_access(&mut self, index: &ast::Access) -> Result<Value> {
-        let Access {
+        let ast::Access {
             subscripted,
             index,
             span,
@@ -784,7 +784,7 @@ impl ExprVisitor<Result<Value>> for Interpreter {
     }
 }
 
-impl Interpreter {
+impl Runtime {
     fn visit_list_access(&mut self, list: &[Value], index: &ast::Expr) -> Result<Value> {
         let span = index.get_span();
         let index = self.resolve_index(index)?;

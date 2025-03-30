@@ -1,6 +1,9 @@
 pub mod ast;
-pub mod closures;
-pub mod parser;
-pub mod parser_error;
-pub mod scope_tracker;
-pub mod token_iter;
+mod closures;
+mod parser;
+mod parser_error;
+mod scope_tracker;
+mod token_iter;
+
+pub use parser::*;
+pub use parser_error::*;

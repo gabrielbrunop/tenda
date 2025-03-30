@@ -1,15 +1,17 @@
 [workspace]
 members = [
-    "interpreter",
+    "runtime",
     "parser",
     "scanner",
-    "main",
     "common",
     "macros",
+    "tenda-core",
+    "tenda",
 ]
 resolver = "2"
 
 [workspace.dependencies]
 peekmore = "1.3.0"
 thiserror = "1.0"
+chrono = "0.4.40"
 ariadne = { git = "https://github.com/gabrielbrunop/ariadne.git", branch = "main" }
