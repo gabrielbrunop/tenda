@@ -351,6 +351,16 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::List(Rc::new(RefCell::new(list))))
             }),
+            "de_texto" => builtin_fn!(["texto"], |args, _, _| {
+                let text = ensure!(args!(args, 0), String(value) => value);
+
+                let list = text
+                    .chars()
+                    .map(|c| Value::String(c.to_string()))
+                    .collect::<Vec<_>>();
+
+                Ok(Value::List(Rc::new(RefCell::new(list))))
+            }),
             "transforma" => builtin_fn!(["lista", "função"], |args, runtime, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let function = ensure!(args!(args, 1), Function(function) => function);
@@ -801,6 +811,17 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                 let text = ensure!(args!(args, 0), String(value) => value);
 
                 Ok(Value::String(text.trim().to_string()))
+            }),
+            "para_número" => builtin_fn!(["texto"], |args, _, _| {
+                let text = ensure!(args!(args, 0), String(value) => value);
+
+                match text.parse::<f64>() {
+                    Ok(number) => Ok(Value::Number(number)),
+                    Err(_) => Err(Box::new(RuntimeError::InvalidValueForConversion  {
+                        value: Value::String(text.to_string()),
+                        span: None,
+                    })),
+                }
             })
         })
     );

@@ -181,4 +181,12 @@ pub enum RuntimeError {
         #[span]
         span: Option<SourceSpan>,
     },
+
+    #[error("valor inválido para conversão para tipo '{}'", .value.to_string())]
+    InvalidValueForConversion {
+        value: Value,
+
+        #[span]
+        span: Option<SourceSpan>,
+    },
 }
