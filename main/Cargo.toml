@@ -12,3 +12,4 @@ ariadne = { workspace = true }
 reedline = "0.39.0"
 rand = "0.9.0"
 chrono = "0.4.40"
+yansi = "1.0"
