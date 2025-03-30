@@ -12,6 +12,7 @@ use scanner::scanner_error::LexicalError;
 use std::io::{IsTerminal, Read};
 use std::rc::Rc;
 use std::{env, io};
+use yansi::Paint;
 
 struct BlockValidator;
 
@@ -180,9 +181,17 @@ fn run_source(source: &str, name: &'static str) {
     let tokens = match Scanner::new(source, source_id).scan() {
         Ok(tokens) => tokens,
         Err(errs) => {
+            let len = errs.len();
+
             for err in errs {
                 err.to_report().eprint(cache.clone()).unwrap();
             }
+
+            println!(
+                "\n{} programa não pôde ser executado devido a {} erro(s) léxico(s) encontrado(s)",
+                Paint::red("erro:").bold(),
+                len,
+            );
 
             return;
         }
@@ -191,9 +200,17 @@ fn run_source(source: &str, name: &'static str) {
     let ast = match Parser::new(&tokens, source_id).parse() {
         Ok(ast) => ast,
         Err(errs) => {
+            let len = errs.len();
+
             for err in errs {
                 err.to_report().eprint(cache.clone()).unwrap();
             }
+
+            println!(
+                "\n{} programa não pôde ser executado devido a {} erro(s) de sintaxe encontrado(s)",
+                Paint::red("erro:").bold(),
+                len,
+            );
 
             return;
         }
@@ -203,6 +220,11 @@ fn run_source(source: &str, name: &'static str) {
 
     if let Err(err) = runtime.eval(&ast) {
         err.to_report().eprint(cache.clone()).unwrap();
+
+        println!(
+            "\n{} programa encerrado devido a um erro durante a execução",
+            Paint::red("erro:").bold(),
+        );
     }
 }
 
