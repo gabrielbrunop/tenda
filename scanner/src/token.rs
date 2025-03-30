@@ -102,4 +102,7 @@ impl Literal {
     pub const TRUE_LITERAL: &'static str = "verdadeiro";
     pub const FALSE_LITERAL: &'static str = "falso";
     pub const NIL_LITERAL: &'static str = "Nada";
+    pub const POSITIVE_INFINITY_LITERAL: &'static str = "infinito";
+    pub const NEGATIVE_INFINITY_LITERAL: &'static str = "-infinito";
+    pub const NAN_LITERAL: &'static str = "NaN";
 }

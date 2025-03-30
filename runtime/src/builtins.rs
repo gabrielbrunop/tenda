@@ -19,6 +19,12 @@ macro_rules! global {
     }};
 }
 
+macro_rules! def_value {
+    ($name:literal, $value:expr) => {
+        ($name.to_string(), $value)
+    };
+}
+
 macro_rules! builtin_assoc_array {
     ($($name:literal => $value:expr),+ $(,)?) => {{
         use std::cell::RefCell;
@@ -42,7 +48,7 @@ macro_rules! assoc_array_enum {
     }};
 }
 
-macro_rules! define_assoc_array {
+macro_rules! def_assoc_array {
     ($assoc_array_name:literal, { $($name:literal => $value:expr),+ $(,)? }) => {
         (
             $assoc_array_name.to_string(),
@@ -66,7 +72,7 @@ macro_rules! builtin_fn {
     };
 }
 
-macro_rules! define_fn {
+macro_rules! def_fn {
     ($name:literal, [$($param:expr),*], $body:expr) => {
         ($name.to_string(), builtin_fn!([$($param),*], $body))
     };
@@ -109,7 +115,7 @@ macro_rules! ensure {
                     expected: ValueType::$variant,
                     found: value.kind(),
                     span: None,
-                    help: None,
+                    message: None,
                 }))
             }
         }
@@ -129,7 +135,7 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 pub fn setup_io_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_fn!("exiba", ["texto"], |args, runtime, _| {
+        def_fn!("exiba", ["texto"], |args, runtime, _| {
             let text = match args!(args, 0) {
                 Value::String(value) => value.to_string(),
                 value => format!("{}", value),
@@ -139,12 +145,12 @@ pub fn setup_io_global_bindings(stack: &mut Stack) {
 
             Ok(Value::Nil)
         }),
-        define_fn!("entrada", [], |_, runtime, _| {
+        def_fn!("entrada", [], |_, runtime, _| {
             let input = runtime.get_platform().read_line();
 
             Ok(Value::String(input))
         }),
-        define_fn!("leia", ["texto"], |args, runtime, _| {
+        def_fn!("leia", ["texto"], |args, runtime, _| {
             let prompt = match args!(args, 0) {
                 Value::String(value) => value.to_string(),
                 value => format!("{}", value),
@@ -156,7 +162,7 @@ pub fn setup_io_global_bindings(stack: &mut Stack) {
 
             Ok(Value::String(input))
         }),
-        define_assoc_array!("Saída", {
+        def_assoc_array!("Saída", {
             "exiba" => builtin_fn!(["texto"], |args, runtime, _| {
                 let text = match args!(args, 0) {
                     Value::String(value) => value.to_string(),
@@ -201,7 +207,7 @@ pub fn setup_io_global_bindings(stack: &mut Stack) {
 pub fn setup_list_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_assoc_array!("Lista", {
+        def_assoc_array!("Lista", {
             "tamanho" => builtin_fn!(["lista"], |args, _, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
 
@@ -241,7 +247,8 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index,
                         len: list.len(),
-                        span: None
+                        span: None,
+                        help: vec![]
                     }));
                 }
 
@@ -257,7 +264,8 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index,
                         len: list.len(),
-                        span: None
+                        span: None,
+                        help: vec![]
                     }));
                 }
 
@@ -304,7 +312,8 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: end,
                         len: list.len(),
-                        span: None
+                        span: None,
+                        help: vec![]
                     }));
                 }
 
@@ -332,7 +341,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                         expected: value::ValueType::Range,
                         found: value.kind(),
                         span: None,
-                        help: None,
+                        message: None,
                     }))
                 };
 
@@ -364,7 +373,13 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 fn setup_math_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_assoc_array!("Matemática", {
+        def_value!("infinito", Value::Number(f64::INFINITY)),
+        def_value!("NaN", Value::Number(f64::NAN)),
+        def_assoc_array!("Matemática", {
+            "maior_número" => Value::Number(f64::MAX),
+            "menor_número" => Value::Number(f64::MIN),
+            "pi" => Value::Number(std::f64::consts::PI),
+            "e" => Value::Number(std::f64::consts::E),
             "absoluto" => builtin_fn!(["número"], |args, _, _| {
                 let number = ensure!(args!(args, 0), Number(value) => *value);
 
@@ -598,7 +613,7 @@ fn setup_math_global_bindings(stack: &mut Stack) {
 fn setup_string_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_assoc_array!("Texto", {
+        def_assoc_array!("Texto", {
             "tamanho" => builtin_fn!(["texto"], |args, _, _| {
                 let text = ensure!(args!(args, 0), String(value) => value);
 
@@ -618,7 +633,8 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: start,
                         len: text.len(),
-                        span: None
+                        span: None,
+                        help: vec![]
                     }));
                 }
 
@@ -705,7 +721,8 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: end,
                         len: text.len(),
-                        span: None
+                        span: None,
+                        help: vec![]
                     }));
                 }
 
@@ -725,7 +742,8 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::IndexOutOfBounds {
                         index: start,
                         len: text.len(),
-                        span: None
+                        span: None,
+                        help: vec![]
                     }));
                 }
 
@@ -791,7 +809,7 @@ fn setup_string_global_bindings(stack: &mut Stack) {
 fn setup_file_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_assoc_array!("Arquivo", {
+        def_assoc_array!("Arquivo", {
             "erros" => assoc_array_enum! {
                 "NÃO_ENCONTRADO",
                 "PERMISSÃO_NEGADA",
@@ -874,7 +892,7 @@ fn setup_file_global_bindings(stack: &mut Stack) {
 fn setup_program_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_assoc_array!("Programa", {
+        def_assoc_array!("Programa", {
             "argumentos" => builtin_fn!(|_, runtime, _| {
                 let args = runtime.get_platform().args();
                 let args = args.into_iter().map(Value::String).collect();
@@ -903,7 +921,7 @@ fn setup_program_global_bindings(stack: &mut Stack) {
 fn setup_date_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_assoc_array!("Data", {
+        def_assoc_array!("Data", {
             "erros" => assoc_array_enum! {
                 "ISO_INVÁLIDA",
                 "TIMESTAMP_INVÁLIDO",

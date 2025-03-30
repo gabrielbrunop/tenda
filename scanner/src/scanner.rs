@@ -127,12 +127,15 @@ impl<'a> Scanner<'a> {
 
     fn consume_string(&mut self, char: char) -> Result<Token, LexicalError> {
         let mut string = String::new();
+        let mut consumed_end_quote = false;
+
         string.push(char);
 
         while let Some(&peeked) = self.source.peek() {
             match peeked {
                 '"' => {
                     self.source.next();
+                    consumed_end_quote = true;
                     break;
                 }
                 '\n' => {
@@ -147,8 +150,8 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        if self.source.peek().is_none() {
-            return Err(LexicalError::UnexpectedEoi {
+        if !consumed_end_quote && self.source.peek().is_none() {
+            return Err(LexicalError::UnexpectedStringEol {
                 span: self.source.consume_span(),
             });
         }

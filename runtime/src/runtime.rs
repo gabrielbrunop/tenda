@@ -241,6 +241,7 @@ impl DeclVisitor<Result<Value>> for Runtime {
                 StackError::AlreadyDeclared => Err(Box::new(RuntimeError::AlreadyDeclared {
                     var_name: name.to_string(),
                     span: Some(span.clone()),
+                    help: Some("declare a variável com outro nome ou use `=` para atribuir um novo valor a ela".to_string()),
                 })),
                 _ => unreachable!(),
             },
@@ -263,6 +264,7 @@ impl DeclVisitor<Result<Value>> for Runtime {
                 StackError::AlreadyDeclared => Err(Box::new(RuntimeError::AlreadyDeclared {
                     var_name: name.to_string(),
                     span: Some(function.span.clone()),
+                    help: Some("declare a função com outro nome".to_string()),
                 })),
                 _ => unreachable!(),
             },
@@ -282,7 +284,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
         let lhs = self.visit_expr(lhs)?;
         let rhs = self.visit_expr(rhs)?;
 
-        let expr = match op {
+        let value = match op {
             Add => match (lhs, rhs) {
                 (Number(lhs), Number(rhs)) => Number(lhs + rhs),
                 (String(lhs), String(rhs)) => String(format!("{}{}", lhs, rhs)),
@@ -301,7 +303,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!("não é possível somar '{}' e '{}'", lhs, rhs)),
+                        message: Some(format!("não é possível somar '{}' e '{}'", lhs, rhs)),
                     }));
                 }
             },
@@ -314,7 +316,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!("não é possível subtrair '{}' de '{}'", rhs, lhs)),
+                        message: Some(format!("não é possível subtrair '{}' de '{}'", rhs, lhs)),
                     }));
                 }
             },
@@ -325,7 +327,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível multiplicar '{}' por '{}'",
                             lhs, rhs
                         )),
@@ -344,7 +346,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!("não é possível dividir '{}' por '{}'", lhs, rhs)),
+                        message: Some(format!("não é possível dividir '{}' por '{}'", lhs, rhs)),
                     }));
                 }
             },
@@ -355,7 +357,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível elevar '{}' à potência de '{}'",
                             lhs, rhs
                         )),
@@ -369,7 +371,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível encontrar o resto da divisão de '{}' por '{}'",
                             lhs, rhs
                         )),
@@ -413,7 +415,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
                             lhs, rhs
                         )),
@@ -429,7 +431,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
                             lhs, rhs
                         )),
@@ -445,7 +447,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
                             lhs, rhs
                         )),
@@ -461,7 +463,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível aplicar a operação de 'menor ou igual a' para '{}' e '{}'",
                             lhs,
                             rhs,
@@ -502,7 +504,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível criar um intervalo entre '{}' e '{}'",
                             lhs, rhs
                         )),
@@ -524,7 +526,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível verificar se '{}' contém '{}'",
                             lhs, rhs
                         )),
@@ -546,7 +548,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         first: lhs.kind(),
                         second: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível verificar se '{}' não contém '{}'",
                             lhs, rhs
                         )),
@@ -555,14 +557,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
             },
         };
 
-        match expr {
-            Number(value) if value.abs() == f64::INFINITY => {
-                Err(Box::new(RuntimeError::NumberOverflow {
-                    span: Some(span.clone()),
-                }))
-            }
-            _ => Ok(expr),
-        }
+        Ok(value)
     }
 
     fn visit_unary(&mut self, unary: &ast::UnaryOp) -> Result<Value> {
@@ -581,7 +576,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         expected: ValueType::Number,
                         found: rhs.kind(),
                         span: Some(span.clone()),
-                        help: Some(format!(
+                        message: Some(format!(
                             "não é possível negar valor de tipo '{}'; esperado '{}'",
                             rhs.kind(),
                             ValueType::Number
@@ -618,8 +613,8 @@ impl ExprVisitor<Result<Value>> for Runtime {
                 expected: ValueType::Function,
                 found: callee.kind(),
                 span: Some(span.clone()),
-                help: Some(format!(
-                    "não é possível chamar '{}' como função",
+                message: Some(format!(
+                    "não é possível chamar um valor de tipo '{}' como função",
                     callee.kind()
                 )),
             })),
@@ -680,7 +675,10 @@ impl ExprVisitor<Result<Value>> for Runtime {
             .ok_or(Box::new(RuntimeError::UndefinedReference {
                 var_name: name.clone(),
                 span: Some(span.clone()),
-                help: None,
+                help: Some(format!(
+                    "você precisa definir a variável '{}' antes de usá-la: `seja {} = ...`",
+                    name, name
+                )),
             }))
     }
 
@@ -707,8 +705,8 @@ impl ExprVisitor<Result<Value>> for Runtime {
                                 var_name: name.clone(),
                                 span: Some(span.clone()),
                                 help: Some(format!(
-                                    "a variável identificada por '{}' precisa ser definida com `seja`",
-                                    name
+                                    "talvez você queria definir a variável '{}': `seja {} = ...`",
+                                    name, name
                                 )),
                             }))
                         }
@@ -719,7 +717,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
             ast::Expr::Access(ast::Access {
                 index,
                 subscripted,
-                span,
+                span: lvalue_span,
             }) => {
                 let subscripted = self.visit_expr(subscripted)?;
 
@@ -736,10 +734,19 @@ impl ExprVisitor<Result<Value>> for Runtime {
                     }
                     Value::String(_) => Err(Box::new(RuntimeError::ImmutableString {
                         span: Some(span.clone()),
+                        help: Some(
+                            concat!(
+                                "em vez de tentar modificar o texto, você pode criar um novo texto\n",
+                                "concatenando o texto original com o novo texto: `texto = texto + ...`\n",
+                                "ou usando funções como `Texto.substitua(...)`\n",
+                                "veja as funções disponíveis em `Texto` para mais possibilidades"
+                            )
+                            .to_string(),
+                        ),
                     })),
                     value => Err(Box::new(RuntimeError::WrongIndexType {
                         value: value.kind(),
-                        span: Some(span.clone()),
+                        span: Some(lvalue_span.clone()),
                     })),
                 }
             }
@@ -794,6 +801,7 @@ impl Runtime {
                 index,
                 len: list.len(),
                 span: Some(span.clone()),
+                help: vec!["verifique se o índice está dentro dos limites da lista antes de tentar acessá-lo".to_string()],
             }));
         }
 
@@ -811,6 +819,10 @@ impl Runtime {
                 index,
                 len: string.len(),
                 span: Some(span.clone()),
+                help: vec![
+                    "verifique o tamanho do texto antes de tentar acessar uma posição nele"
+                        .to_string(),
+                ],
             }))
         }
     }
@@ -877,7 +889,7 @@ impl Runtime {
                     expected: ValueType::Number,
                     found: val.kind(),
                     span: Some(value_span.clone()),
-                    help: Some(format!(
+                    message: Some(format!(
                         "não é possível indexar uma lista com '{}'; esperado '{}'",
                         val.kind(),
                         ValueType::Number
@@ -891,6 +903,10 @@ impl Runtime {
                 index,
                 len: list.len(),
                 span: Some(index_span.clone()),
+                help: vec![
+                    "verifique se o índice está dentro dos limites da lista antes de tentar acessá-lo".to_string(), 
+                    "se a sua intenção era adicionar um novo elemento à lista, use `Lista.insira`".to_string()
+                ], 
             }));
         }
 
@@ -936,7 +952,7 @@ impl Runtime {
                 expected: ValueType::Number,
                 found: val.kind(),
                 span: Some(span.clone()),
-                help: Some(format!(
+                message: Some(format!(
                     "não é possível indexar com '{}'; esperado '{}'",
                     val.kind(),
                     ValueType::Number
