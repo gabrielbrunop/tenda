@@ -4,10 +4,10 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, LitStr, Type};
 
 /// Derive macro for creating a `Report` implementation that supports:
 ///
-/// - `#[span]` for the primary span
+/// - `#[span]` for the primary span (must appear at most once in each variant)
 /// - `#[label]` for extra spans (each field can be `Option<SourceSpan>`, `SourceSpan`, or `Vec<SourceSpan>`)
 /// - `#[help]` and `#[note]` for textual messages (each field can be `Option<String>` or `Vec<String>`)
-/// - `#[message]` for overriding the default error message (`String` or `Option<String>`)
+/// - `#[message]` for overriding the default error message (`String` or `Option<String>`, must appear at most once in each variant)
 /// - A top-level enum attribute `#[report("error_kind")]` to customize the error kind
 #[proc_macro_derive(Report, attributes(report, span, label, help, note, message))]
 pub fn report_derive(input: TokenStream) -> TokenStream {
@@ -53,6 +53,9 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
         let mut get_message_arm = quote! { #enum_ident::#variant_ident { .. } => None };
 
         if let Fields::Named(named_fields) = &variant.fields {
+            let mut span_fields_found = 0usize;
+            let mut message_fields_found = 0usize;
+
             let mut span_fields = Vec::new();
             let mut label_fields = Vec::new();
             let mut help_fields = Vec::new();
@@ -82,6 +85,19 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                 }
 
                 if is_span_field {
+                    span_fields_found += 1;
+                    if span_fields_found > 1 {
+                        return syn::Error::new_spanned(
+                            field,
+                            format!(
+                                "Multiple `#[span]` attributes in variant `{}` are not allowed.",
+                                variant_ident,
+                            ),
+                        )
+                        .to_compile_error()
+                        .into();
+                    }
+
                     if let Type::Path(type_path) = &field.ty {
                         if let Some(last_seg) = type_path.path.segments.last() {
                             match last_seg.ident.to_string().as_str() {
@@ -186,6 +202,19 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                 }
 
                 if is_message_field {
+                    message_fields_found += 1;
+                    if message_fields_found > 1 {
+                        return syn::Error::new_spanned(
+                            field,
+                            format!(
+                                "Multiple `#[message]` attributes in variant `{}` are not allowed.",
+                                variant_ident,
+                            ),
+                        )
+                        .to_compile_error()
+                        .into();
+                    }
+
                     if let Type::Path(type_path) = &field.ty {
                         if let Some(last_seg) = type_path.path.segments.last() {
                             match last_seg.ident.to_string().as_str() {
@@ -302,7 +331,6 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                                 }
                             }
                         } else {
-                            // "VecString"
                             quote! {
                                 notes.extend(#ident.clone());
                             }
