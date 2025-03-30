@@ -129,68 +129,68 @@ pub fn setup_native_bindings(stack: &mut Stack) {
 pub fn setup_io_global_bindings(stack: &mut Stack) {
     global!(
         stack,
-        define_fn!("exiba", ["texto"], |args, interpreter, _| {
+        define_fn!("exiba", ["texto"], |args, runtime, _| {
             let text = match args!(args, 0) {
                 Value::String(value) => value.to_string(),
                 value => format!("{}", value),
             };
 
-            interpreter.get_platform().println(&text);
+            runtime.get_platform().println(&text);
 
             Ok(Value::Nil)
         }),
-        define_fn!("entrada", [], |_, interpreter, _| {
-            let input = interpreter.get_platform().read_line();
+        define_fn!("entrada", [], |_, runtime, _| {
+            let input = runtime.get_platform().read_line();
 
             Ok(Value::String(input))
         }),
-        define_fn!("leia", ["texto"], |args, interpreter, _| {
+        define_fn!("leia", ["texto"], |args, runtime, _| {
             let prompt = match args!(args, 0) {
                 Value::String(value) => value.to_string(),
                 value => format!("{}", value),
             };
 
-            interpreter.get_platform().print(&prompt);
+            runtime.get_platform().print(&prompt);
 
-            let input = interpreter.get_platform().read_line();
+            let input = runtime.get_platform().read_line();
 
             Ok(Value::String(input))
         }),
         define_assoc_array!("Saída", {
-            "exiba" => builtin_fn!(["texto"], |args, interpreter, _| {
+            "exiba" => builtin_fn!(["texto"], |args, runtime, _| {
                 let text = match args!(args, 0) {
                     Value::String(value) => value.to_string(),
                     value => format!("{}", value),
                 };
 
-                interpreter.get_platform().println(&text);
+                runtime.get_platform().println(&text);
 
                 Ok(Value::Nil)
             }),
-            "escreva" => builtin_fn!(["texto"], |args, interpreter, _| {
+            "escreva" => builtin_fn!(["texto"], |args, runtime, _| {
                 let text = match args!(args, 0) {
                     Value::String(value) => value.to_string(),
                     value => format!("{}", value),
                 };
 
-                interpreter.get_platform().write(&text);
+                runtime.get_platform().write(&text);
 
                 Ok(Value::Nil)
             }),
-            "leia" => builtin_fn!(["texto"], |args, interpreter, _| {
+            "leia" => builtin_fn!(["texto"], |args, runtime, _| {
                 let prompt = match args!(args, 0) {
                     Value::String(value) => value.to_string(),
                     value => format!("{}", value),
                 };
 
-                interpreter.get_platform().print(&prompt);
+                runtime.get_platform().print(&prompt);
 
-                let input = interpreter.get_platform().read_line();
+                let input = runtime.get_platform().read_line();
 
                 Ok(Value::String(input))
             }),
-            "entrada" => builtin_fn!([], |_, interpreter, _| {
-                let input = interpreter.get_platform().read_line();
+            "entrada" => builtin_fn!([], |_, runtime, _| {
+                let input = runtime.get_platform().read_line();
 
                 Ok(Value::String(input))
             })
@@ -312,7 +312,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::List(Rc::new(RefCell::new(extracted))))
             }),
-            "para_cada" => builtin_fn!(["lista", "função"], |args, interpreter, _| {
+            "para_cada" => builtin_fn!(["lista", "função"], |args, runtime, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let function = ensure!(args!(args, 1), Function(function) => function);
 
@@ -320,7 +320,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     let i = Value::Number(i as f64);
                     let args = vec![value.clone(), i];
 
-                    interpreter.call_function(function.clone(), args, None)?;
+                    runtime.call_function(function.clone(), args, None)?;
                 }
 
                 Ok(Value::Nil)
@@ -342,7 +342,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::List(Rc::new(RefCell::new(list))))
             }),
-            "transforma" => builtin_fn!(["lista", "função"], |args, interpreter, _| {
+            "transforma" => builtin_fn!(["lista", "função"], |args, runtime, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
                 let function = ensure!(args!(args, 1), Function(function) => function);
 
@@ -350,7 +350,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 for value in list.iter() {
                     let args = vec![value.clone()];
-                    let result = interpreter.call_function(function.clone(), args, None)?;
+                    let result = runtime.call_function(function.clone(), args, None)?;
 
                     new_list.push(result);
                 }
@@ -454,11 +454,11 @@ fn setup_math_global_bindings(stack: &mut Stack) {
 
                 Ok(Value::Number(number1.min(number2)))
             }),
-            "aleatório" => builtin_fn!(["mínimo", "máximo"], |args, interpreter, _| {
+            "aleatório" => builtin_fn!(["mínimo", "máximo"], |args, runtime, _| {
                 let min = ensure!(args!(args, 0), Number(value) => *value);
                 let max = ensure!(args!(args, 1), Number(value) => *value);
 
-                let number = interpreter.get_platform().rand();
+                let number = runtime.get_platform().rand();
 
                 Ok(Value::Number(number * (max - min) + min))
             }),
@@ -798,44 +798,44 @@ fn setup_file_global_bindings(stack: &mut Stack) {
                 "JÁ_EXISTE",
                 "OUTRO",
             },
-            "leia" => builtin_fn!(["caminho"], |args, interpreter, _| {
+            "leia" => builtin_fn!(["caminho"], |args, runtime, _| {
                 let path = ensure!(args!(args, 0), String(value) => value);
 
-                match interpreter.get_platform().read_file(path) {
+                match runtime.get_platform().read_file(path) {
                     Ok(text) => Ok(success_object!(Value::String(text))),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "escreva" => builtin_fn!(["caminho", "conteúdo"], |args, interpreter, _| {
+            "escreva" => builtin_fn!(["caminho", "conteúdo"], |args, runtime, _| {
                 let path = ensure!(args!(args, 0), String(value) => value);
                 let content = ensure!(args!(args, 1), String(value) => value);
 
-                match interpreter.get_platform().write_file(path, content) {
+                match runtime.get_platform().write_file(path, content) {
                     Ok(_) => Ok(success_object!(Value::Nil)),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "acrescenta" => builtin_fn!(["caminho", "conteúdo"], |args, interpreter, _| {
+            "acrescenta" => builtin_fn!(["caminho", "conteúdo"], |args, runtime, _| {
                 let path = ensure!(args!(args, 0), String(value) => value);
                 let content = ensure!(args!(args, 1), String(value) => value);
 
-                match interpreter.get_platform().file_append(path, content) {
+                match runtime.get_platform().file_append(path, content) {
                     Ok(_) => Ok(success_object!(Value::Nil)),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "remova" => builtin_fn!(["caminho"], |args, interpreter, _| {
+            "remova" => builtin_fn!(["caminho"], |args, runtime, _| {
                 let path = ensure!(args!(args, 0), String(value) => value);
 
-                match interpreter.get_platform().remove_file(path) {
+                match runtime.get_platform().remove_file(path) {
                     Ok(_) => Ok(success_object!(Value::Nil)),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "lista" => builtin_fn!(["caminho"], |args, interpreter, _| {
+            "lista" => builtin_fn!(["caminho"], |args, runtime, _| {
                 let path = ensure!(args!(args, 0), String(value) => value);
 
-                match interpreter.get_platform().list_files(path) {
+                match runtime.get_platform().list_files(path) {
                     Ok(files) => {
                         let files = files.into_iter().map(Value::String).collect();
                         let value = Value::List(Rc::new(RefCell::new(files)));
@@ -845,24 +845,24 @@ fn setup_file_global_bindings(stack: &mut Stack) {
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "cria_diretório" => builtin_fn!(["caminho"], |args, interpreter, _| {
+            "cria_diretório" => builtin_fn!(["caminho"], |args, runtime, _| {
                 let path = ensure!(args!(args, 0), String(value) => value);
 
-                match interpreter.get_platform().create_dir(path) {
+                match runtime.get_platform().create_dir(path) {
                     Ok(_) => Ok(success_object!(Value::Nil)),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "remova_diretório" => builtin_fn!(["caminho"], |args, interpreter, _| {
+            "remova_diretório" => builtin_fn!(["caminho"], |args, runtime, _| {
                 let path = ensure!(args!(args, 0), String(value) => value);
 
-                match interpreter.get_platform().remove_dir(path) {
+                match runtime.get_platform().remove_dir(path) {
                     Ok(_) => Ok(success_object!(Value::Nil)),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
             }),
-            "caminho_atual" => builtin_fn!(|_, interpreter, _| {
-                match interpreter.get_platform().current_dir() {
+            "caminho_atual" => builtin_fn!(|_, runtime, _| {
+                match runtime.get_platform().current_dir() {
                     Ok(path) => Ok(success_object!(Value::String(path))),
                     Err(kind) => Ok(io_error_to_error_object(kind)),
                 }
@@ -875,24 +875,24 @@ fn setup_program_global_bindings(stack: &mut Stack) {
     global!(
         stack,
         define_assoc_array!("Programa", {
-            "argumentos" => builtin_fn!(|_, interpreter, _| {
-                let args = interpreter.get_platform().args();
+            "argumentos" => builtin_fn!(|_, runtime, _| {
+                let args = runtime.get_platform().args();
                 let args = args.into_iter().map(Value::String).collect();
                 let value = Value::List(Rc::new(RefCell::new(args)));
 
                 Ok(value)
             }),
-            "encerra" => builtin_fn!(["código"], |args, interpreter, _| {
+            "encerra" => builtin_fn!(["código"], |args, runtime, _| {
                 let code = ensure!(args!(args, 0), Number(value) => *value as i32);
 
-                interpreter.get_platform().exit(code);
+                runtime.get_platform().exit(code);
 
                 Ok(Value::Nil)
             }),
-            "espera" => builtin_fn!(["segundos"], |args, interpreter, _| {
+            "espera" => builtin_fn!(["segundos"], |args, runtime, _| {
                 let seconds = ensure!(args!(args, 0), Number(value) => *value);
 
-                interpreter.get_platform().sleep(seconds);
+                runtime.get_platform().sleep(seconds);
 
                 Ok(Value::Nil)
             }),
@@ -909,9 +909,9 @@ fn setup_date_global_bindings(stack: &mut Stack) {
                 "TIMESTAMP_INVÁLIDO",
                 "FUSO_HORÁRIO_INVÁLIDO",
             },
-            "agora" => builtin_fn!(|_, interpreter, _| {
-                let now = interpreter.get_platform().date_now();
-                let tz = interpreter.get_platform().timezone_offset();
+            "agora" => builtin_fn!(|_, runtime, _| {
+                let now = runtime.get_platform().date_now();
+                let tz = runtime.get_platform().timezone_offset();
 
                 let value = Value::Date(Date::from_timestamp_millis(now, Some(tz)).unwrap());
 

@@ -1,5 +1,5 @@
 [package]
-name = "interpreter"
+name = "runtime"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,6 +10,6 @@ common = { path = "../common" }
 macros = { path = "../macros" }
 thiserror = { workspace = true }
 ariadne = { workspace = true }
+chrono = { workspace = true }
 indexmap = "1.7.0"
-chrono = "0.4.40"
 chrono-tz = "0.10.1"

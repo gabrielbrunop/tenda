@@ -2,7 +2,7 @@ use common::{
     source::IdentifiedSource,
     span::{SourceSpan, Span},
 };
-use scanner::token::{self, Token, TokenKind};
+use scanner::{self, Token, TokenKind};
 
 use crate::{
     ast::{self, FunctionParam},
@@ -699,7 +699,7 @@ impl<'a> Parser<'a> {
         let span = token.span.clone();
 
         let name = match token.literal.as_ref().unwrap() {
-            token::Literal::String(string) => string,
+            scanner::Literal::String(string) => string,
             _ => unreachable!(),
         };
 
@@ -908,7 +908,7 @@ impl<'a> Parser<'a> {
 
     fn parse_dot_access(&mut self, name: ast::Expr) -> Result<ast::Expr> {
         let (field, field_span) = self.consume_identifier()?;
-        let field = token::Literal::String(field);
+        let field = scanner::Literal::String(field);
 
         let index_expr = ast::Literal::new(field, field_span);
         let index_expr = ast::Expr::Literal(index_expr);
@@ -933,7 +933,9 @@ impl Parser<'_> {
         match self.tokens.next() {
             Some(token) if token.kind == TokenKind::Identifier => {
                 match token.literal.as_ref().unwrap() {
-                    token::Literal::String(string) => Ok((string.to_string(), token.span.clone())),
+                    scanner::Literal::String(string) => {
+                        Ok((string.to_string(), token.span.clone()))
+                    }
                     _ => unreachable!(),
                 }
             }

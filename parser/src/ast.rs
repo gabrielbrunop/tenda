@@ -1,5 +1,5 @@
 use common::span::SourceSpan;
-use scanner::token::{Token, TokenKind};
+use scanner::{Token, TokenKind};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Ast {
@@ -466,12 +466,12 @@ impl Grouping {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Literal {
-    pub value: scanner::token::Literal,
+    pub value: scanner::Literal,
     pub span: SourceSpan,
 }
 
 impl Literal {
-    pub fn new(value: scanner::token::Literal, span: SourceSpan) -> Self {
+    pub fn new(value: scanner::Literal, span: SourceSpan) -> Self {
         Literal { value, span }
     }
 }

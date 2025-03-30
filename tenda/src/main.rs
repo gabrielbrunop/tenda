@@ -1,17 +1,18 @@
 use common::report::Report;
 use common::source::IdentifiedSource;
-use interpreter::interpreter::Interpreter;
-use parser::parser::Parser;
-use parser::parser_error::ParserError;
+use parser::Parser;
+use parser::ParserError;
 use platform::Platform;
 use reedline::{
     default_emacs_keybindings, DefaultPrompt, Reedline, Signal, ValidationResult, Validator,
 };
-use scanner::scanner::Scanner;
-use scanner::scanner_error::LexicalError;
+use runtime::Runtime;
+use scanner::LexicalError;
+use scanner::Scanner;
 use std::io::{IsTerminal, Read};
 use std::rc::Rc;
 use std::{env, io};
+use tenda_core::*;
 use yansi::Paint;
 
 struct BlockValidator;
@@ -63,7 +64,7 @@ fn main() -> io::Result<()> {
         match file_content {
             Ok(source) => run_source(&source, path),
             Err(err) => match err.kind() {
-                std::io::ErrorKind::NotFound => eprintln!("Arquivo não encontrado: {}", path),
+                io::ErrorKind::NotFound => eprintln!("Arquivo não encontrado: {}", path),
                 _ => eprintln!("Erro ao ler arquivo: {}", err),
             },
         }
@@ -101,7 +102,7 @@ fn start_repl() {
     );
 
     let platform = Platform;
-    let mut runtime = Interpreter::new(platform);
+    let mut runtime = Runtime::new(platform);
     let mut exiting = false;
     let mut source_history: Vec<(IdentifiedSource, Rc<str>)> = Vec::new();
 
@@ -216,7 +217,7 @@ fn run_source(source: &str, name: &'static str) {
         }
     };
 
-    let mut runtime = Interpreter::new(platform);
+    let mut runtime = Runtime::new(platform);
 
     if let Err(err) = runtime.eval(&ast) {
         err.to_report().eprint(cache.clone()).unwrap();

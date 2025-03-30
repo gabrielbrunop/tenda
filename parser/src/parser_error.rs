@@ -1,6 +1,6 @@
 use common::span::SourceSpan;
 use macros::Report;
-use scanner::token::Token;
+use scanner::Token;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Vec<ParserError>>;

@@ -1,15 +1,10 @@
 [package]
-name = "main"
+name = "tenda-core"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-interpreter = { path = "../interpreter" }
+runtime = { path = "../runtime" }
 parser = { path = "../parser" }
 scanner = { path = "../scanner" }
 common = { path = "../common" }
-ariadne = { workspace = true }
-reedline = "0.39.0"
-rand = "0.9.0"
-chrono = "0.4.40"
-yansi = "1.0"
