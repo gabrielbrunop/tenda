@@ -6,6 +6,7 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, Vec<ParserError>>;
 
 #[derive(Error, Debug, PartialEq, Clone, Report)]
+#[report("erro sintático")]
 pub enum ParserError {
     #[error("fim inesperado de entrada")]
     UnexpectedEoi { span: SourceSpan },

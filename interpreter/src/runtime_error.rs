@@ -10,6 +10,7 @@ use crate::{
 pub type Result<T> = std::result::Result<T, Box<RuntimeError>>;
 
 #[derive(Error, Debug, PartialEq, Clone, Report)]
+#[report("erro de execução")]
 pub enum RuntimeError {
     #[error("divisão por zero não é permitida")]
     DivisionByZero { span: Option<SourceSpan> },

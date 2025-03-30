@@ -12,4 +12,4 @@ resolver = "2"
 [workspace.dependencies]
 peekmore = "1.3.0"
 thiserror = "1.0"
-ariadne = "0.5.1"
+ariadne = { git = "https://github.com/gabrielbrunop/ariadne.git", branch = "main" }
