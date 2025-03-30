@@ -3,6 +3,7 @@ use macros::Report;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Clone, Report)]
+#[report("erro léxico")]
 pub enum LexicalError {
     #[error("zeros à esquerda em literais numéricos não são permitidos")]
     LeadingZeroNumberLiterals { span: SourceSpan },

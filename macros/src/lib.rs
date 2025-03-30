@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, LitStr, Type};
 
-#[proc_macro_derive(Report)]
+#[proc_macro_derive(Report, attributes(report))]
 pub fn report_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -17,6 +17,14 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
             .into();
         }
     };
+
+    let error_kind = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("report"))
+        .and_then(|attr| attr.parse_args::<LitStr>().ok())
+        .map(|lit| lit.value())
+        .unwrap_or_else(|| "erro".into());
 
     let enum_ident = &input.ident;
 
@@ -122,9 +130,15 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     .get_span()
                     .expect("`to_report()` called on error variant without a span");
                 let help = self.get_help();
-                let kind = ariadne::ReportKind::Custom("erro", ariadne::Color::Red);
+                let kind = ariadne::ReportKind::Custom(&#error_kind, ariadne::Color::Red);
+
+                let prefixes = ariadne::Prefixes::new()
+                    .with_help("ajuda")
+                    .with_note("nota");
+
                 let config = ariadne::Config::default()
-                    .with_index_type(ariadne::IndexType::Byte);
+                    .with_index_type(ariadne::IndexType::Byte)
+                    .with_prefixes(prefixes);
 
                 let mut builder = ariadne::Report::build(kind, span.clone())
                     .with_config(config)
