@@ -6,14 +6,27 @@ use thiserror::Error;
 #[report("erro léxico")]
 pub enum LexicalError {
     #[error("zeros à esquerda em literais numéricos não são permitidos")]
-    LeadingZeroNumberLiterals { span: SourceSpan },
+    LeadingZeroNumberLiterals {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("fim de linha inesperado em texto")]
-    UnexpectedStringEol { span: SourceSpan },
+    UnexpectedStringEol {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("caractere inesperado: {}", .character)]
-    UnexpectedChar { character: char, span: SourceSpan },
+    UnexpectedChar {
+        character: char,
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("fim inesperado de entrada")]
-    UnexpectedEoi { span: SourceSpan },
+    UnexpectedEoi {
+        #[span]
+        span: SourceSpan,
+    },
 }

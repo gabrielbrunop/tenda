@@ -29,6 +29,10 @@ impl SourceSpan {
         self.label = Some(label);
         self
     }
+
+    pub fn label(&self) -> Option<&String> {
+        self.label.as_ref()
+    }
 }
 
 impl ariadne::Span for SourceSpan {

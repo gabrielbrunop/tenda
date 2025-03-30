@@ -65,7 +65,17 @@ impl Display for Value {
             f,
             "{}",
             match self {
-                Number(value) => value.to_string(),
+                Number(value) => match value {
+                    v if v.is_infinite() => {
+                        if v.is_sign_positive() {
+                            Literal::POSITIVE_INFINITY_LITERAL.to_string()
+                        } else {
+                            Literal::NEGATIVE_INFINITY_LITERAL.to_string()
+                        }
+                    }
+                    v if v.is_nan() => Literal::NAN_LITERAL.to_string(),
+                    _ => value.to_string(),
+                },
                 Boolean(value) => match *value {
                     true => Literal::TRUE_LITERAL.to_string(),
                     false => Literal::FALSE_LITERAL.to_string(),

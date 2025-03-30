@@ -9,37 +9,76 @@ pub type Result<T> = std::result::Result<T, Vec<ParserError>>;
 #[report("erro sintático")]
 pub enum ParserError {
     #[error("fim inesperado de entrada")]
-    UnexpectedEoi { span: SourceSpan },
+    UnexpectedEoi {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("esperado ')'")]
-    MissingParentheses { span: SourceSpan },
+    MissingParentheses {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("esperado ']'")]
-    MissingBrackets { span: SourceSpan },
+    MissingBrackets {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("esperado '}}'")]
-    MissingBraces { span: SourceSpan },
+    MissingBraces {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("esperado ':'")]
-    MissingColon { span: SourceSpan },
+    MissingColon {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("token inesperado: {}", .token.lexeme.escape_default())]
-    UnexpectedToken { token: Token, span: SourceSpan },
+    UnexpectedToken {
+        token: Token,
+
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("o valor à direita do '=' não é um valor válido para receber atribuições")]
-    InvalidAssignmentTarget { token: Token, span: SourceSpan },
+    InvalidAssignmentTarget {
+        token: Token,
+
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("retorno fora de uma função")]
-    IllegalReturn { span: SourceSpan },
+    IllegalReturn {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("'pare' fora de uma estrutura de repetição")]
-    IllegalBreak { span: SourceSpan },
+    IllegalBreak {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("'continue' fora de uma estrutura de repetição")]
-    IllegalContinue { span: SourceSpan },
+    IllegalContinue {
+        #[span]
+        span: SourceSpan,
+    },
 
     #[error("parâmetro '{}' duplicado na função", .name)]
-    DuplicateParameter { name: String, span: SourceSpan },
+    DuplicateParameter {
+        name: String,
+
+        #[span]
+        span: SourceSpan,
+    },
 }
 
 macro_rules! unexpected_token {

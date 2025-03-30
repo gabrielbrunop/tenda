@@ -13,44 +13,63 @@ pub type Result<T> = std::result::Result<T, Box<RuntimeError>>;
 #[report("erro de execução")]
 pub enum RuntimeError {
     #[error("divisão por zero não é permitida")]
-    DivisionByZero { span: Option<SourceSpan> },
-
-    #[error("números muito grandes não são permitidos")]
-    NumberOverflow { span: Option<SourceSpan> },
+    DivisionByZero {
+        #[span]
+        span: Option<SourceSpan>,
+    },
 
     #[error("operação inválida para os tipos '{}' e '{}'", .first.to_string(), .second.to_string())]
     TypeMismatch {
         first: ValueType,
         second: ValueType,
+
+        #[span]
         span: Option<SourceSpan>,
-        help: Option<String>,
+
+        #[message]
+        message: Option<String>,
     },
 
     #[error("esperado valor de tipo '{}', encontrado '{}'", .expected.to_string(), .found.to_string())]
     UnexpectedTypeError {
         expected: ValueType,
         found: ValueType,
+
+        #[message]
+        message: Option<String>,
+
+        #[span]
         span: Option<SourceSpan>,
-        help: Option<String>,
     },
 
     #[error("a variável identificada por '{}' não está definida neste escopo", .var_name)]
     UndefinedReference {
         var_name: String,
+
+        #[span]
         span: Option<SourceSpan>,
+
+        #[help]
         help: Option<String>,
     },
 
     #[error("variável identificada por {0} já está declarada neste escopo", .var_name)]
     AlreadyDeclared {
         var_name: String,
+
+        #[span]
         span: Option<SourceSpan>,
+
+        #[help]
+        help: Option<String>,
     },
 
     #[error("número de argumentos incorreto: esperado {}, encontrado {}", .expected, .found)]
     WrongNumberOfArguments {
         expected: usize,
         found: usize,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
@@ -58,72 +77,108 @@ pub enum RuntimeError {
     IndexOutOfBounds {
         index: usize,
         len: usize,
+
+        #[span]
         span: Option<SourceSpan>,
+
+        #[help]
+        help: Vec<String>,
     },
 
     #[error("não é possível acessar um valor do tipo '{}'", .value.to_string())]
     WrongIndexType {
         value: ValueType,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("limites de intervalo precisam ser números inteiros finitos: encontrado '{}'", .bound)]
     InvalidRangeBounds {
         bound: f64,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("índice de lista precisa ser um número inteiro positivo e finito: encontrado '{}'", .index)]
     InvalidIndex {
         index: f64,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("chave de dicionário precisa ser número inteiro ou texto: encontrado '{}'", .key)]
-    InvalidNumberAssociativeArrayKey { key: f64, span: Option<SourceSpan> },
+    InvalidNumberAssociativeArrayKey {
+        key: f64,
+
+        #[span]
+        span: Option<SourceSpan>,
+    },
 
     #[error("chave de dicionário precisa ser número inteiro ou texto: encontrado '{}'", .key)]
     InvalidTypeAssociativeArrayKey {
         key: ValueType,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("chave de dicionário não encontrada: '{}'", .key.to_string())]
     AssociativeArrayKeyNotFound {
         key: AssociativeArrayKey,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("não é possível iterar sobre um valor do tipo '{}'", .value.to_string())]
     NotIterable {
         value: ValueType,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("o valor do tipo '{}' não é um argumento válido para a função", .value.to_string())]
     InvalidArgument {
         value: Value,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("textos são imutáveis e não podem ser modificados")]
-    ImmutableString { span: Option<SourceSpan> },
+    ImmutableString {
+        #[span]
+        span: Option<SourceSpan>,
+
+        #[help]
+        help: Option<String>,
+    },
 
     #[error("timestamp inválido: {}", .timestamp.to_string())]
     InvalidTimestamp {
         timestamp: i64,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("falha ao analisar data ISO: {}", .source)]
     DateIsoParseError {
         source: chrono::ParseError,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 
     #[error("fuso horário inválido: '{tz_str}'")]
     InvalidTimeZoneString {
         tz_str: String,
+
+        #[span]
         span: Option<SourceSpan>,
     },
 }
