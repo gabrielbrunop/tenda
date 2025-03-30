@@ -415,24 +415,29 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     .with_index_type(ariadne::IndexType::Byte)
                     .with_prefixes(prefixes);
 
+                let mut main_label = ariadne::Label::new(main_span.clone())
+                    .with_color(ariadne::Color::Red);
+
+                if let Some(lbl) = main_span.label() {
+                    main_label = main_label.with_message(lbl.clone());
+                } else {
+                    main_label = main_label.with_message(format!("{}", "aqui".fg(ariadne::Color::Red)));
+                }
+
                 let mut builder = ariadne::Report::build(kind, main_span.clone())
                     .with_config(config)
                     .with_message(final_message)
-                    .with_label(
-                        ariadne::Label::new(main_span.clone())
-                            .with_message(format!("{}", "aqui".fg(ariadne::Color::Red)))
-                            .with_color(ariadne::Color::Red)
-                    );
+                    .with_label(main_label);
 
                 for lbl_span in label_spans {
                     let mut label =
                         ariadne::Label::new(lbl_span.clone())
-                            .with_color(ariadne::Color::Yellow);
+                            .with_color(ariadne::Color::Red);
 
                     if let Some(lbl) = lbl_span.label() {
                         label = label.with_message(lbl.clone());
                     } else {
-                        label = label.with_message(format!("{}", "aqui".fg(ariadne::Color::Yellow)));
+                        label = label.with_message(format!("{}", "aqui".fg(ariadne::Color::Red)));
                     }
 
                     builder = builder.with_label(label);
