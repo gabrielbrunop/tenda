@@ -1,5 +1,6 @@
 use std::{
     fmt::Display,
+    hash::Hash,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -64,6 +65,12 @@ impl Default for IdentifiedSource {
 impl PartialEq for IdentifiedSource {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+impl Hash for IdentifiedSource {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 

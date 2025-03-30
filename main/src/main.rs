@@ -10,6 +10,7 @@ use reedline::{
 use scanner::scanner::Scanner;
 use scanner::scanner_error::LexicalError;
 use std::io::{IsTerminal, Read};
+use std::rc::Rc;
 use std::{env, io};
 
 struct BlockValidator;
@@ -101,6 +102,7 @@ fn start_repl() {
     let platform = Platform;
     let mut runtime = Interpreter::new(platform);
     let mut exiting = false;
+    let mut source_history: Vec<(IdentifiedSource, Rc<str>)> = Vec::new();
 
     loop {
         let sig = rl.read_line(&prompt);
@@ -111,13 +113,15 @@ fn start_repl() {
                 exiting = false;
 
                 let source_id = IdentifiedSource::new();
-                let cache = (source_id, ariadne::Source::from(line.clone()));
+                let source_rc = Rc::from(line.clone());
+                source_history.push((source_id, source_rc));
 
                 let tokens = match Scanner::new(&line, source_id).scan() {
                     Ok(tokens) => tokens,
                     Err(errs) => {
                         for err in errs {
-                            err.to_report().eprint(cache.clone()).unwrap();
+                            let caches = ariadne::sources(source_history.clone());
+                            err.to_report().eprint(caches).unwrap();
                         }
 
                         continue;
@@ -128,7 +132,8 @@ fn start_repl() {
                     Ok(ast) => ast,
                     Err(errs) => {
                         for err in errs {
-                            err.to_report().eprint(cache.clone()).unwrap();
+                            let source_caches = ariadne::sources(source_history.clone());
+                            err.to_report().eprint(source_caches).unwrap();
                         }
 
                         continue;
@@ -140,7 +145,8 @@ fn start_repl() {
                         println!("{}", result);
                     }
                     Err(err) => {
-                        err.to_report().eprint(cache.clone()).unwrap();
+                        let source_caches = ariadne::sources(source_history.clone());
+                        err.to_report().eprint(source_caches).unwrap();
                     }
                 }
             }
