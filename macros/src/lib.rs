@@ -6,10 +6,16 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, LitStr, Type};
 ///
 /// - `#[span]` for the primary span (must appear at most once in each variant)
 /// - `#[label]` for extra spans (each field can be `Option<SourceSpan>`, `SourceSpan`, or `Vec<SourceSpan>`)
-/// - `#[help]` and `#[note]` for textual messages (each field can be `Option<String>` or `Vec<String>`)
-/// - `#[message]` for overriding the default error message (`String` or `Option<String>`, must appear at most once in each variant)
-/// - A top-level enum attribute `#[report("error_kind")]` to customize the error kind
-#[proc_macro_derive(Report, attributes(report, span, label, help, note, message))]
+/// - `#[help]` and `#[note]` for textual messages (each field can be `Option<String>` or `Vec<String>`),
+/// - `#[message]` for overriding the default error message (`String` or `Option<String>`).
+/// - A top-level enum attribute `#[report("error_kind")]` to customize the error kind.
+/// - A top-level enum attribute `#[accept_hooks]` that requires you (the user) to provide your own
+///   `impl HasReportHooks for YourEnum`. If you omit `#[accept_hooks]`, the macro provides a
+///   default, empty `HasReportHooks`.
+#[proc_macro_derive(
+    Report,
+    attributes(report, span, label, help, note, message, accept_hooks)
+)]
 pub fn report_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -32,6 +38,11 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
         .and_then(|attr| attr.parse_args::<LitStr>().ok())
         .map(|lit| lit.value())
         .unwrap_or_else(|| "erro".into());
+
+    let accept_hooks = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("accept_hooks"));
 
     let enum_ident = &input.ident;
 
@@ -97,14 +108,15 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                         .to_compile_error()
                         .into();
                     }
-
                     if let Type::Path(type_path) = &field.ty {
                         if let Some(last_seg) = type_path.path.segments.last() {
                             match last_seg.ident.to_string().as_str() {
                                 "Option" => {
                                     span_fields.push((
                                         ident.clone(),
-                                        quote! { #enum_ident::#variant_ident { #ident, .. } => #ident.clone() },
+                                        quote! {
+                                            #enum_ident::#variant_ident { #ident, .. } => #ident.clone()
+                                        },
                                         quote! {
                                             #enum_ident::#variant_ident { #ident, .. } => {
                                                 *#ident = Some(new_span.clone());
@@ -115,7 +127,9 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                                 "SourceSpan" => {
                                     span_fields.push((
                                         ident.clone(),
-                                        quote! { #enum_ident::#variant_ident { #ident, .. } => Some(#ident.clone()) },
+                                        quote! {
+                                            #enum_ident::#variant_ident { #ident, .. } => Some(#ident.clone())
+                                        },
                                         quote! {
                                             #enum_ident::#variant_ident { #ident, .. } => {
                                                 *#ident = new_span.clone();
@@ -141,13 +155,11 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                         if let Some(last_seg) = type_path.path.segments.last() {
                             match last_seg.ident.to_string().as_str() {
                                 "Option" => {
-                                    label_fields.push((ident.clone(), "OptionSpan".to_string()));
+                                    label_fields.push((ident.clone(), "OptionSpan".to_string()))
                                 }
-                                "Vec" => {
-                                    label_fields.push((ident.clone(), "VecSpan".to_string()));
-                                }
+                                "Vec" => label_fields.push((ident.clone(), "VecSpan".to_string())),
                                 "SourceSpan" => {
-                                    label_fields.push((ident.clone(), "DirectSpan".to_string()));
+                                    label_fields.push((ident.clone(), "DirectSpan".to_string()))
                                 }
                                 _ => {
                                     return syn::Error::new_spanned(
@@ -193,7 +205,6 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                         Err(err) => return err.to_compile_error().into(),
                     }
                 }
-
                 if is_note_field {
                     match check_help_note(&field.ty) {
                         Ok(kind) => note_fields.push((ident.clone(), kind)),
@@ -203,12 +214,13 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
 
                 if is_message_field {
                     message_fields_found += 1;
+
                     if message_fields_found > 1 {
                         return syn::Error::new_spanned(
                             field,
                             format!(
                                 "Multiple `#[message]` attributes in variant `{}` are not allowed.",
-                                variant_ident,
+                                variant_ident
                             ),
                         )
                         .to_compile_error()
@@ -376,7 +388,7 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
         get_message_arms.push(get_message_arm);
     }
 
-    let expanded = quote! {
+    let report_impl = quote! {
         impl common::report::Report for #enum_ident {
             fn get_span(&self) -> ::std::option::Option<common::span::SourceSpan> {
                 match self {
@@ -414,27 +426,32 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                 }
             }
 
-            fn to_report(&self) -> ariadne::Report<common::span::SourceSpan> {
-                use ariadne::Fmt;
-
+            fn build_report_config(&self) -> common::report::ReportConfig {
                 let fallback_message = self.to_string();
-
-                let main_span = self
-                    .get_span()
-                    .expect("`to_report()` called on error variant without a main #[span]");
-
-                let label_spans = self.get_labels();
+                let span = self.get_span();
+                let labels = self.get_labels();
                 let helps = self.get_helps();
                 let notes = self.get_notes();
-
                 let final_message = if let Some(custom) = self.get_message() {
                     custom
                 } else {
                     fallback_message
                 };
 
-                let kind = ariadne::ReportKind::Custom(&#error_kind, ariadne::Color::Red);
+                common::report::ReportConfig::new(
+                    span,
+                    labels,
+                    helps,
+                    notes,
+                    final_message
+                )
+            }
 
+            fn to_report(&self) -> ariadne::Report<common::span::SourceSpan> {
+                use ariadne::Fmt;
+                use common::report::{HasReportHooks, ReportConfig};
+
+                let kind = ariadne::ReportKind::Custom(&#error_kind, ariadne::Color::Red);
                 let prefixes = ariadne::Prefixes::new()
                     .with_help("ajuda")
                     .with_note("nota");
@@ -443,45 +460,84 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     .with_index_type(ariadne::IndexType::Byte)
                     .with_prefixes(prefixes);
 
+                let mut rep_config = self.build_report_config();
+
+                for hook in <Self as HasReportHooks>::hooks() {
+                    rep_config = hook(rep_config);
+                }
+
+                let main_span = match &rep_config.span {
+                    Some(sp) => sp.clone(),
+                    None => {
+                        panic!("No span found for report. \
+                            Please ensure at least one #[span] is present.");
+                    }
+                };
+
                 let mut main_label = ariadne::Label::new(main_span.clone())
                     .with_color(ariadne::Color::Red);
 
                 if let Some(lbl) = main_span.label() {
                     main_label = main_label.with_message(lbl.clone());
                 } else {
-                    main_label = main_label.with_message(format!("{}", "aqui".fg(ariadne::Color::Red)));
+                    main_label = main_label.with_message(
+                        format!("{}", "aqui".fg(ariadne::Color::Red))
+                    );
                 }
 
                 let mut builder = ariadne::Report::build(kind, main_span.clone())
                     .with_config(config)
-                    .with_message(final_message)
+                    .with_message(rep_config.message)
                     .with_label(main_label);
 
-                for lbl_span in label_spans {
-                    let mut label =
-                        ariadne::Label::new(lbl_span.clone())
-                            .with_color(ariadne::Color::Red);
+                for lbl_span in rep_config.labels {
+                    let mut label = ariadne::Label::new(lbl_span.clone())
+                        .with_color(ariadne::Color::Red);
 
-                    if let Some(lbl) = lbl_span.label() {
-                        label = label.with_message(lbl.clone());
+                    if let Some(lbl_txt) = lbl_span.label() {
+                        label = label.with_message(lbl_txt.clone());
                     } else {
-                        label = label.with_message(format!("{}", "aqui".fg(ariadne::Color::Red)));
+                        label = label.with_message(
+                            format!("{}", "aqui".fg(ariadne::Color::Red))
+                        );
                     }
-
                     builder = builder.with_label(label);
                 }
 
-                for help_msg in helps {
-                    builder = builder.with_help(help_msg);
+                for h in rep_config.helps {
+                    builder = builder.with_help(h);
                 }
 
-                for note_msg in notes {
-                    builder = builder.with_note(note_msg);
+                for n in rep_config.notes {
+                    builder = builder.with_note(n);
                 }
 
                 builder.finish()
             }
         }
+    };
+
+    let maybe_impl_hooks = if accept_hooks {
+        quote! {
+            #[allow(dead_code)]
+            const __CHECK_HOOKS_IMPL: () = {
+                let _ = <#enum_ident as common::report::HasReportHooks>::hooks;
+            };
+        }
+    } else {
+        quote! {
+            impl common::report::HasReportHooks for #enum_ident {
+                fn hooks() -> &'static [fn(common::report::ReportConfig) -> common::report::ReportConfig] {
+                    &[]
+                }
+            }
+        }
+    };
+
+    let expanded = quote! {
+        #report_impl
+
+        #maybe_impl_hooks
     };
 
     expanded.into()
