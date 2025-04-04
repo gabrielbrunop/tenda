@@ -1,0 +1,12 @@
+[package]
+name = "tenda-parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tenda-scanner = { path = "../scanner" }
+tenda-common = { path = "../common" }
+tenda-reporting = { path = "../reporting" }
+tenda-reporting-derive = { path = "../reporting-derive" }
+thiserror = { workspace = true }
+peekmore = { workspace = true }

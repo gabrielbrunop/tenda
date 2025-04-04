@@ -1,0 +1,11 @@
+[package]
+name = "tenda-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tenda-runtime = { path = "../runtime" }
+tenda-parser = { path = "../parser" }
+tenda-scanner = { path = "../scanner" }
+tenda-common = { path = "../common" }
+tenda-reporting = { path = "../reporting" }

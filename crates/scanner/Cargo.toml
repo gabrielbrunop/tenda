@@ -1,0 +1,10 @@
+[package]
+name = "tenda-scanner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tenda-common = { path = "../common" }
+tenda-reporting-derive = { path = "../reporting-derive" }
+tenda-reporting = { path = "../reporting" }
+thiserror = { workspace = true }

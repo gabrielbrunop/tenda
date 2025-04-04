@@ -1,0 +1,22 @@
+[package]
+name = "tenda-reporting-derive"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = { workspace = true }
+tenda-common = { path = "../common" }
+tenda-reporting = { path = "../reporting" }
+
+[dependencies.syn]
+version = "2.0"
+features = ["derive", "parsing"]
+
+[dependencies.quote]
+version = "1.0"
+
+[dependencies.proc-macro2]
+version = "1.0"
+
+[lib]
+proc-macro = true

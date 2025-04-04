@@ -1,0 +1,15 @@
+[package]
+name = "tenda-runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tenda-parser = { path = "../parser" }
+tenda-scanner = { path = "../scanner" }
+tenda-common = { path = "../common" }
+tenda-reporting = { path = "../reporting" }
+tenda-reporting-derive = { path = "../reporting-derive" }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+indexmap = "1.7.0"
+chrono-tz = "0.10.1"
