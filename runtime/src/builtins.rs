@@ -116,6 +116,7 @@ macro_rules! ensure {
                     found: value.kind(),
                     span: None,
                     message: None,
+                    stacktrace: vec![],
                 }))
             }
         }
@@ -248,7 +249,8 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                         index,
                         len: list.len(),
                         span: None,
-                        help: vec![]
+                        help: vec![],
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -265,7 +267,8 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                         index,
                         len: list.len(),
                         span: None,
-                        help: vec![]
+                        help: vec![],
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -304,7 +307,8 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                 if start > end {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: end as f64,
-                        span: None
+                        span: None,
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -313,7 +317,8 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                         index: end,
                         len: list.len(),
                         span: None,
-                        help: vec![]
+                        help: vec![],
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -329,7 +334,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                     let i = Value::Number(i as f64);
                     let args = vec![value.clone(), i];
 
-                    runtime.call_function(function.clone(), args, None)?;
+                    runtime.call_function(None, function.clone(), args, None)?;
                 }
 
                 Ok(Value::Nil)
@@ -342,6 +347,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                         found: value.kind(),
                         span: None,
                         message: None,
+                        stacktrace: vec![],
                     }))
                 };
 
@@ -369,7 +375,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
 
                 for value in list.iter() {
                     let args = vec![value.clone()];
-                    let result = runtime.call_function(function.clone(), args, None)?;
+                    let result = runtime.call_function(None, function.clone(), args, None)?;
 
                     new_list.push(result);
                 }
@@ -605,6 +611,7 @@ fn setup_math_global_bindings(stack: &mut Stack) {
                     return Err(Box::new(RuntimeError::InvalidArgument {
                         value: Value::Number(n),
                         span: None,
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -644,7 +651,8 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                         index: start,
                         len: text.len(),
                         span: None,
-                        help: vec![]
+                        help: vec![],
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -723,7 +731,8 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                 if start > end {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: end as f64,
-                        span: None
+                        span: None,
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -732,7 +741,8 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                         index: end,
                         len: text.len(),
                         span: None,
-                        help: vec![]
+                        help: vec![],
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -753,7 +763,8 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                         index: start,
                         len: text.len(),
                         span: None,
-                        help: vec![]
+                        help: vec![],
+                        stacktrace: vec![],
                     }));
                 }
 
@@ -820,6 +831,7 @@ fn setup_string_global_bindings(stack: &mut Stack) {
                     Err(_) => Err(Box::new(RuntimeError::InvalidValueForConversion  {
                         value: Value::String(text.to_string()),
                         span: None,
+                        stacktrace: vec![],
                     })),
                 }
             })

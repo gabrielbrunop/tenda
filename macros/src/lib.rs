@@ -1,23 +1,56 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, LitStr, Type};
+use std::collections::BTreeMap;
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, LitStr, Type};
 
 /// Derive macro for creating a `Report` implementation that supports:
 ///
-/// - `#[span]` for the primary span (must appear at most once in each variant)
-/// - `#[label]` for extra spans (each field can be `Option<SourceSpan>`, `SourceSpan`, or `Vec<SourceSpan>`)
-/// - `#[help]` and `#[note]` for textual messages (each field can be `Option<String>` or `Vec<String>`),
-/// - `#[message]` for overriding the default error message (`String` or `Option<String>`).
-/// - A top-level enum attribute `#[report("error_kind")]` to customize the error kind.
-/// - A top-level enum attribute `#[accept_hooks]` that requires you (the user) to provide your own
-///   `impl HasReportHooks for YourEnum`. If you omit `#[accept_hooks]`, the macro provides a
-///   default, empty `HasReportHooks`.
+/// - `#[span]` for the primary span
+/// - `#[label]` for extra spans (Option, SourceSpan, Vec<SourceSpan>)
+/// - `#[help]`/`#[note]` for textual messages (Option<String>, Vec<String>)
+/// - `#[message]` for overriding the default error message
+/// - `#[metadata]` for fields you want get/set methods generated for
+/// - `#[report("error_kind")]` to customize the error kind
+/// - `#[accept_hooks]` so you provide your own `HasReportHooks` impl;
+///   otherwise a default empty `HasReportHooks` is given.
 #[proc_macro_derive(
     Report,
-    attributes(report, span, label, help, note, message, accept_hooks)
+    attributes(report, span, label, help, note, message, metadata, accept_hooks)
 )]
 pub fn report_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+
+    let accept_hooks = input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("accept_hooks"));
+
+    let error_kind = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("report"))
+        .and_then(|attr| attr.parse_args::<LitStr>().ok())
+        .map(|lit| lit.value())
+        .unwrap_or_else(|| "erro".into());
+
+    let enum_ident = &input.ident;
+
+    let mut get_span_arms = Vec::new();
+    let mut set_span_arms = Vec::new();
+    let mut get_label_arms = Vec::new();
+    let mut get_help_arms = Vec::new();
+    let mut get_note_arms = Vec::new();
+    let mut get_message_arms = Vec::new();
+
+    #[derive(Default)]
+    struct MetaFieldInfo {
+        field_type: Option<Type>,
+        get_arms: Vec<proc_macro2::TokenStream>,
+        get_mut_arms: Vec<proc_macro2::TokenStream>,
+        set_arms: Vec<proc_macro2::TokenStream>,
+    }
+
+    let mut metadata_map: BTreeMap<Ident, MetaFieldInfo> = BTreeMap::new();
 
     let enum_data = match &input.data {
         Data::Enum(data_enum) => data_enum,
@@ -31,41 +64,19 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
         }
     };
 
-    let error_kind = input
-        .attrs
-        .iter()
-        .find(|attr| attr.path().is_ident("report"))
-        .and_then(|attr| attr.parse_args::<LitStr>().ok())
-        .map(|lit| lit.value())
-        .unwrap_or_else(|| "erro".into());
-
-    let accept_hooks = input
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("accept_hooks"));
-
-    let enum_ident = &input.ident;
-
-    let mut get_span_arms = Vec::new();
-    let mut set_span_arms = Vec::new();
-    let mut get_label_arms = Vec::new();
-    let mut get_help_arms = Vec::new();
-    let mut get_note_arms = Vec::new();
-    let mut get_message_arms = Vec::new();
-
     for variant in &enum_data.variants {
         let variant_ident = &variant.ident;
 
-        let mut get_span_arm = quote! { #enum_ident::#variant_ident { .. } => None };
-        let mut set_span_arm = quote! { #enum_ident::#variant_ident { .. } => {} };
-        let mut get_label_arm = quote! { #enum_ident::#variant_ident { .. } => Vec::new() };
-        let mut get_help_arm = quote! { #enum_ident::#variant_ident { .. } => Vec::new() };
-        let mut get_note_arm = quote! { #enum_ident::#variant_ident { .. } => Vec::new() };
-        let mut get_message_arm = quote! { #enum_ident::#variant_ident { .. } => None };
+        let mut get_span_arm = quote! { Self::#variant_ident { .. } => None };
+        let mut set_span_arm = quote! { Self::#variant_ident { .. } => {} };
+        let mut get_label_arm = quote! { Self::#variant_ident { .. } => Vec::new() };
+        let mut get_help_arm = quote! { Self::#variant_ident { .. } => Vec::new() };
+        let mut get_note_arm = quote! { Self::#variant_ident { .. } => Vec::new() };
+        let mut get_message_arm = quote! { Self::#variant_ident { .. } => None };
 
         if let Fields::Named(named_fields) = &variant.fields {
-            let mut span_fields_found = 0usize;
-            let mut message_fields_found = 0usize;
+            let mut span_fields_found = 0;
+            let mut message_fields_found = 0;
 
             let mut span_fields = Vec::new();
             let mut label_fields = Vec::new();
@@ -74,35 +85,40 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
             let mut message_fields = Vec::new();
 
             for field in &named_fields.named {
-                let ident = field.ident.as_ref().unwrap();
-                let mut is_span_field = false;
-                let mut is_label_field = false;
-                let mut is_help_field = false;
-                let mut is_note_field = false;
-                let mut is_message_field = false;
+                let field_ident = field.ident.as_ref().unwrap();
+                let field_ty = &field.ty;
+
+                let mut is_span = false;
+                let mut is_label = false;
+                let mut is_help = false;
+                let mut is_note = false;
+                let mut is_message = false;
+                let mut is_metadata = false;
 
                 for attr in &field.attrs {
                     if attr.path().is_ident("span") {
-                        is_span_field = true;
+                        is_span = true;
                     } else if attr.path().is_ident("label") {
-                        is_label_field = true;
+                        is_label = true;
                     } else if attr.path().is_ident("help") {
-                        is_help_field = true;
+                        is_help = true;
                     } else if attr.path().is_ident("note") {
-                        is_note_field = true;
+                        is_note = true;
                     } else if attr.path().is_ident("message") {
-                        is_message_field = true;
+                        is_message = true;
+                    } else if attr.path().is_ident("metadata") {
+                        is_metadata = true;
                     }
                 }
 
-                if is_span_field {
+                if is_span {
                     span_fields_found += 1;
                     if span_fields_found > 1 {
                         return syn::Error::new_spanned(
                             field,
                             format!(
                                 "Multiple `#[span]` attributes in variant `{}` are not allowed.",
-                                variant_ident,
+                                variant_ident
                             ),
                         )
                         .to_compile_error()
@@ -113,26 +129,26 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                             match last_seg.ident.to_string().as_str() {
                                 "Option" => {
                                     span_fields.push((
-                                        ident.clone(),
+                                        field_ident.clone(),
                                         quote! {
-                                            #enum_ident::#variant_ident { #ident, .. } => #ident.clone()
+                                            Self::#variant_ident { #field_ident, .. } => #field_ident.clone()
                                         },
                                         quote! {
-                                            #enum_ident::#variant_ident { #ident, .. } => {
-                                                *#ident = Some(new_span.clone());
+                                            Self::#variant_ident { #field_ident, .. } => {
+                                                *#field_ident = Some(new_span.clone());
                                             }
                                         }
                                     ));
                                 }
                                 "SourceSpan" => {
                                     span_fields.push((
-                                        ident.clone(),
+                                        field_ident.clone(),
                                         quote! {
-                                            #enum_ident::#variant_ident { #ident, .. } => Some(#ident.clone())
+                                            Self::#variant_ident { #field_ident, .. } => Some(#field_ident.clone())
                                         },
                                         quote! {
-                                            #enum_ident::#variant_ident { #ident, .. } => {
-                                                *#ident = new_span.clone();
+                                            Self::#variant_ident { #field_ident, .. } => {
+                                                *#field_ident = new_span.clone();
                                             }
                                         }
                                     ));
@@ -141,33 +157,29 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                                     return syn::Error::new_spanned(
                                         &field.ty,
                                         "Expected `#[span]` field to be `SourceSpan` or `Option<SourceSpan>`",
-                                    )
-                                    .to_compile_error()
-                                    .into();
+                                    ).to_compile_error().into();
                                 }
                             }
                         }
                     }
                 }
 
-                if is_label_field {
+                if is_label {
                     if let Type::Path(type_path) = &field.ty {
                         if let Some(last_seg) = type_path.path.segments.last() {
                             match last_seg.ident.to_string().as_str() {
-                                "Option" => {
-                                    label_fields.push((ident.clone(), "OptionSpan".to_string()))
+                                "Option" => label_fields
+                                    .push((field_ident.clone(), "OptionSpan".to_string())),
+                                "Vec" => {
+                                    label_fields.push((field_ident.clone(), "VecSpan".to_string()))
                                 }
-                                "Vec" => label_fields.push((ident.clone(), "VecSpan".to_string())),
-                                "SourceSpan" => {
-                                    label_fields.push((ident.clone(), "DirectSpan".to_string()))
-                                }
+                                "SourceSpan" => label_fields
+                                    .push((field_ident.clone(), "DirectSpan".to_string())),
                                 _ => {
                                     return syn::Error::new_spanned(
                                         &field.ty,
                                         "Expected `#[label]` field to be `SourceSpan`, `Option<SourceSpan>`, or `Vec<SourceSpan>`",
-                                    )
-                                    .to_compile_error()
-                                    .into();
+                                    ).to_compile_error().into();
                                 }
                             }
                         }
@@ -199,22 +211,22 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     }
                 };
 
-                if is_help_field {
-                    match check_help_note(&field.ty) {
-                        Ok(kind) => help_fields.push((ident.clone(), kind)),
-                        Err(err) => return err.to_compile_error().into(),
-                    }
-                }
-                if is_note_field {
-                    match check_help_note(&field.ty) {
-                        Ok(kind) => note_fields.push((ident.clone(), kind)),
-                        Err(err) => return err.to_compile_error().into(),
+                if is_help {
+                    match check_help_note(field_ty) {
+                        Ok(kind) => help_fields.push((field_ident.clone(), kind)),
+                        Err(e) => return e.to_compile_error().into(),
                     }
                 }
 
-                if is_message_field {
+                if is_note {
+                    match check_help_note(field_ty) {
+                        Ok(kind) => note_fields.push((field_ident.clone(), kind)),
+                        Err(e) => return e.to_compile_error().into(),
+                    }
+                }
+
+                if is_message {
                     message_fields_found += 1;
-
                     if message_fields_found > 1 {
                         return syn::Error::new_spanned(
                             field,
@@ -226,29 +238,45 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                         .to_compile_error()
                         .into();
                     }
-
                     if let Type::Path(type_path) = &field.ty {
                         if let Some(last_seg) = type_path.path.segments.last() {
                             match last_seg.ident.to_string().as_str() {
                                 "String" => {
                                     message_fields
-                                        .push((ident.clone(), "DirectString".to_string()));
+                                        .push((field_ident.clone(), "DirectString".to_string()));
                                 }
                                 "Option" => {
                                     message_fields
-                                        .push((ident.clone(), "OptionString".to_string()));
+                                        .push((field_ident.clone(), "OptionString".to_string()));
                                 }
                                 _ => {
                                     return syn::Error::new_spanned(
                                         &field.ty,
-                                        "Expected `#[message]` field to be `String` or `Option<String>`",
-                                    )
-                                    .to_compile_error()
-                                    .into();
+                                        "Expected `#[message]` field to be `String` or `Option<String>`"
+                                    ).to_compile_error().into();
                                 }
                             }
                         }
                     }
+                }
+
+                if is_metadata {
+                    let entry = metadata_map.entry(field_ident.clone()).or_default();
+                    if entry.field_type.is_none() {
+                        entry.field_type = Some(field_ty.clone());
+                    }
+                    let get_arm = quote! {
+                        Self::#variant_ident { #field_ident, .. } => Some(#field_ident),
+                    };
+                    let get_mut_arm = quote! {
+                        Self::#variant_ident { ref mut #field_ident, .. } => Some(#field_ident),
+                    };
+                    let set_arm = quote! {
+                        Self::#variant_ident { #field_ident, .. } => { *#field_ident = value; },
+                    };
+                    entry.get_arms.push(get_arm);
+                    entry.get_mut_arms.push(get_mut_arm);
+                    entry.set_arms.push(set_arm);
                 }
             }
 
@@ -283,7 +311,7 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     .collect();
 
                 let label_arm = quote! {
-                    #enum_ident::#variant_ident { #(ref #all_idents),* } => {
+                    Self::#variant_ident { #(ref #all_idents),* } => {
                         let mut labels = Vec::new();
                         #( #gather_label_branches )*
                         labels
@@ -317,7 +345,7 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     .collect();
 
                 let help_arm = quote! {
-                    #enum_ident::#variant_ident { #(ref #all_idents),* } => {
+                    Self::#variant_ident { #(ref #all_idents),* } => {
                         let mut helps = Vec::new();
                         #( #pushes )*
                         helps
@@ -351,7 +379,7 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     .collect();
 
                 let note_arm = quote! {
-                    #enum_ident::#variant_ident { #(ref #all_idents),* } => {
+                    Self::#variant_ident { #(ref #all_idents),* } => {
                         let mut notes = Vec::new();
                         #( #pushes )*
                         notes
@@ -363,17 +391,17 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
             if let Some((ident, kind)) = message_fields.last() {
                 let message_arm = match kind.as_str() {
                     "DirectString" => quote! {
-                        #enum_ident::#variant_ident { #ident, .. } => {
+                        Self::#variant_ident { #ident, .. } => {
                             Some(#ident.clone())
                         }
                     },
                     "OptionString" => quote! {
-                        #enum_ident::#variant_ident { #ident, .. } => {
+                        Self::#variant_ident { #ident, .. } => {
                             #ident.clone()
                         }
                     },
                     _ => quote! {
-                        #enum_ident::#variant_ident { .. } => None
+                        Self::#variant_ident { .. } => None
                     },
                 };
                 get_message_arm = message_arm;
@@ -437,13 +465,15 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                 } else {
                     fallback_message
                 };
+                let stacktrace = vec![];
 
                 common::report::ReportConfig::new(
                     span,
                     labels,
                     helps,
                     notes,
-                    final_message
+                    final_message,
+                    stacktrace,
                 )
             }
 
@@ -452,9 +482,11 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                 use common::report::{HasReportHooks, ReportConfig};
 
                 let kind = ariadne::ReportKind::Custom(&#error_kind, ariadne::Color::Red);
-                let prefixes = ariadne::Prefixes::new()
+                let prefixes = ariadne::Localization::new()
                     .with_help("ajuda")
-                    .with_note("nota");
+                    .with_note("nota")
+                    .with_stacktrace("em")
+                    .with_unknown("desconhecido");
 
                 let config = ariadne::Config::default()
                     .with_index_type(ariadne::IndexType::Byte)
@@ -463,14 +495,13 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                 let mut rep_config = self.build_report_config();
 
                 for hook in <Self as HasReportHooks>::hooks() {
-                    rep_config = hook(rep_config);
+                    rep_config = hook(self, rep_config);
                 }
 
                 let main_span = match &rep_config.span {
                     Some(sp) => sp.clone(),
                     None => {
-                        panic!("No span found for report. \
-                            Please ensure at least one #[span] is present.");
+                        panic!("No span found for report. Please ensure at least one #[span] is present.");
                     }
                 };
 
@@ -497,9 +528,7 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     if let Some(lbl_txt) = lbl_span.label() {
                         label = label.with_message(lbl_txt.clone());
                     } else {
-                        label = label.with_message(
-                            format!("{}", "aqui".fg(ariadne::Color::Red))
-                        );
+                        label = label.with_message(format!("{}", "aqui".fg(ariadne::Color::Red)));
                     }
                     builder = builder.with_label(label);
                 }
@@ -512,32 +541,91 @@ pub fn report_derive(input: TokenStream) -> TokenStream {
                     builder = builder.with_note(n);
                 }
 
-                builder.finish()
+
+                builder
+                    .with_stacktrace(rep_config.stacktrace)
+                    .finish()
             }
         }
     };
 
-    let maybe_impl_hooks = if accept_hooks {
+    let maybe_hooks_impl = if accept_hooks {
         quote! {
             #[allow(dead_code)]
-            const __CHECK_HOOKS_IMPL: () = {
+            const __REQUIRE_HOOKS_IMPL: () = {
                 let _ = <#enum_ident as common::report::HasReportHooks>::hooks;
             };
         }
     } else {
         quote! {
             impl common::report::HasReportHooks for #enum_ident {
-                fn hooks() -> &'static [fn(common::report::ReportConfig) -> common::report::ReportConfig] {
+                fn hooks() -> &'static [fn(&Self, common::report::ReportConfig) -> common::report::ReportConfig] {
                     &[]
                 }
             }
         }
     };
 
+    let mut metadata_impls = Vec::new();
+
+    for (field_ident, info) in metadata_map {
+        let field_name_str = field_ident.to_string();
+        let field_ty = match &info.field_type {
+            Some(ty) => ty,
+            None => continue,
+        };
+
+        let get_fn_name = Ident::new(&format!("get_{}", field_name_str), field_ident.span());
+        let get_mut_fn_name =
+            Ident::new(&format!("get_mut_{}", field_name_str), field_ident.span());
+        let set_fn_name = Ident::new(&format!("set_{}", field_name_str), field_ident.span());
+
+        let get_arms = &info.get_arms;
+        let get_mut_arms = &info.get_mut_arms;
+        let set_arms = &info.set_arms;
+
+        let get_fn = quote! {
+            pub fn #get_fn_name(&self) -> ::std::option::Option<&#field_ty> {
+                match self {
+                    #( #get_arms )*
+                    _ => None
+                }
+            }
+        };
+
+        let get_mut_fn = quote! {
+            pub fn #get_mut_fn_name(&mut self) -> ::std::option::Option<&mut #field_ty> {
+                match self {
+                    #( #get_mut_arms )*
+                    _ => None
+                }
+            }
+        };
+
+        let set_fn = quote! {
+            pub fn #set_fn_name(&mut self, value: #field_ty) {
+                match self {
+                    #( #set_arms )*
+                    _ => {}
+                }
+            }
+        };
+
+        metadata_impls.push(get_fn);
+        metadata_impls.push(get_mut_fn);
+        metadata_impls.push(set_fn);
+    }
+
+    let metadata_impl = quote! {
+        impl #enum_ident {
+            #( #metadata_impls )*
+        }
+    };
+
     let expanded = quote! {
         #report_impl
-
-        #maybe_impl_hooks
+        #maybe_hooks_impl
+        #metadata_impl
     };
 
     expanded.into()
