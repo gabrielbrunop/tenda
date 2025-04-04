@@ -12,7 +12,8 @@ use crate::{
     platform::{self},
     runtime_error::{Result, RuntimeError},
     stack::{Stack, StackError},
-    value::{Value, ValueType}, StackFrame,
+    value::{Value, ValueType},
+    StackFrame,
 };
 
 #[derive(Debug)]
@@ -948,7 +949,7 @@ impl Runtime {
                 help: vec![
                     "verifique se o índice está dentro dos limites da lista antes de tentar acessá-lo".to_string(), 
                     "se a sua intenção era adicionar um novo elemento à lista, use `Lista.insira`".to_string()
-                ], 
+                ],
                 stacktrace: vec![],
             }));
         }
@@ -1070,7 +1071,7 @@ impl Runtime {
 
                         Ok(value)
                     }
-                    Err(err) => Err(err)
+                    Err(err) => Err(err),
                 }
             }
         };
@@ -1083,12 +1084,7 @@ impl Runtime {
                 let err_span = err.get_span();
 
                 if err.get_stacktrace().filter(|cs| !cs.is_empty()).is_none() {
-                    let stacktrace = vec![
-                        StackFrame::new(
-                            name.clone(),
-                            err_span,
-                        )
-                    ];
+                    let stacktrace = vec![StackFrame::new(name.clone(), err_span)];
 
                     err.set_stacktrace(stacktrace);
                 }
@@ -1099,10 +1095,7 @@ impl Runtime {
                     }
                 }
 
-                let call_frame = StackFrame::new(
-                    name.clone(),
-                    span.cloned(),
-                );
+                let call_frame = StackFrame::new(name.clone(), span.cloned());
 
                 match err.get_mut_stacktrace() {
                     Some(stacktrace) => {
