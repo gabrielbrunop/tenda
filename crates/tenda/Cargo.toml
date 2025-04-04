@@ -1,0 +1,11 @@
+[package]
+name = "tenda"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tenda-core = { path = "../core" }
+chrono = { workspace = true }
+reedline = "0.39.0"
+rand = "0.9.0"
+yansi = "1.0"

@@ -1,0 +1,8 @@
+[package]
+name = "tenda-reporting"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = { workspace = true }
+ariadne = { git = "https://github.com/gabrielbrunop/ariadne.git", branch = "main" }

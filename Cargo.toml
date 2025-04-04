@@ -1,12 +1,13 @@
 [workspace]
 members = [
-    "runtime",
-    "parser",
-    "scanner",
-    "common",
-    "macros",
-    "tenda-core",
-    "tenda",
+    "crates/runtime",
+    "crates/parser",
+    "crates/scanner",
+    "crates/common",
+    "crates/reporting",
+    "crates/reporting-derive",
+    "crates/core",
+    "crates/tenda",
 ]
 resolver = "2"
 
@@ -14,4 +15,3 @@ resolver = "2"
 peekmore = "1.3.0"
 thiserror = "1.0"
 chrono = "0.4.40"
-ariadne = { git = "https://github.com/gabrielbrunop/ariadne.git", branch = "main" }
