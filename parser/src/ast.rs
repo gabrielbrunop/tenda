@@ -61,18 +61,6 @@ impl Stmt {
     }
 }
 
-pub trait StmtVisitor<T> {
-    fn visit_expr(&mut self, expr: &Expr) -> T;
-    fn visit_decl(&mut self, decl: &Decl) -> T;
-    fn visit_cond(&mut self, cond: &Cond) -> T;
-    fn visit_block(&mut self, block: &Block) -> T;
-    fn visit_return(&mut self, return_stmt: &Return) -> T;
-    fn visit_while(&mut self, while_stmt: &While) -> T;
-    fn visit_for_each(&mut self, for_each: &ForEach) -> T;
-    fn visit_break(&mut self, break_stmt: &Break) -> T;
-    fn visit_continue(&mut self, continue_stmt: &Continue) -> T;
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Return {
     pub value: Option<Expr>,
@@ -139,11 +127,6 @@ impl Decl {
             Decl::Function(function) => function.uid,
         }
     }
-}
-
-pub trait DeclVisitor<T> {
-    fn visit_local(&mut self, local: &LocalDecl) -> T;
-    fn visit_function(&mut self, function: &FunctionDecl) -> T;
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -322,20 +305,6 @@ impl Expr {
             Expr::AnonymousFunction(anonymous_function) => &anonymous_function.span,
         }
     }
-}
-
-pub trait ExprVisitor<T> {
-    fn visit_binary(&mut self, binary: &BinaryOp) -> T;
-    fn visit_unary(&mut self, unary: &UnaryOp) -> T;
-    fn visit_call(&mut self, call: &Call) -> T;
-    fn visit_access(&mut self, index: &Access) -> T;
-    fn visit_assign(&mut self, assign: &Assign) -> T;
-    fn visit_list(&mut self, list: &List) -> T;
-    fn visit_grouping(&mut self, grouping: &Grouping) -> T;
-    fn visit_literal(&mut self, literal: &Literal) -> T;
-    fn visit_variable(&mut self, variable: &Variable) -> T;
-    fn visit_associative_array(&mut self, associative_array: &AssociativeArray) -> T;
-    fn visit_anonymous_function(&mut self, anonymous_function: &AnonymousFunction) -> T;
 }
 
 #[derive(Debug, PartialEq, Clone)]
