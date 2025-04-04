@@ -1,6 +1,6 @@
 use common::report::Report;
 use common::span::SourceSpan;
-use parser::{self, ast, ast::DeclVisitor, ast::ExprVisitor, ast::StmtVisitor};
+use parser::{self, ast};
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use crate::{
@@ -36,6 +36,10 @@ impl Runtime {
 
     pub fn eval(&mut self, ast: &ast::Ast) -> Result<Value> {
         self.interpret_ast(ast)
+    }
+
+    pub fn get_platform(&self) -> &dyn platform::Platform {
+        self.platform.as_ref()
     }
 
     fn interpret_ast(&mut self, ast: &ast::Ast) -> Result<Value> {
@@ -74,13 +78,9 @@ impl Runtime {
             Continue(continue_stmt) => self.visit_continue(continue_stmt),
         }
     }
-
-    pub fn get_platform(&self) -> &dyn platform::Platform {
-        self.platform.as_ref()
-    }
 }
 
-impl StmtVisitor<Result<Value>> for Runtime {
+impl Runtime {
     fn visit_decl(&mut self, decl: &ast::Decl) -> Result<Value> {
         use ast::Decl::*;
 
@@ -224,7 +224,7 @@ impl StmtVisitor<Result<Value>> for Runtime {
     }
 }
 
-impl DeclVisitor<Result<Value>> for Runtime {
+impl Runtime {
     fn visit_local(&mut self, local: &ast::LocalDecl) -> Result<Value> {
         let ast::LocalDecl {
             name, value, span, ..
@@ -276,7 +276,7 @@ impl DeclVisitor<Result<Value>> for Runtime {
     }
 }
 
-impl ExprVisitor<Result<Value>> for Runtime {
+impl Runtime {
     fn visit_binary(&mut self, binary: &ast::BinaryOp) -> Result<Value> {
         let ast::BinaryOp {
             lhs, op, rhs, span, ..
@@ -532,7 +532,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
             Has => match (lhs, rhs) {
                 (List(list), value) => Boolean(list.borrow().contains(&value)),
                 (AssociativeArray(associative_array), key) => {
-                    let key = self.visit_associative_array_key(key).map_err(|mut src| {
+                    let key = self.resolve_associative_array_key(key).map_err(|mut src| {
                         src.set_span(span);
                         src
                     })?;
@@ -555,7 +555,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
             Lacks => match (lhs, rhs) {
                 (List(list), value) => Boolean(!list.borrow().contains(&value)),
                 (AssociativeArray(associative_array), key) => {
-                    let key = self.visit_associative_array_key(key).map_err(|mut src| {
+                    let key = self.resolve_associative_array_key(key).map_err(|mut src| {
                         src.set_span(span);
                         src
                     })?;
@@ -802,7 +802,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
         for (key, value) in elements {
             let key = self.visit_literal(key)?;
             let key = self
-                .visit_associative_array_key(key)
+                .resolve_associative_array_key(key)
                 .map_err(|mut source| {
                     source.set_span(span);
                     source
@@ -874,7 +874,7 @@ impl Runtime {
         let span = index.get_span();
         let index = self.visit_expr(index)?;
         let index = self
-            .visit_associative_array_key(index)
+            .resolve_associative_array_key(index)
             .map_err(|mut source| {
                 source.set_span(span);
                 source
@@ -885,28 +885,6 @@ impl Runtime {
             None => Err(Box::new(RuntimeError::AssociativeArrayKeyNotFound {
                 key: index,
                 span: Some(span.clone()),
-                stacktrace: vec![],
-            })),
-        }
-    }
-
-    fn visit_associative_array_key(
-        &mut self,
-        key: Value,
-    ) -> std::result::Result<AssociativeArrayKey, Box<RuntimeError>> {
-        match key {
-            Value::String(value) => Ok(AssociativeArrayKey::String(value)),
-            Value::Number(value) if !value.is_finite() || value.trunc() != value => {
-                Err(Box::new(RuntimeError::InvalidNumberAssociativeArrayKey {
-                    key: value,
-                    span: None,
-                    stacktrace: vec![],
-                }))
-            }
-            Value::Number(value) => Ok(AssociativeArrayKey::Number(value as i64)),
-            val => Err(Box::new(RuntimeError::InvalidTypeAssociativeArrayKey {
-                key: val.kind(),
-                span: None,
                 stacktrace: vec![],
             })),
         }
@@ -947,7 +925,7 @@ impl Runtime {
                 len: list.len(),
                 span: Some(index_span.clone()),
                 help: vec![
-                    "verifique se o índice está dentro dos limites da lista antes de tentar acessá-lo".to_string(), 
+                    "verifique se o índice está dentro dos limites da lista antes de tentar acessá-lo".to_string(),
                     "se a sua intenção era adicionar um novo elemento à lista, use `Lista.insira`".to_string()
                 ],
                 stacktrace: vec![],
@@ -970,7 +948,7 @@ impl Runtime {
         let value = self.visit_expr(value)?;
         let index = self.visit_expr(index)?;
         let index = self
-            .visit_associative_array_key(index)
+            .resolve_associative_array_key(index)
             .map_err(|mut source| {
                 source.set_span(span);
                 source
@@ -980,55 +958,9 @@ impl Runtime {
 
         Ok(value)
     }
+}
 
-    fn resolve_index(&mut self, index: &ast::Expr) -> Result<usize> {
-        let span = index.get_span();
-
-        match self.visit_expr(index)? {
-            Value::Number(num) if !num.is_finite() || num.trunc() != num || num < 0.0 => {
-                Err(Box::new(RuntimeError::InvalidIndex {
-                    index: num,
-                    span: Some(span.clone()),
-                    stacktrace: vec![],
-                }))
-            }
-            Value::Number(num) => Ok(num as usize),
-            val => Err(Box::new(RuntimeError::UnexpectedTypeError {
-                expected: ValueType::Number,
-                found: val.kind(),
-                span: Some(span.clone()),
-                message: Some(format!(
-                    "não é possível indexar com '{}'; esperado '{}'",
-                    val.kind(),
-                    ValueType::Number
-                )),
-                stacktrace: vec![],
-            })),
-        }
-    }
-
-    fn create_function(&self, params: &[ast::FunctionParam], body: Box<ast::Stmt>) -> Function {
-        let mut context = Environment::new();
-
-        for frame in self.stack.into_iter() {
-            for (name, value) in &frame.env {
-                if params.iter().any(|param| param.name == *name) {
-                    continue;
-                }
-
-                if let StoredValue::Shared(value) = value {
-                    context.set(name.clone(), StoredValue::Shared(value.clone()));
-                }
-            }
-        }
-
-        Function::new(
-            params.iter().map(|p| p.clone().into()).collect(),
-            context,
-            body,
-        )
-    }
-
+impl Runtime {
     pub fn call_function(
         &mut self,
         name: Option<String>,
@@ -1106,6 +1038,76 @@ impl Runtime {
 
                 Err(err)
             }
+        }
+    }
+
+    fn create_function(&self, params: &[ast::FunctionParam], body: Box<ast::Stmt>) -> Function {
+        let mut context = Environment::new();
+
+        for frame in self.stack.into_iter() {
+            for (name, value) in &frame.env {
+                if params.iter().any(|param| param.name == *name) {
+                    continue;
+                }
+
+                if let StoredValue::Shared(value) = value {
+                    context.set(name.clone(), StoredValue::Shared(value.clone()));
+                }
+            }
+        }
+
+        Function::new(
+            params.iter().map(|p| p.clone().into()).collect(),
+            context,
+            body,
+        )
+    }
+
+    fn resolve_associative_array_key(
+        &mut self,
+        key: Value,
+    ) -> std::result::Result<AssociativeArrayKey, Box<RuntimeError>> {
+        match key {
+            Value::String(value) => Ok(AssociativeArrayKey::String(value)),
+            Value::Number(value) if !value.is_finite() || value.trunc() != value => {
+                Err(Box::new(RuntimeError::InvalidNumberAssociativeArrayKey {
+                    key: value,
+                    span: None,
+                    stacktrace: vec![],
+                }))
+            }
+            Value::Number(value) => Ok(AssociativeArrayKey::Number(value as i64)),
+            val => Err(Box::new(RuntimeError::InvalidTypeAssociativeArrayKey {
+                key: val.kind(),
+                span: None,
+                stacktrace: vec![],
+            })),
+        }
+    }
+
+    fn resolve_index(&mut self, index: &ast::Expr) -> Result<usize> {
+        let span = index.get_span();
+
+        match self.visit_expr(index)? {
+            Value::Number(num) if !num.is_finite() || num.trunc() != num || num < 0.0 => {
+                Err(Box::new(RuntimeError::InvalidIndex {
+                    index: num,
+                    span: Some(span.clone()),
+                    stacktrace: vec![],
+                }))
+            }
+            Value::Number(num) => Ok(num as usize),
+            val => Err(Box::new(RuntimeError::UnexpectedTypeError {
+                expected: ValueType::Number,
+                found: val.kind(),
+                span: Some(span.clone()),
+                message: Some(format!(
+                    "não é possível indexar com '{}'; esperado '{}'",
+                    val.kind(),
+                    ValueType::Number
+                )),
+                stacktrace: vec![],
+            })),
         }
     }
 }
