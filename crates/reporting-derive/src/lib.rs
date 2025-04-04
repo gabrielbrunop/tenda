@@ -3,7 +3,7 @@ use quote::quote;
 use std::collections::BTreeMap;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, LitStr, Type};
 
-/// Derive macro for creating a `Report` implementation that supports:
+/// Derive macro for creating a `Diagnostic` implementation that supports:
 ///
 /// - `#[span]` for the primary span
 /// - `#[label]` for extra spans (Option, SourceSpan, Vec<SourceSpan>)
@@ -17,7 +17,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, LitStr, Type};
     Diagnostic,
     attributes(report, span, label, help, note, message, metadata, accept_hooks)
 )]
-pub fn report_derive(input: TokenStream) -> TokenStream {
+pub fn diagnostic_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let accept_hooks = input
