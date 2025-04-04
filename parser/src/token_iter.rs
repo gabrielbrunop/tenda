@@ -158,8 +158,8 @@ impl TokenIterator<'_> {
         is_next_valid
     }
 
-    pub fn advance_while(&mut self, token_type: Iter<TokenKind>) {
-        let token_types: Vec<TokenKind> = token_type.cloned().collect();
+    pub fn advance_while(&mut self, expected_types: Iter<TokenKind>) {
+        let token_types: Vec<TokenKind> = expected_types.cloned().collect();
 
         while let Some(token) = self.tokens.peek() {
             if token_types.iter().any(|t| *t == token.kind) {
