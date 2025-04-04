@@ -24,6 +24,7 @@ impl Date {
             _ => Err(Box::new(RuntimeError::InvalidTimestamp {
                 timestamp: ts,
                 span: None,
+                stacktrace: vec![],
             })),
         }
     }
@@ -35,6 +36,7 @@ impl Date {
                 return Err(Box::new(RuntimeError::DateIsoParseError {
                     source: e,
                     span: None,
+                    stacktrace: vec![],
                 }))
             }
         };
@@ -55,6 +57,7 @@ impl Date {
                 return Err(Box::new(RuntimeError::InvalidTimeZoneString {
                     tz_str: tz_str.into(),
                     span: None,
+                    stacktrace: vec![],
                 }));
             }
         };

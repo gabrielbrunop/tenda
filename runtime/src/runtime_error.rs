@@ -1,3 +1,4 @@
+use common::report::{HasReportHooks, ReportConfig};
 use common::span::SourceSpan;
 use macros::Report;
 use thiserror::Error;
@@ -9,13 +10,40 @@ use crate::{
 
 pub type Result<T> = std::result::Result<T, Box<RuntimeError>>;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct StackFrame {
+    pub function_name: Option<String>,
+    pub location: Option<SourceSpan>,
+}
+
+impl StackFrame {
+    pub fn new(function_name: Option<String>, location: Option<SourceSpan>) -> Self {
+        Self {
+            function_name,
+            location,
+        }
+    }
+}
+
+impl From<StackFrame> for ariadne::StackFrame<SourceSpan> {
+    fn from(val: StackFrame) -> Self {
+        let function_name = val.function_name.unwrap_or_else(|| "<anônimo>".to_string());
+
+        ariadne::StackFrame::new(function_name, val.location)
+    }
+}
+
 #[derive(Error, Debug, PartialEq, Clone, Report)]
+#[accept_hooks]
 #[report("erro de execução")]
 pub enum RuntimeError {
     #[error("divisão por zero não é permitida")]
     DivisionByZero {
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("operação inválida para os tipos '{}' e '{}'", .first.to_string(), .second.to_string())]
@@ -28,6 +56,9 @@ pub enum RuntimeError {
 
         #[message]
         message: Option<String>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("esperado valor de tipo '{}', encontrado '{}'", .expected.to_string(), .found.to_string())]
@@ -40,6 +71,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("a variável identificada por '{}' não está definida neste escopo", .var_name)]
@@ -51,6 +85,9 @@ pub enum RuntimeError {
 
         #[help]
         help: Option<String>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("variável identificada por {0} já está declarada neste escopo", .var_name)]
@@ -62,6 +99,9 @@ pub enum RuntimeError {
 
         #[help]
         help: Option<String>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("número de argumentos incorreto: esperado {}, encontrado {}", .expected, .found)]
@@ -71,6 +111,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("índice fora dos limites: índice {}, tamanho {}", .index, .len)]
@@ -83,6 +126,9 @@ pub enum RuntimeError {
 
         #[help]
         help: Vec<String>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("não é possível acessar um valor do tipo '{}'", .value.to_string())]
@@ -91,6 +137,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("limites de intervalo precisam ser números inteiros finitos: encontrado '{}'", .bound)]
@@ -99,6 +148,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("índice de lista precisa ser um número inteiro positivo e finito: encontrado '{}'", .index)]
@@ -107,6 +159,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("chave de dicionário precisa ser número inteiro ou texto: encontrado '{}'", .key)]
@@ -115,6 +170,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("chave de dicionário precisa ser número inteiro ou texto: encontrado '{}'", .key)]
@@ -123,6 +181,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("chave de dicionário não encontrada: '{}'", .key.to_string())]
@@ -131,6 +192,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("não é possível iterar sobre um valor do tipo '{}'", .value.to_string())]
@@ -139,6 +203,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("o valor do tipo '{}' não é um argumento válido para a função", .value.to_string())]
@@ -147,6 +214,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("textos são imutáveis e não podem ser modificados")]
@@ -156,6 +226,9 @@ pub enum RuntimeError {
 
         #[help]
         help: Option<String>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("timestamp inválido: {}", .timestamp.to_string())]
@@ -164,6 +237,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("falha ao analisar data ISO: {}", .source)]
@@ -172,6 +248,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("fuso horário inválido: '{tz_str}'")]
@@ -180,6 +259,9 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
 
     #[error("valor inválido para conversão para tipo '{}'", .value.to_string())]
@@ -188,5 +270,23 @@ pub enum RuntimeError {
 
         #[span]
         span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
     },
+}
+
+impl HasReportHooks for RuntimeError {
+    fn hooks() -> &'static [fn(&Self, ReportConfig) -> ReportConfig] {
+        &[add_stacktrace]
+    }
+}
+
+fn add_stacktrace(runtime_error: &RuntimeError, config: ReportConfig) -> ReportConfig {
+    let stacktrace = match runtime_error.get_stacktrace().cloned() {
+        Some(stacktrace) => stacktrace,
+        None => return config,
+    };
+
+    config.stacktrace(stacktrace.into_iter().map(|c| c.into()).collect())
 }

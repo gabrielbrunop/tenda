@@ -164,7 +164,7 @@ fn start_repl() {
                 break;
             }
             Err(err) => {
-                println!("Erro: {:?}", err);
+                eprintln!("{}", err);
                 break;
             }
         }

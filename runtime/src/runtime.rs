@@ -12,7 +12,7 @@ use crate::{
     platform::{self},
     runtime_error::{Result, RuntimeError},
     stack::{Stack, StackError},
-    value::{Value, ValueType},
+    value::{Value, ValueType}, StackFrame,
 };
 
 #[derive(Debug)]
@@ -179,6 +179,7 @@ impl StmtVisitor<Result<Value>> for Runtime {
             return Err(Box::new(RuntimeError::NotIterable {
                 value: iterable.kind(),
                 span: Some(span.clone()),
+                stacktrace: vec![],
             }));
         }
 
@@ -242,6 +243,7 @@ impl DeclVisitor<Result<Value>> for Runtime {
                     var_name: name.to_string(),
                     span: Some(span.clone()),
                     help: Some("declare a variável com outro nome ou use `=` para atribuir um novo valor a ela".to_string()),
+                    stacktrace: vec![],
                 })),
                 _ => unreachable!(),
             },
@@ -265,6 +267,7 @@ impl DeclVisitor<Result<Value>> for Runtime {
                     var_name: name.to_string(),
                     span: Some(function.span.clone()),
                     help: Some("declare a função com outro nome".to_string()),
+                    stacktrace: vec![],
                 })),
                 _ => unreachable!(),
             },
@@ -304,6 +307,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         second: rhs.kind(),
                         span: Some(span.clone()),
                         message: Some(format!("não é possível somar '{}' e '{}'", lhs, rhs)),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -317,6 +321,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         second: rhs.kind(),
                         span: Some(span.clone()),
                         message: Some(format!("não é possível subtrair '{}' de '{}'", rhs, lhs)),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -331,6 +336,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível multiplicar '{}' por '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -338,6 +344,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                 (Number(_), Number(0.0)) => {
                     return Err(Box::new(RuntimeError::DivisionByZero {
                         span: Some(span.clone()),
+                        stacktrace: vec![],
                     }));
                 }
                 (Number(lhs), Number(rhs)) => Number(lhs / rhs),
@@ -347,6 +354,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                         second: rhs.kind(),
                         span: Some(span.clone()),
                         message: Some(format!("não é possível dividir '{}' por '{}'", lhs, rhs)),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -361,6 +369,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível elevar '{}' à potência de '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -375,6 +384,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível encontrar o resto da divisão de '{}' por '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -419,6 +429,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível aplicar a operação de 'maior que' para '{}' e '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -435,6 +446,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível aplicar a operação de 'maior ou igual' para '{}' e '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -451,6 +463,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível aplicar a operação de 'menor que' para '{}' e '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -468,6 +481,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             lhs,
                             rhs,
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -490,12 +504,14 @@ impl ExprVisitor<Result<Value>> for Runtime {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: lhs,
                         span: Some(span.clone()),
+                        stacktrace: vec![],
                     }));
                 }
                 (Number(_), Number(rhs)) if rhs != rhs.trunc() || !rhs.is_finite() => {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
                         bound: rhs,
                         span: Some(span.clone()),
+                        stacktrace: vec![],
                     }));
                 }
                 (Number(lhs), Number(rhs)) => Value::Range(lhs as usize, rhs as usize),
@@ -508,6 +524,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível criar um intervalo entre '{}' e '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -530,6 +547,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível verificar se '{}' contém '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -552,6 +570,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             "não é possível verificar se '{}' não contém '{}'",
                             lhs, rhs
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -581,6 +600,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             rhs.kind(),
                             ValueType::Number
                         )),
+                        stacktrace: vec![],
                     }));
                 }
             },
@@ -592,6 +612,15 @@ impl ExprVisitor<Result<Value>> for Runtime {
 
     fn visit_call(&mut self, call: &ast::Call) -> Result<Value> {
         let ast::Call { callee, args, span } = call;
+
+        let fn_name = match *callee.clone() {
+            ast::Expr::Variable(ast::Variable { name, .. }) => Some(name.clone()),
+            ast::Expr::Access(ast::Access { subscripted, .. }) => match *subscripted {
+                ast::Expr::Variable(ast::Variable { name, .. }) => Some(name.clone()),
+                _ => None,
+            },
+            _ => None,
+        };
 
         let callee = self.visit_expr(callee)?;
 
@@ -606,9 +635,10 @@ impl ExprVisitor<Result<Value>> for Runtime {
                     expected: func.get_params().len(),
                     found: args.len(),
                     span: Some(span.clone()),
+                    stacktrace: vec![],
                 }))
             }
-            Value::Function(func) => self.call_function(func, args, Some(span)),
+            Value::Function(func) => self.call_function(fn_name, func, args, Some(span)),
             _ => Err(Box::new(RuntimeError::UnexpectedTypeError {
                 expected: ValueType::Function,
                 found: callee.kind(),
@@ -617,6 +647,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                     "não é possível chamar um valor de tipo '{}' como função",
                     callee.kind()
                 )),
+                stacktrace: vec![],
             })),
         }
     }
@@ -639,6 +670,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
             value => Err(Box::new(RuntimeError::WrongIndexType {
                 value: value.kind(),
                 span: Some(span.clone()),
+                stacktrace: vec![],
             })),
         }
     }
@@ -679,6 +711,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                     "você precisa definir a variável '{}' antes de usá-la: `seja {} = ...`",
                     name, name
                 )),
+                stacktrace: vec![],
             }))
     }
 
@@ -708,6 +741,7 @@ impl ExprVisitor<Result<Value>> for Runtime {
                                     "talvez você queria definir a variável '{}': `seja {} = ...`",
                                     name, name
                                 )),
+                                stacktrace: vec![],
                             }))
                         }
                         _ => unreachable!(),
@@ -743,10 +777,12 @@ impl ExprVisitor<Result<Value>> for Runtime {
                             )
                             .to_string(),
                         ),
+                        stacktrace: vec![],
                     })),
                     value => Err(Box::new(RuntimeError::WrongIndexType {
                         value: value.kind(),
                         span: Some(lvalue_span.clone()),
+                        stacktrace: vec![],
                     })),
                 }
             }
@@ -802,6 +838,7 @@ impl Runtime {
                 len: list.len(),
                 span: Some(span.clone()),
                 help: vec!["verifique se o índice está dentro dos limites da lista antes de tentar acessá-lo".to_string()],
+                stacktrace: vec![],
             }));
         }
 
@@ -823,6 +860,7 @@ impl Runtime {
                     "verifique o tamanho do texto antes de tentar acessar uma posição nele"
                         .to_string(),
                 ],
+                stacktrace: vec![],
             }))
         }
     }
@@ -846,6 +884,7 @@ impl Runtime {
             None => Err(Box::new(RuntimeError::AssociativeArrayKeyNotFound {
                 key: index,
                 span: Some(span.clone()),
+                stacktrace: vec![],
             })),
         }
     }
@@ -860,12 +899,14 @@ impl Runtime {
                 Err(Box::new(RuntimeError::InvalidNumberAssociativeArrayKey {
                     key: value,
                     span: None,
+                    stacktrace: vec![],
                 }))
             }
             Value::Number(value) => Ok(AssociativeArrayKey::Number(value as i64)),
             val => Err(Box::new(RuntimeError::InvalidTypeAssociativeArrayKey {
                 key: val.kind(),
                 span: None,
+                stacktrace: vec![],
             })),
         }
     }
@@ -894,6 +935,7 @@ impl Runtime {
                         val.kind(),
                         ValueType::Number
                     )),
+                    stacktrace: vec![],
                 }));
             }
         };
@@ -907,6 +949,7 @@ impl Runtime {
                     "verifique se o índice está dentro dos limites da lista antes de tentar acessá-lo".to_string(), 
                     "se a sua intenção era adicionar um novo elemento à lista, use `Lista.insira`".to_string()
                 ], 
+                stacktrace: vec![],
             }));
         }
 
@@ -945,6 +988,7 @@ impl Runtime {
                 Err(Box::new(RuntimeError::InvalidIndex {
                     index: num,
                     span: Some(span.clone()),
+                    stacktrace: vec![],
                 }))
             }
             Value::Number(num) => Ok(num as usize),
@@ -957,6 +1001,7 @@ impl Runtime {
                     val.kind(),
                     ValueType::Number
                 )),
+                stacktrace: vec![],
             })),
         }
     }
@@ -985,6 +1030,7 @@ impl Runtime {
 
     pub fn call_function(
         &mut self,
+        name: Option<String>,
         func: Function,
         args: Vec<Value>,
         span: Option<&SourceSpan>,
@@ -1014,15 +1060,18 @@ impl Runtime {
                     self.stack.define(param.name.clone(), stored_value).unwrap();
                 }
 
-                self.interpret_stmt(&body)?;
+                match self.interpret_stmt(&body) {
+                    Ok(_) => {
+                        let value = self
+                            .stack
+                            .consume_return_value()
+                            .map(|v| v.extract_value())
+                            .unwrap_or(Value::Nil);
 
-                let value = self
-                    .stack
-                    .consume_return_value()
-                    .map(|v| v.extract_value())
-                    .unwrap_or(Value::Nil);
-
-                Ok(value)
+                        Ok(value)
+                    }
+                    Err(err) => Err(err)
+                }
             }
         };
 
@@ -1030,11 +1079,40 @@ impl Runtime {
 
         match result {
             Ok(value) => Ok(value),
-            Err(mut err) if err.get_span().is_none() && span.is_some() => {
-                err.set_span(span.unwrap());
+            Err(mut err) => {
+                let err_span = err.get_span();
+
+                if err.get_stacktrace().filter(|cs| !cs.is_empty()).is_none() {
+                    let stacktrace = vec![
+                        StackFrame::new(
+                            name.clone(),
+                            err_span,
+                        )
+                    ];
+
+                    err.set_stacktrace(stacktrace);
+                }
+
+                if err.get_span().is_none() && span.is_some() {
+                    if let Some(span) = err.get_span() {
+                        err.set_span(&span);
+                    }
+                }
+
+                let call_frame = StackFrame::new(
+                    name.clone(),
+                    span.cloned(),
+                );
+
+                match err.get_mut_stacktrace() {
+                    Some(stacktrace) => {
+                        stacktrace.push(call_frame);
+                    }
+                    None => unreachable!(),
+                };
+
                 Err(err)
             }
-            Err(err) => Err(err),
         }
     }
 }

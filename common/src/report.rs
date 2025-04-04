@@ -18,6 +18,7 @@ pub struct ReportConfig {
     pub helps: Vec<String>,
     pub notes: Vec<String>,
     pub message: String,
+    pub stacktrace: Vec<ariadne::StackFrame<SourceSpan>>,
 }
 
 impl ReportConfig {
@@ -27,6 +28,7 @@ impl ReportConfig {
         helps: Vec<String>,
         notes: Vec<String>,
         message: String,
+        stacktrace: Vec<ariadne::StackFrame<SourceSpan>>,
     ) -> Self {
         Self {
             span,
@@ -34,6 +36,7 @@ impl ReportConfig {
             helps,
             notes,
             message,
+            stacktrace,
         }
     }
 
@@ -61,10 +64,15 @@ impl ReportConfig {
         self.message = new_message;
         self
     }
+
+    pub fn stacktrace(mut self, new_stacktrace: Vec<ariadne::StackFrame<SourceSpan>>) -> Self {
+        self.stacktrace.extend(new_stacktrace);
+        self
+    }
 }
 
 pub trait HasReportHooks {
-    fn hooks() -> &'static [fn(ReportConfig) -> ReportConfig] {
+    fn hooks() -> &'static [fn(&Self, ReportConfig) -> ReportConfig] {
         &[]
     }
 }
