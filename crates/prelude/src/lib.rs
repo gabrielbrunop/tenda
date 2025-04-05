@@ -4,7 +4,7 @@ macro_rules! global {
     ($env:ident, $builtin:expr) => {{
         let builtin = $builtin;
 
-        $env.set(builtin.0, StoredValue::Unique(builtin.1));
+        $env.set(builtin.0, ValueCell::Owned(builtin.1));
     }};
     ($stack:ident, $($builtin:expr),+) => {{
         $(global!($stack, $builtin);)+

@@ -4,7 +4,7 @@ use super::value::Value;
 
 #[derive(Debug, Clone)]
 pub struct Environment {
-    state: HashMap<String, StoredValue>,
+    state: HashMap<String, ValueCell>,
 }
 
 impl Environment {
@@ -14,7 +14,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, name: &String) -> Option<&StoredValue> {
+    pub fn get(&self, name: &String) -> Option<&ValueCell> {
         self.state.get(name)
     }
 
@@ -22,13 +22,13 @@ impl Environment {
         self.state.contains_key(name)
     }
 
-    pub fn set(&mut self, name: String, value: StoredValue) {
+    pub fn set(&mut self, name: String, value: ValueCell) {
         match self.state.get_mut(&name) {
             Some(val) => match val {
-                StoredValue::Shared(val) => {
-                    *val.borrow_mut() = value.extract_value();
+                ValueCell::Shared(val) => {
+                    *val.borrow_mut() = value.extract();
                 }
-                StoredValue::Unique(_) => {
+                ValueCell::Owned(_) => {
                     self.state.insert(name, value);
                 }
             },
@@ -40,8 +40,8 @@ impl Environment {
 }
 
 impl<'a> IntoIterator for &'a Environment {
-    type Item = (&'a String, &'a StoredValue);
-    type IntoIter = std::collections::hash_map::Iter<'a, String, StoredValue>;
+    type Item = (&'a String, &'a ValueCell);
+    type IntoIter = std::collections::hash_map::Iter<'a, String, ValueCell>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.state.iter()
@@ -55,24 +55,24 @@ impl Default for Environment {
 }
 
 #[derive(Debug, Clone)]
-pub enum StoredValue {
-    Unique(Value),
+pub enum ValueCell {
+    Owned(Value),
     Shared(Rc<RefCell<Value>>),
 }
 
-impl StoredValue {
+impl ValueCell {
     pub fn new(value: Value) -> Self {
-        StoredValue::Unique(value)
+        ValueCell::Owned(value)
     }
 
     pub fn new_shared(value: Value) -> Self {
-        StoredValue::Shared(Rc::new(RefCell::new(value)))
+        ValueCell::Shared(Rc::new(RefCell::new(value)))
     }
 
-    pub fn extract_value(&self) -> Value {
+    pub fn extract(&self) -> Value {
         match self {
-            StoredValue::Unique(val) => val.clone(),
-            StoredValue::Shared(val) => val.borrow().clone(),
+            ValueCell::Owned(val) => val.clone(),
+            ValueCell::Shared(val) => val.borrow().clone(),
         }
     }
 }
