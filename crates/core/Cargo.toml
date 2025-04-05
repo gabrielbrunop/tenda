@@ -9,3 +9,4 @@ tenda-parser = { path = "../parser" }
 tenda-scanner = { path = "../scanner" }
 tenda-common = { path = "../common" }
 tenda-reporting = { path = "../reporting" }
+tenda-prelude = { path = "../prelude" }

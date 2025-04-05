@@ -8,6 +8,7 @@ members = [
     "crates/reporting-derive",
     "crates/core",
     "crates/tenda",
+    "crates/prelude",
 ]
 resolver = "2"
 
@@ -15,3 +16,4 @@ resolver = "2"
 peekmore = "1.3.0"
 thiserror = "1.0"
 chrono = "0.4.40"
+indexmap = "1.7.0"

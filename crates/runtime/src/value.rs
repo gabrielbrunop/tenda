@@ -146,7 +146,7 @@ impl IntoIterator for Value {
 
     fn into_iter(self) -> Self::IntoIter {
         if !self.is_iterable() {
-            panic!("Value is not iterable");
+            panic!("value is not iterable");
         }
 
         match self {

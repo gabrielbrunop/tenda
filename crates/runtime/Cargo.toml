@@ -11,5 +11,5 @@ tenda-reporting = { path = "../reporting" }
 tenda-reporting-derive = { path = "../reporting-derive" }
 thiserror = { workspace = true }
 chrono = { workspace = true }
-indexmap = "1.7.0"
+indexmap = { workspace = true }
 chrono-tz = "0.10.1"

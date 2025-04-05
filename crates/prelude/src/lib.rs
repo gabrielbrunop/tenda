@@ -1,18 +1,10 @@
-use crate::date::Date;
-use crate::environment::StoredValue;
-use crate::function::{params, Function};
-use crate::runtime_error::RuntimeError;
-use crate::stack::Stack;
-use crate::value::Value;
-use crate::{platform, value};
+use tenda_runtime::*;
 
 macro_rules! global {
-    ($stack:ident, $builtin:expr) => {{
+    ($env:ident, $builtin:expr) => {{
         let builtin = $builtin;
 
-        $stack
-            .define(builtin.0, StoredValue::Unique(builtin.1))
-            .unwrap();
+        $env.set(builtin.0, StoredValue::Unique(builtin.1));
     }};
     ($stack:ident, $($builtin:expr),+) => {{
         $(global!($stack, $builtin);)+
@@ -29,7 +21,7 @@ macro_rules! builtin_assoc_array {
     ($($name:literal => $value:expr),+ $(,)?) => {{
         use std::cell::RefCell;
         use std::rc::Rc;
-        use crate::associative_array::AssociativeArrayKey;
+        use tenda_runtime::AssociativeArrayKey;
 
         let mut map = indexmap::IndexMap::new();
 
@@ -104,10 +96,6 @@ macro_rules! success_object {
 
 macro_rules! ensure {
     ($val:expr, $variant:ident($binding:pat) => $body:expr) => {{
-        use crate::runtime_error::RuntimeError;
-        use crate::value::Value;
-        use crate::value::ValueType;
-
         match $val {
             Value::$variant($binding) => $body,
             value => {
@@ -123,19 +111,19 @@ macro_rules! ensure {
     }};
 }
 
-pub fn setup_native_bindings(stack: &mut Stack) {
-    setup_io_global_bindings(stack);
-    setup_list_global_bindings(stack);
-    setup_math_global_bindings(stack);
-    setup_string_global_bindings(stack);
-    setup_file_global_bindings(stack);
-    setup_program_global_bindings(stack);
-    setup_date_global_bindings(stack);
+pub fn setup_runtime_prelude(env: &mut Environment) {
+    setup_io_prelude(env);
+    setup_list_prelude(env);
+    setup_math_prelude(env);
+    setup_string_prelude(env);
+    setup_file_prelude(env);
+    setup_program_prelude(env);
+    setup_date_prelude(env);
 }
 
-pub fn setup_io_global_bindings(stack: &mut Stack) {
+fn setup_io_prelude(env: &mut Environment) {
     global!(
-        stack,
+        env,
         def_fn!("exiba", ["texto"], |args, runtime, _| {
             let text = match args!(args, 0) {
                 Value::String(value) => value.to_string(),
@@ -205,9 +193,9 @@ pub fn setup_io_global_bindings(stack: &mut Stack) {
     );
 }
 
-pub fn setup_list_global_bindings(stack: &mut Stack) {
+fn setup_list_prelude(env: &mut Environment) {
     global!(
-        stack,
+        env,
         def_assoc_array!("Lista", {
             "tamanho" => builtin_fn!(["lista"], |args, _, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
@@ -343,7 +331,7 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
                 let (from, to) = match args!(args, 0) {
                     Value::Range(from, start) => (from, start),
                     value => return Err(Box::new(RuntimeError::UnexpectedTypeError {
-                        expected: value::ValueType::Range,
+                        expected: ValueType::Range,
                         found: value.kind(),
                         span: None,
                         message: None,
@@ -386,9 +374,9 @@ pub fn setup_list_global_bindings(stack: &mut Stack) {
     );
 }
 
-fn setup_math_global_bindings(stack: &mut Stack) {
+fn setup_math_prelude(env: &mut Environment) {
     global!(
-        stack,
+        env,
         def_value!("infinito", Value::Number(f64::INFINITY)),
         def_value!("NaN", Value::Number(f64::NAN)),
         def_assoc_array!("Matemática", {
@@ -627,9 +615,9 @@ fn setup_math_global_bindings(stack: &mut Stack) {
     );
 }
 
-fn setup_string_global_bindings(stack: &mut Stack) {
+fn setup_string_prelude(env: &mut Environment) {
     global!(
-        stack,
+        env,
         def_assoc_array!("Texto", {
             "tamanho" => builtin_fn!(["texto"], |args, _, _| {
                 let text = ensure!(args!(args, 0), String(value) => value);
@@ -839,9 +827,9 @@ fn setup_string_global_bindings(stack: &mut Stack) {
     );
 }
 
-fn setup_file_global_bindings(stack: &mut Stack) {
+fn setup_file_prelude(env: &mut Environment) {
     global!(
-        stack,
+        env,
         def_assoc_array!("Arquivo", {
             "erros" => assoc_array_enum! {
                 "NÃO_ENCONTRADO",
@@ -922,9 +910,9 @@ fn setup_file_global_bindings(stack: &mut Stack) {
     );
 }
 
-fn setup_program_global_bindings(stack: &mut Stack) {
+fn setup_program_prelude(env: &mut Environment) {
     global!(
-        stack,
+        env,
         def_assoc_array!("Programa", {
             "argumentos" => builtin_fn!(|_, runtime, _| {
                 let args = runtime.get_platform().args();
@@ -951,9 +939,9 @@ fn setup_program_global_bindings(stack: &mut Stack) {
     );
 }
 
-fn setup_date_global_bindings(stack: &mut Stack) {
+fn setup_date_prelude(env: &mut Environment) {
     global!(
-        stack,
+        env,
         def_assoc_array!("Data", {
             "erros" => assoc_array_enum! {
                 "ISO_INVÁLIDA",
@@ -1057,8 +1045,8 @@ fn setup_date_global_bindings(stack: &mut Stack) {
     );
 }
 
-fn io_error_to_error_object(kind: platform::FileErrorKind) -> Value {
-    use platform::FileErrorKind::*;
+fn io_error_to_error_object(kind: FileErrorKind) -> Value {
+    use FileErrorKind::*;
 
     match kind {
         NotFound => error_object!("NÃO_ENCONTRADO"),

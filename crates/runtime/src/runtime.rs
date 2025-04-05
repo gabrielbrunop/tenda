@@ -5,7 +5,6 @@ use tenda_reporting::Diagnostic;
 
 use crate::{
     associative_array::{AssociativeArray, AssociativeArrayKey},
-    builtins,
     environment::{Environment, StoredValue},
     frame::Frame,
     function::{Function, FunctionObject},
@@ -24,18 +23,22 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new(platform: impl platform::Platform + 'static) -> Self {
-        let mut stack = Stack::new();
-
-        builtins::setup_native_bindings(&mut stack);
-
         Runtime {
-            stack,
+            stack: Stack::new(),
             platform: Box::new(platform),
         }
     }
 
     pub fn eval(&mut self, ast: &ast::Ast) -> Result<Value> {
         self.interpret_ast(ast)
+    }
+
+    pub fn get_global_env(&self) -> &Environment {
+        self.stack.global().get_env()
+    }
+
+    pub fn get_global_env_mut(&mut self) -> &mut Environment {
+        self.stack.global_mut().get_env_mut()
     }
 
     pub fn get_platform(&self) -> &dyn platform::Platform {
@@ -193,7 +196,7 @@ impl Runtime {
                 StoredValue::new(value.clone())
             };
 
-            frame.env.set(item.name.clone(), stored_value);
+            frame.get_env_mut().set(item.name.clone(), stored_value);
 
             self.stack.push(frame);
             self.interpret_stmt(body)?;
@@ -975,8 +978,7 @@ impl Runtime {
             .map(|(a, b)| (a.clone(), b))
             .collect();
 
-        let mut context_frame = Frame::new();
-        context_frame.env = *func.get_env();
+        let context_frame = Frame::from_env(*func.get_env().clone());
 
         self.stack.push(context_frame);
 
@@ -1045,7 +1047,7 @@ impl Runtime {
         let mut context = Environment::new();
 
         for frame in self.stack.into_iter() {
-            for (name, value) in &frame.env {
+            for (name, value) in frame.get_env() {
                 if params.iter().any(|param| param.name == *name) {
                     continue;
                 }

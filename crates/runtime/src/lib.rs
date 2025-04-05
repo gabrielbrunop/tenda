@@ -1,5 +1,4 @@
 mod associative_array;
-mod builtins;
 mod date;
 mod environment;
 mod frame;

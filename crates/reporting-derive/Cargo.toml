@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-thiserror = { workspace = true }
 tenda-common = { path = "../common" }
 tenda-reporting = { path = "../reporting" }
+thiserror = { workspace = true }
 
 [dependencies.syn]
 version = "2.0"
