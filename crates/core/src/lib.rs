@@ -17,3 +17,7 @@ pub mod common {
 pub mod reporting {
     pub use ::tenda_reporting::*;
 }
+
+pub mod prelude {
+    pub use ::tenda_prelude::*;
+}

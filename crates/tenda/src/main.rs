@@ -6,8 +6,9 @@ use std::io::{IsTerminal, Read};
 use std::rc::Rc;
 use std::{env, io};
 use tenda_core::{
-    common::source::IdentifiedSource, parser::Parser, parser::ParserError, reporting::Diagnostic,
-    runtime::Runtime, scanner::LexicalError, scanner::Scanner,
+    common::source::IdentifiedSource, parser::Parser, parser::ParserError,
+    prelude::setup_runtime_prelude, reporting::Diagnostic, runtime::Runtime, scanner::LexicalError,
+    scanner::Scanner,
 };
 use yansi::Paint;
 
@@ -101,6 +102,8 @@ fn start_repl() {
     let mut runtime = Runtime::new(platform);
     let mut exiting = false;
     let mut source_history: Vec<(IdentifiedSource, Rc<str>)> = Vec::new();
+
+    setup_runtime_prelude(runtime.get_global_env_mut());
 
     loop {
         let sig = rl.read_line(&prompt);
@@ -215,6 +218,8 @@ fn run_source(source: &str, name: &'static str) {
     };
 
     let mut runtime = Runtime::new(platform);
+
+    setup_runtime_prelude(runtime.get_global_env_mut());
 
     if let Err(err) = runtime.eval(&ast) {
         err.to_report().eprint(cache.clone()).unwrap();

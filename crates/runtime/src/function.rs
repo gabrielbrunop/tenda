@@ -45,10 +45,17 @@ impl Function {
         }
     }
 
-    pub fn get_env(&self) -> Box<Environment> {
+    pub fn get_env(&self) -> &Box<Environment> {
         match &self.object {
-            FunctionObject::UserDefined { env, .. } => env.clone(),
-            FunctionObject::Builtin { env, .. } => env.clone(),
+            FunctionObject::UserDefined { env, .. } => env,
+            FunctionObject::Builtin { env, .. } => env,
+        }
+    }
+
+    pub fn get_env_mut(&mut self) -> &mut Box<Environment> {
+        match &mut self.object {
+            FunctionObject::UserDefined { env, .. } => env,
+            FunctionObject::Builtin { env, .. } => env,
         }
     }
 }
@@ -120,10 +127,11 @@ impl FunctionObject {
     }
 }
 
+#[macro_export]
 macro_rules! params {
     ($($kind:expr),*) => {
         {
-            use crate::function::FunctionParam;
+            use $crate::FunctionParam;
             vec![$($kind.to_string()),*].into_iter().map(|name| FunctionParam {
                 name,
                 is_captured: false,
@@ -131,5 +139,3 @@ macro_rules! params {
         }
     };
 }
-
-pub(crate) use params;

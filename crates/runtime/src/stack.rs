@@ -23,17 +23,17 @@ impl Stack {
     }
 
     pub fn is_name_in_local_scope(&self, name: &String) -> bool {
-        self.get_innermost_frame().env.has(name)
+        self.get_innermost_frame().get_env().has(name)
     }
 
     pub fn define(&mut self, name: String, value: StoredValue) -> Result<()> {
         let scope = self.get_innermost_scope_mut();
 
-        if scope.env.has(&name) {
+        if scope.get_env().has(&name) {
             return Err(StackError::AlreadyDeclared);
         }
 
-        scope.env.set(name, value);
+        scope.get_env_mut().set(name, value);
 
         Ok(())
     }
@@ -43,11 +43,11 @@ impl Stack {
             .frame
             .iter_mut()
             .rev()
-            .find(|frame| frame.env.has(&name))
+            .find(|frame| frame.get_env().has(&name))
             .unwrap_or(&mut self.global);
 
-        if frame.env.has(&name) {
-            frame.env.set(name, value);
+        if frame.get_env().has(&name) {
+            frame.get_env_mut().set(name, value);
             Ok(())
         } else {
             Err(StackError::AssignToUndefined(name))
@@ -56,12 +56,12 @@ impl Stack {
 
     pub fn lookup(&mut self, name: &String) -> Option<&StoredValue> {
         for frame in self.frame.iter().rev() {
-            if let Some(var) = frame.env.get(name) {
+            if let Some(var) = frame.get_env().get(name) {
                 return Some(var);
             }
         }
 
-        self.global.env.get(name)
+        self.global.get_env().get(name)
     }
 
     pub fn push(&mut self, frame: Frame) {
@@ -110,6 +110,10 @@ impl Stack {
 
     pub fn global(&self) -> &Frame {
         &self.global
+    }
+
+    pub fn global_mut(&mut self) -> &mut Frame {
+        &mut self.global
     }
 }
 

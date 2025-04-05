@@ -2,8 +2,8 @@ use crate::environment::{Environment, StoredValue};
 
 #[derive(Debug, Clone)]
 pub struct Frame {
-    pub env: Environment,
-    pub return_value: Option<StoredValue>,
+    env: Environment,
+    return_value: Option<StoredValue>,
 }
 
 impl Frame {
@@ -12,6 +12,21 @@ impl Frame {
             env: Environment::new(),
             return_value: None,
         }
+    }
+
+    pub fn from_env(env: Environment) -> Self {
+        Frame {
+            env,
+            return_value: None,
+        }
+    }
+
+    pub fn get_env(&self) -> &Environment {
+        &self.env
+    }
+
+    pub fn get_env_mut(&mut self) -> &mut Environment {
+        &mut self.env
     }
 
     pub fn set_return_value(&mut self, value: StoredValue) {
