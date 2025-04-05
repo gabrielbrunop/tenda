@@ -5,7 +5,7 @@ use tenda_reporting::Diagnostic;
 
 use crate::{
     associative_array::{AssociativeArray, AssociativeArrayKey},
-    environment::{Environment, StoredValue},
+    environment::{Environment, ValueCell},
     frame::Frame,
     function::{Function, FunctionObject},
     platform::{self},
@@ -132,7 +132,7 @@ impl Runtime {
 
         if let Some(expr) = value {
             let value = self.visit_expr(expr)?;
-            self.stack.set_return_value(StoredValue::new(value));
+            self.stack.set_return_value(ValueCell::new(value));
         }
 
         Ok(Value::Nil)
@@ -191,9 +191,9 @@ impl Runtime {
             let mut frame = Frame::new();
 
             let stored_value = if item.captured {
-                StoredValue::new_shared(value.clone())
+                ValueCell::new_shared(value.clone())
             } else {
-                StoredValue::new(value.clone())
+                ValueCell::new(value.clone())
             };
 
             frame.get_env_mut().set(item.name.clone(), stored_value);
@@ -236,8 +236,8 @@ impl Runtime {
         let value = self.visit_expr(value)?;
 
         let value = match local.captured {
-            true => StoredValue::new_shared(value),
-            false => StoredValue::new(value),
+            true => ValueCell::new_shared(value),
+            false => ValueCell::new(value),
         };
 
         match self.stack.define(name.clone(), value) {
@@ -263,7 +263,7 @@ impl Runtime {
 
         match self
             .stack
-            .define(name.clone(), StoredValue::new(Value::Function(func)))
+            .define(name.clone(), ValueCell::new(Value::Function(func)))
         {
             Ok(_) => Ok(Value::Nil),
             Err(err) => match err {
@@ -705,10 +705,8 @@ impl Runtime {
     fn visit_variable(&mut self, variable: &ast::Variable) -> Result<Value> {
         let ast::Variable { name, span, .. } = variable;
 
-        self.stack
-            .lookup(name)
-            .map(|v| v.extract_value())
-            .ok_or(Box::new(RuntimeError::UndefinedReference {
+        self.stack.lookup(name).map(|v| v.extract()).ok_or(Box::new(
+            RuntimeError::UndefinedReference {
                 var_name: name.clone(),
                 span: Some(span.clone()),
                 help: Some(format!(
@@ -716,7 +714,8 @@ impl Runtime {
                     name, name
                 )),
                 stacktrace: vec![],
-            }))
+            },
+        ))
     }
 
     fn visit_assign(&mut self, assign: &ast::Assign) -> Result<Value> {
@@ -732,7 +731,7 @@ impl Runtime {
 
                 let result = self
                     .stack
-                    .assign(name.clone(), StoredValue::new(value.clone()));
+                    .assign(name.clone(), ValueCell::new(value.clone()));
 
                 match result {
                     Ok(_) => Ok(value),
@@ -987,9 +986,9 @@ impl Runtime {
             FunctionObject::UserDefined { body, .. } => {
                 for (param, arg_value) in args.into_iter() {
                     let stored_value = if param.is_captured {
-                        StoredValue::new_shared(arg_value)
+                        ValueCell::new_shared(arg_value)
                     } else {
-                        StoredValue::new(arg_value)
+                        ValueCell::new(arg_value)
                     };
 
                     self.stack.define(param.name.clone(), stored_value).unwrap();
@@ -1000,7 +999,7 @@ impl Runtime {
                         let value = self
                             .stack
                             .consume_return_value()
-                            .map(|v| v.extract_value())
+                            .map(|v| v.extract())
                             .unwrap_or(Value::Nil);
 
                         Ok(value)
@@ -1052,8 +1051,8 @@ impl Runtime {
                     continue;
                 }
 
-                if let StoredValue::Shared(value) = value {
-                    context.set(name.clone(), StoredValue::Shared(value.clone()));
+                if let ValueCell::Shared(value) = value {
+                    context.set(name.clone(), ValueCell::Shared(value.clone()));
                 }
             }
         }

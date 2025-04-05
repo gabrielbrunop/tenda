@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{environment::StoredValue, frame::Frame};
+use crate::{environment::ValueCell, frame::Frame};
 
 type Result<T> = std::result::Result<T, StackError>;
 
@@ -26,7 +26,7 @@ impl Stack {
         self.get_innermost_frame().get_env().has(name)
     }
 
-    pub fn define(&mut self, name: String, value: StoredValue) -> Result<()> {
+    pub fn define(&mut self, name: String, value: ValueCell) -> Result<()> {
         let scope = self.get_innermost_scope_mut();
 
         if scope.get_env().has(&name) {
@@ -38,7 +38,7 @@ impl Stack {
         Ok(())
     }
 
-    pub fn assign(&mut self, name: String, value: StoredValue) -> Result<()> {
+    pub fn assign(&mut self, name: String, value: ValueCell) -> Result<()> {
         let frame = self
             .frame
             .iter_mut()
@@ -54,7 +54,7 @@ impl Stack {
         }
     }
 
-    pub fn lookup(&mut self, name: &String) -> Option<&StoredValue> {
+    pub fn lookup(&mut self, name: &String) -> Option<&ValueCell> {
         for frame in self.frame.iter().rev() {
             if let Some(var) = frame.get_env().get(name) {
                 return Some(var);
@@ -76,7 +76,7 @@ impl Stack {
         self.frame.pop();
     }
 
-    pub fn set_return_value(&mut self, value: StoredValue) {
+    pub fn set_return_value(&mut self, value: ValueCell) {
         self.get_innermost_scope_mut().set_return_value(value);
     }
 
@@ -84,7 +84,7 @@ impl Stack {
         self.get_innermost_frame().get_return_value().is_some()
     }
 
-    pub fn consume_return_value(&mut self) -> Option<StoredValue> {
+    pub fn consume_return_value(&mut self) -> Option<ValueCell> {
         let value = self.get_innermost_frame().get_return_value().cloned();
 
         self.get_innermost_scope_mut().clear_return_value();

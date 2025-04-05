@@ -1,9 +1,9 @@
-use crate::environment::{Environment, StoredValue};
+use crate::environment::{Environment, ValueCell};
 
 #[derive(Debug, Clone)]
 pub struct Frame {
     env: Environment,
-    return_value: Option<StoredValue>,
+    return_value: Option<ValueCell>,
 }
 
 impl Frame {
@@ -29,11 +29,11 @@ impl Frame {
         &mut self.env
     }
 
-    pub fn set_return_value(&mut self, value: StoredValue) {
+    pub fn set_return_value(&mut self, value: ValueCell) {
         self.return_value = Some(value);
     }
 
-    pub fn get_return_value(&self) -> Option<&StoredValue> {
+    pub fn get_return_value(&self) -> Option<&ValueCell> {
         self.return_value.as_ref()
     }
 
