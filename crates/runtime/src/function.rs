@@ -45,7 +45,7 @@ impl Function {
         }
     }
 
-    pub fn get_env(&self) -> &Box<Environment> {
+    pub fn get_env(&self) -> &Environment {
         match &self.object {
             FunctionObject::UserDefined { env, .. } => env,
             FunctionObject::Builtin { env, .. } => env,

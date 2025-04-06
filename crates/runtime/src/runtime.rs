@@ -977,7 +977,7 @@ impl Runtime {
             .map(|(a, b)| (a.clone(), b))
             .collect();
 
-        let context_frame = Frame::from_env(*func.get_env().clone());
+        let context_frame = Frame::from_env(func.get_env().clone());
 
         self.stack.push(context_frame);
 
