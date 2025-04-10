@@ -480,7 +480,7 @@ impl<'a> Parser<'a> {
         let lhs = self.parse_term()?;
 
         if let Some(op) = self.tokens.consume_one_of(token_stream![Until]) {
-            let rhs = self.parse_expression()?;
+            let rhs = self.parse_term()?;
 
             let span_start = lhs.get_span().start();
             let span_end = rhs.get_span().end();

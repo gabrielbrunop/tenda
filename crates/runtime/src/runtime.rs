@@ -397,8 +397,8 @@ impl Runtime {
                 (Boolean(lhs), Boolean(rhs)) => Boolean(lhs == rhs),
                 (String(lhs), String(rhs)) => Boolean(lhs == rhs),
                 (List(lhs), List(rhs)) => Boolean(lhs == rhs),
-                (Value::Range(lhs_start1, lhs_end1), Value::Range(rhs_start2, rhs_end2)) => {
-                    Boolean(lhs_start1 == rhs_start2 && lhs_end1 == rhs_end2)
+                (Value::Range(lhs_start, lhs_end), Value::Range(rhs_start, rhs_end)) => {
+                    Boolean(lhs_start == rhs_start && lhs_end == rhs_end)
                 }
                 (AssociativeArray(lhs), AssociativeArray(rhs)) => Boolean(lhs == rhs),
                 (Nil, Nil) => Boolean(true),

@@ -1,4 +1,3 @@
-use platform::Platform;
 use reedline::{
     default_emacs_keybindings, DefaultPrompt, Reedline, Signal, ValidationResult, Validator,
 };
@@ -6,7 +5,7 @@ use std::io::{IsTerminal, Read};
 use std::rc::Rc;
 use std::{env, io};
 use tenda_core::{
-    common::source::IdentifiedSource, parser::Parser, parser::ParserError,
+    common::source::IdentifiedSource, parser::Parser, parser::ParserError, platform::OSPlatform,
     prelude::setup_runtime_prelude, reporting::Diagnostic, runtime::Runtime, scanner::LexicalError,
     scanner::Scanner,
 };
@@ -98,7 +97,7 @@ fn start_repl() {
         reedline::DefaultPromptSegment::Empty,
     );
 
-    let platform = Platform;
+    let platform = OSPlatform;
     let mut runtime = Runtime::new(platform);
     let mut exiting = false;
     let mut source_history: Vec<(IdentifiedSource, Rc<str>)> = Vec::new();
@@ -172,7 +171,7 @@ fn start_repl() {
 }
 
 fn run_source(source: &str, name: &'static str) {
-    let platform = Platform;
+    let platform = OSPlatform;
 
     let mut source_id = IdentifiedSource::new();
     source_id.set_name(name);
@@ -230,5 +229,3 @@ fn run_source(source: &str, name: &'static str) {
         );
     }
 }
-
-mod platform;

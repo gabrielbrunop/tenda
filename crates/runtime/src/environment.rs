@@ -14,7 +14,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, name: &String) -> Option<&ValueCell> {
+    pub fn get(&self, name: &str) -> Option<&ValueCell> {
         self.state.get(name)
     }
 

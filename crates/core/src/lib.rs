@@ -21,3 +21,7 @@ pub mod reporting {
 pub mod prelude {
     pub use ::tenda_prelude::*;
 }
+
+pub mod platform {
+    pub use ::tenda_os_platform::Platform as OSPlatform;
+}
