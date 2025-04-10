@@ -54,7 +54,7 @@ impl Stack {
         }
     }
 
-    pub fn lookup(&mut self, name: &String) -> Option<&ValueCell> {
+    pub fn lookup(&mut self, name: &str) -> Option<&ValueCell> {
         for frame in self.frame.iter().rev() {
             if let Some(var) = frame.get_env().get(name) {
                 return Some(var);

@@ -6,9 +6,11 @@ members = [
     "crates/common",
     "crates/reporting",
     "crates/reporting-derive",
+    "crates/os-platform",
     "crates/core",
     "crates/tenda",
     "crates/prelude",
+    "tests",
 ]
 resolver = "2"
 
