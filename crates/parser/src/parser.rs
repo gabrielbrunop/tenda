@@ -93,11 +93,16 @@ impl<'a> Parser<'a> {
             TokenKind::Let => self.parse_declaration(),
             TokenKind::If => self.parse_if_statement(),
             TokenKind::While => self.parse_while_statement(),
-            TokenKind::For => self.parse_for_each_statement(),
+            TokenKind::ForOrBreak => {
+                if self.tokens.check_sequence(token_stream![ForOrBreak, Each]) {
+                    self.parse_for_each_statement()
+                } else {
+                    self.parse_break_statement()
+                }
+            }
             TokenKind::Function => self.parse_function_declaration(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Continue => self.parse_continue_statement(),
-            TokenKind::Break => self.parse_break_statement(),
             _ => self.parse_expression().map(ast::Stmt::Expr),
         }?;
 
