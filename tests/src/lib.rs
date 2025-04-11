@@ -277,7 +277,7 @@ mod tests {
 
             para cada i em 1 até 10 faça
                 se i é 5 então
-                    pare
+                    para
                 fim
 
                 resultado = resultado + i
@@ -298,7 +298,7 @@ mod tests {
 
             para cada i em 1 até 10 faça
                 se i é 5 então
-                    continue
+                    continua
                 fim
 
                 resultado = resultado + i

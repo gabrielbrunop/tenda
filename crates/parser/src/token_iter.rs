@@ -88,6 +88,35 @@ impl TokenIterator<'_> {
         Some(tokens)
     }
 
+    pub fn check_sequence(&mut self, token_types: Iter<TokenKind>) -> bool {
+        self.tokens.reset_cursor();
+
+        for token_type in token_types {
+            while let Some(token) = self.tokens.peek() {
+                if token.kind == TokenKind::Newline && *self.ignoring_newline_counter.borrow() > 0 {
+                    self.tokens.advance_cursor();
+                } else {
+                    break;
+                }
+            }
+
+            match self.tokens.peek() {
+                Some(token) if token.kind == *token_type => {
+                    self.tokens.advance_cursor();
+                }
+                _ => {
+                    self.tokens.reset_cursor();
+
+                    return false;
+                }
+            }
+        }
+
+        self.tokens.reset_cursor();
+
+        true
+    }
+
     pub fn is_next_token(&mut self, token_type: TokenKind) -> bool {
         self.tokens.reset_cursor();
 
