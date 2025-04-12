@@ -199,22 +199,17 @@ impl Display for ValueType {
     }
 }
 
-fn escape_special_chars(s: &str) -> String {
+pub fn escape_special_chars(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
 
     while let Some(c) = chars.next() {
         match c {
-            '\r' => {
-                if let Some(&'\n') = chars.peek() {
-                    result.push_str("\\r\\n");
-                    chars.next();
-                } else {
-                    result.push_str("\\r");
-                }
-            }
+            '\r' => result.push_str("\\r"),
             '\n' => result.push_str("\\n"),
             '\t' => result.push_str("\\t"),
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
             _ => result.push(c),
         }
     }

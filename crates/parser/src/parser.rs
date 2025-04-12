@@ -369,7 +369,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_assignment(&mut self) -> Result<ast::Expr> {
-        let expr = self.parse_logical()?;
+        let expr = self.parse_logical_or()?;
 
         if let Some(equal_sign) = self.tokens.consume_one_of(token_stream![EqualSign]) {
             let value = self.parse_assignment()?;
@@ -395,10 +395,29 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn parse_logical(&mut self) -> Result<ast::Expr> {
+    fn parse_logical_or(&mut self) -> Result<ast::Expr> {
+        let mut expr = self.parse_logical_and()?;
+
+        while let Some(op) = self.tokens.consume_one_of(token_stream![Or]) {
+            let lhs = expr;
+            let rhs = self.parse_logical_and()?;
+
+            let span_start = lhs.get_span().start();
+            let span_end = rhs.get_span().end();
+            let span = SourceSpan::new(span_start, span_end, self.source_id);
+
+            let binary_op = ast::BinaryOp::new(lhs, op.into(), rhs, span);
+
+            expr = ast::Expr::Binary(binary_op);
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_logical_and(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_equality()?;
 
-        while let Some(op) = self.tokens.consume_one_of(token_stream![Or, And]) {
+        while let Some(op) = self.tokens.consume_one_of(token_stream![And]) {
             let lhs = expr;
             let rhs = self.parse_equality()?;
 

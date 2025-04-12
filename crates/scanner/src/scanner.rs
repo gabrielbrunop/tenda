@@ -126,10 +126,10 @@ impl<'a> Scanner<'a> {
     }
 
     fn consume_string(&mut self, char: char) -> Result<Token, LexicalError> {
-        let mut string = String::new();
+        let mut buffer = String::new();
         let mut consumed_end_quote = false;
 
-        string.push(char);
+        buffer.push(char);
 
         while let Some(&peeked) = self.source.peek() {
             match peeked {
@@ -143,8 +143,44 @@ impl<'a> Scanner<'a> {
                         span: self.source.consume_span(),
                     });
                 }
+                '\\' => {
+                    self.source.next();
+
+                    if let Some(&escaped_ch) = self.source.peek() {
+                        match escaped_ch {
+                            'n' => {
+                                buffer.push('\n');
+                                self.source.next();
+                            }
+                            'r' => {
+                                buffer.push('\r');
+                                self.source.next();
+                            }
+                            't' => {
+                                buffer.push('\t');
+                                self.source.next();
+                            }
+                            '\\' => {
+                                buffer.push('\\');
+                                self.source.next();
+                            }
+                            '"' => {
+                                buffer.push('"');
+                                self.source.next();
+                            }
+                            other => {
+                                buffer.push(other);
+                                self.source.next();
+                            }
+                        }
+                    } else {
+                        return Err(LexicalError::UnexpectedStringEol {
+                            span: self.source.consume_span(),
+                        });
+                    }
+                }
                 _ => {
-                    string.push(peeked);
+                    buffer.push(peeked);
                     self.source.next();
                 }
             }
@@ -156,7 +192,7 @@ impl<'a> Scanner<'a> {
             });
         }
 
-        let string = string[1..].to_string();
+        let string = buffer[1..].to_string();
 
         let token = self.source.consume_token_with_literal(
             TokenKind::String,
