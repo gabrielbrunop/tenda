@@ -51,7 +51,7 @@ expr_tests_should_panic!(
     func_call_invalid_type_expr: "verdadeiro()",
     func_call_invalid_type2_expr: "[1, 2, 3]()",
     func_call_invalid_type3_expr: "{ 1: 2 }()",
-    func_call_invalid_type4_expr: "\"hello\"()",
+    func_call_invalid_type4_expr: "\"olá\"()",
 );
 
 expr_tests!(
@@ -144,17 +144,17 @@ expr_tests!(
     str_with_newline_escape: "\"Com\\nQuebra\"" => String("Com\nQuebra".to_string()),
     str_concat_with_numeric_computation: "\"2 + 2 = \" + (2 + 2)" => String("2 + 2 = 4".to_string()),
     str_concat_empty_strings: "\"\" + \"\"" => String("".to_string()),
-    str_hello_space_world: "\"Hello\" + \" \" + \"World\"" => String("Hello World".to_string()),
+    str_hello_space_world: "\"Olá\" + \" \" + \"Mundo\"" => String("Olá Mundo".to_string()),
     str_concat_with_negative_number: "\"foo\" + (-5)" => String("foo-5".to_string()),
     str_concatenate_two_literals: "\"AB\" + \"CD\"" => String("ABCD".to_string()),
     str_emoji_concatenation: "\"😃\" + \"😡\"" => String("😃😡".to_string()),
     str_with_tab_escape: "\"Tab:\\t\"" => String("Tab:\t".to_string()),
-    str_with_linefeed_escape: "\"Line:\\n\"" => String("Line:\n".to_string()),
+    str_with_linefeed_escape: "\"Linha:\\n\"" => String("Linha:\n".to_string()),
     str_with_backslash_escape: "\"Backslash: \\\\\"" => String("Backslash: \\".to_string()),
-    str_concat_with_trailing_spaces: "\"Margin \" + \"    \"" => String("Margin     ".to_string()),
+    str_concat_with_trailing_spaces: "\"Margem \" + \"    \"" => String("Margem     ".to_string()),
     str_trim_test_unchanged: "\"  trim  \"" => String("  trim  ".to_string()),
     str_mixed_case_literal: "\"MixedCase\"" => String("MixedCase".to_string()),
-    str_multiple_concat_sequence: "\"some \" + \"stuff\" + \" here\"" => String("some stuff here".to_string()),
+    str_multiple_concat_sequence: "\"algo \" + \"coisas\" + \" aqui\"" => String("algo coisas aqui".to_string()),
     str_concat_boolean_comparison_false: "\"abc\" + (verdadeiro é falso)" => String("abcfalso".to_string()),
     str_concat_comparison_numeric_true: "\"abc\" + (10 > 9)" => String("abcverdadeiro".to_string()),
     str_concat_with_nil: "\"xyz\" + Nada" => String("xyzNada".to_string()),
@@ -253,17 +253,17 @@ expr_tests!(
             List(Rc::new(RefCell::new(vec![Number(2.0), Number(3.0)]))),
             Number(4.0),
         ]))),
-    list_of_mixed_types_expr: "[\"hello\", verdadeiro, 123, Nada]" =>
+    list_of_mixed_types_expr: "[\"olá\", verdadeiro, 123, Nada]" =>
         List(Rc::new(RefCell::new(vec![
-            String("hello".to_string()),
+            String("olá".to_string()),
             Boolean(true),
             Number(123.0),
             Nil,
         ]))),
-    list_including_range_expr: "[(1 até 3), \"stuff\", 42]" =>
+    list_including_range_expr: "[(1 até 3), \"coisas\", 42]" =>
         List(Rc::new(RefCell::new(vec![
             Range(1, 3),
-            String("stuff".to_string()),
+            String("coisas".to_string()),
             Number(42.0),
         ]))),
     list_arithmetic_expressions_expr: "[1 + 2, 3 * 4]" =>
@@ -319,27 +319,27 @@ expr_tests!(
                     String("bar".to_string()))
             ])
         ))),
-    assoc_array_nested_list_and_map_expr: "{ \"nested\": [1, 2], \"map\": { \"inner\": 42 } }" =>
+    assoc_array_nested_list_and_map_expr: "{ \"aninhado\": [1, 2], \"dicionário\": { \"interior\": 42 } }" =>
         AssociativeArray(Rc::new(RefCell::new(
             runtime::AssociativeArray::from([
-                (AssociativeArrayKey::String("nested".to_string()),
+                (AssociativeArrayKey::String("aninhado".to_string()),
                 List(Rc::new(RefCell::new(vec![Number(1.0), Number(2.0)])))),
-                (AssociativeArrayKey::String("map".to_string()),
+                (AssociativeArrayKey::String("dicionário".to_string()),
                 AssociativeArray(Rc::new(RefCell::new(
                     runtime::AssociativeArray::from([
-                        (AssociativeArrayKey::String("inner".to_string()),
+                        (AssociativeArrayKey::String("interior".to_string()),
                         Number(42.0))
                     ])
                 ))))
             ])
         ))),
-    assoc_array_numeric_keys_with_list_expr: "{ 1: [2, 3], 2: \"some\" }" =>
+    assoc_array_numeric_keys_with_list_expr: "{ 1: [2, 3], 2: \"algo\" }" =>
         AssociativeArray(Rc::new(RefCell::new(
             runtime::AssociativeArray::from([
                 (AssociativeArrayKey::Number(1),
                 List(Rc::new(RefCell::new(vec![Number(2.0), Number(3.0)])))),
                 (AssociativeArrayKey::Number(2),
-                String("some".to_string()))
+                    String("algo".to_string()))
             ])
         ))),
     assoc_array_mixed_numeric_values_expr: "{ \"a\": 1.5, \"b\": -2 }" =>
@@ -355,13 +355,13 @@ expr_tests!(
     assoc_array_membership_wrong_type_expr: "{ 1: [\"x\"] } tem \"1\"" => Boolean(false),
     assoc_array_membership_found_string_key_expr: "{ \"abc\": 123, \"def\": 456 } tem \"abc\"" => Boolean(true),
     assoc_array_membership_key_not_found_expr: "{ \"abc\": 123 } não tem \"xyz\"" => Boolean(true),
-    assoc_array_nested_assoc_in_value_expr: "{ \"x\": [1,2], \"y\": {\"nested\": verdadeiro} } tem \"y\"" => Boolean(true),
+    assoc_array_nested_assoc_in_value_expr: "{ \"x\": [1,2], \"y\": {\"aninhado\": verdadeiro} } tem \"y\"" => Boolean(true),
     assoc_array_equality_nested_maps_true_expr: "{ \"x\": {1: 2}, \"y\": {1: 2} } é { \"x\": {1: 2}, \"y\": {1: 2} }" => Boolean(true),
     assoc_array_inequality_nested_maps_diff_expr: "{ \"x\": {1: 2}, \"y\": {1: 2} } é { \"x\": {1: 2}, \"y\": {1: 3} }" => Boolean(false),
-    assoc_array_empty_inner_assoc_expr: "{ \"empty\": { } }" =>
+    assoc_array_empty_inner_assoc_expr: "{ \"vazio\": { } }" =>
         AssociativeArray(Rc::new(RefCell::new(
             runtime::AssociativeArray::from([
-                (AssociativeArrayKey::String("empty".to_string()),
+                (AssociativeArrayKey::String("vazio".to_string()),
                     AssociativeArray(Rc::new(RefCell::new(
                         runtime::AssociativeArray::from([])
                     ))))
@@ -387,9 +387,11 @@ expr_tests!(
             ])
         ))),
     assoc_array_numeric_keys_equality_expr: "{ 1: {2: 3} } é { 1: {2: 3} }" => Boolean(true),
-    assoc_array_complex_nested_inequality_expr: "{ \"abc\": 1, \"def\": [1,2], \"ghi\": { \"x\": 9} } não é { \"abc\": 1, \"def\": [1,2], \"ghi\": { \"x\": 10} }" =>
-        Boolean(true),
-    assoc_array_unordered_keys_equality_expr: "{ \"k1\": \"v1\", \"k2\": \"v2\" } é { \"k2\": \"v2\", \"k1\": \"v1\" }" => Boolean(true),
+    assoc_array_complex_nested_inequality_expr:
+        "{ \"abc\": 1, \"def\": [1,2], \"ghi\": { \"x\": 9} } não é { \"abc\": 1, \"def\": [1,2], \"ghi\": { \"x\": 10} }"
+            => Boolean(true),
+    assoc_array_unordered_keys_equality_expr:
+        "{ \"k1\": \"v1\", \"k2\": \"v2\" } é { \"k2\": \"v2\", \"k1\": \"v1\" }" => Boolean(true),
     assoc_array_mixed_elements_membership_expr: "{ \"arr\": [1,2,3], \"flag\": verdadeiro }" =>
         AssociativeArray(Rc::new(RefCell::new(
             runtime::AssociativeArray::from([
