@@ -79,6 +79,20 @@ pub enum ParserError {
         #[span]
         span: SourceSpan,
     },
+
+    #[error("o operador '{}' não pode ser encadeado", .op.lexeme)]
+    InvalidChaining {
+        op: Token,
+
+        #[span]
+        span: SourceSpan,
+
+        #[message]
+        message: Option<String>,
+
+        #[help]
+        help: Option<String>,
+    },
 }
 
 macro_rules! unexpected_token {

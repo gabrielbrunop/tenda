@@ -1,13 +1,10 @@
-#[allow(unused_imports)]
 use std::{cell::RefCell, rc::Rc};
-#[allow(unused_imports)]
 use tenda_core::{
     platform::OSPlatform,
-    runtime::{self, AssociativeArrayKey, Date, Platform, Value},
+    runtime::{self, AssociativeArrayKey, Platform, Value},
 };
 
-#[allow(unused_imports)]
-use crate::interpret_expr;
+use crate::interpret_expr_with_prelude;
 
 macro_rules! expr_tests {
     ($($name:ident: $expr:expr => $variant:ident $parens:tt),+ $(,)?) => {
@@ -18,7 +15,7 @@ macro_rules! expr_tests {
                 use Value::*;
 
                 assert_eq!(
-                    crate::interpret_expr_with_prelude(platform, $expr),
+                    interpret_expr_with_prelude(platform, $expr),
                     $variant $parens
                 );
             }
@@ -33,11 +30,29 @@ macro_rules! expr_tests_should_panic {
             #[case(OSPlatform)]
             #[should_panic]
             fn $name(#[case] platform: impl Platform + 'static) {
-                crate::interpret_expr_with_prelude(platform, $expr);
+                interpret_expr_with_prelude(platform, $expr);
             }
         )*
     };
 }
+
+expr_tests_should_panic!(
+    chained_comparison_expr: "1 < 2 < 3",
+    chained_comparison2_expr: "1 > 2 > 3",
+    chained_comparison3_expr: "1 <= 2 <= 3",
+    chained_comparison4_expr: "1 >= 2 >= 3",
+    chained_comparison_mixed_expr: "1 < 2 > 3",
+    chained_comparison_mixed2_expr: "1 > 2 < 3",
+    chained_comparison_mixed3_expr: "1 <= 2 >= 3",
+    chained_comparison_mixed4_expr: "1 >= 2 <= 3",
+);
+
+expr_tests_should_panic!(
+    func_call_invalid_type_expr: "verdadeiro()",
+    func_call_invalid_type2_expr: "[1, 2, 3]()",
+    func_call_invalid_type3_expr: "{ 1: 2 }()",
+    func_call_invalid_type4_expr: "\"hello\"()",
+);
 
 expr_tests!(
     num_expr: "1" => Number(1.0),
@@ -253,24 +268,24 @@ expr_tests!(
         ]))),
     list_arithmetic_expressions_expr: "[1 + 2, 3 * 4]" =>
         List(Rc::new(RefCell::new(vec![Number(3.0), Number(12.0)]))),
-    chained_list_concatenation_expr: "([1, 2] + [3, 4]) + [5]" =>
+    list_chained_concatenation_expr: "([1, 2] + [3, 4]) + [5]" =>
         List(Rc::new(RefCell::new(vec![
             Number(1.0), Number(2.0), Number(3.0), Number(4.0), Number(5.0)
         ]))),
-    deeply_nested_empty_list_expr: "[[[]]]" =>
+    list_deeply_nested_empty_expr: "[[[]]]" =>
         List(Rc::new(RefCell::new(vec![
             List(Rc::new(RefCell::new(vec![
                 List(Rc::new(RefCell::new(vec![]))),
             ]))),
         ]))),
-    nested_list_equality_true_expr: "[[1], [2]] é [[1], [2]]" => Boolean(true),
+    list_nested_equality_true_expr: "[[1], [2]] é [[1], [2]]" => Boolean(true),
     list_string_elements_equality_false_expr: "[\"abc\", \"def\"] é [\"abc\", \"xyz\"]" => Boolean(false),
     list_inequality_due_to_order_expr: "[1, 2] não é [2, 1]" => Boolean(true),
     list_multiple_concatenation_expr: "[1, 2] + [3] + [4, 5]" =>
         List(Rc::new(RefCell::new(vec![
             Number(1.0), Number(2.0), Number(3.0), Number(4.0), Number(5.0)
         ]))),
-    empty_lists_concatenation_expr: "[] + []" =>
+    list_empty_concatenation_expr: "[] + []" =>
         List(Rc::new(RefCell::new(vec![]))),
     list_membership_found_numeric_expr: "[1, 2, 3] tem 1" => Boolean(true),
     list_membership_not_found_wrong_type_expr: "[1, 2, 3] tem \"1\"" => Boolean(false),
@@ -293,7 +308,7 @@ expr_tests!(
     assoc_array_lack: "{ 1: 2, 3: 4 } não tem 5" => Boolean(true),
     assoc_array_equality_expr: "{ 1: 2, 3: 4 } é { 1: 2, 3: 4 }" => Boolean(true),
     assoc_array_equality2_expr: "{ 1: 2, 3: 4 } é { 1: 2, 3: 5 }" => Boolean(false),
-    empty_assoc_array_expr: "{ }" =>
+    assoc_array_empty_expr: "{ }" =>
         AssociativeArray(Rc::new(RefCell::new(
             runtime::AssociativeArray::from([])
         ))),
