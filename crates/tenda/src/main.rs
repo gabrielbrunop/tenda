@@ -4,6 +4,7 @@ use reedline::{
 use std::io::{IsTerminal, Read};
 use std::rc::Rc;
 use std::{env, io};
+use tenda_core::runtime::escape_special_chars;
 use tenda_core::{
     common::source::IdentifiedSource, parser::Parser, parser::ParserError, platform::OSPlatform,
     prelude::setup_runtime_prelude, reporting::Diagnostic, runtime::Runtime, scanner::LexicalError,
@@ -143,7 +144,8 @@ fn start_repl() {
 
                 match runtime.eval(&ast) {
                     Ok(result) => {
-                        println!("{}", result);
+                        let result_str = format!("{}", result);
+                        println!("{}", escape_special_chars(&result_str));
                     }
                     Err(err) => {
                         let source_caches = tenda_core::reporting::sources(source_history.clone());

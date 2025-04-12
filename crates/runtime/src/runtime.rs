@@ -289,6 +289,25 @@ impl Runtime {
         use Value::*;
 
         let lhs = self.visit_expr(lhs)?;
+
+        match op {
+            LogicalAnd => {
+                if lhs.to_bool() {
+                    return self.visit_expr(rhs);
+                } else {
+                    return Ok(lhs);
+                }
+            }
+            LogicalOr => {
+                if lhs.to_bool() {
+                    return Ok(lhs);
+                } else {
+                    return self.visit_expr(rhs);
+                }
+            }
+            _ => {}
+        };
+
         let rhs = self.visit_expr(rhs)?;
 
         let value = match op {
@@ -489,20 +508,6 @@ impl Runtime {
                     }));
                 }
             },
-            LogicalAnd => {
-                if lhs.to_bool() {
-                    rhs
-                } else {
-                    lhs
-                }
-            }
-            LogicalOr => {
-                if lhs.to_bool() {
-                    lhs
-                } else {
-                    rhs
-                }
-            }
             ast::BinaryOperator::Range => match (lhs, rhs) {
                 (Number(lhs), Number(_)) if lhs != lhs.trunc() || !lhs.is_finite() => {
                     return Err(Box::new(RuntimeError::InvalidRangeBounds {
@@ -578,6 +583,8 @@ impl Runtime {
                     }));
                 }
             },
+            LogicalAnd => unreachable!(),
+            LogicalOr => unreachable!(),
         };
 
         Ok(value)
@@ -898,28 +905,10 @@ impl Runtime {
         index: &ast::Expr,
         value: &ast::Expr,
     ) -> Result<Value> {
-        let value_span = value.get_span();
         let index_span = index.get_span();
 
         let value = self.visit_expr(value)?;
-        let index = self.visit_expr(index)?;
-
-        let index = match index {
-            Value::Number(num) => num as usize,
-            val => {
-                return Err(Box::new(RuntimeError::UnexpectedTypeError {
-                    expected: ValueType::Number,
-                    found: val.kind(),
-                    span: Some(value_span.clone()),
-                    message: Some(format!(
-                        "não é possível indexar uma lista com '{}'; esperado '{}'",
-                        val.kind(),
-                        ValueType::Number
-                    )),
-                    stacktrace: vec![],
-                }));
-            }
-        };
+        let index = self.resolve_index(index)?;
 
         if index >= list.len() {
             return Err(Box::new(RuntimeError::IndexOutOfBounds {
