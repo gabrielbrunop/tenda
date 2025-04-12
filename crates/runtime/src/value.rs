@@ -201,9 +201,8 @@ impl Display for ValueType {
 
 pub fn escape_special_chars(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
 
-    while let Some(c) = chars.next() {
+    for c in s.chars() {
         match c {
             '\r' => result.push_str("\\r"),
             '\n' => result.push_str("\\n"),
