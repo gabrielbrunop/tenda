@@ -25,7 +25,7 @@ impl TokenIterator<'_> {
         NewlineGuard::new(self.ignoring_newline_counter.clone(), Some(size))
     }
 
-    pub fn consume_one_of(&mut self, token_types: Iter<TokenKind>) -> Option<Token> {
+    pub fn consume_one_of(&mut self, token_types: &[TokenKind]) -> Option<Token> {
         self.tokens.reset_cursor();
 
         while let Some(token) = self.tokens.peek() {
@@ -37,10 +37,9 @@ impl TokenIterator<'_> {
         }
 
         let skipped = self.tokens.cursor();
-        let expected: Vec<TokenKind> = token_types.cloned().collect();
 
         if let Some(token) = self.tokens.peek() {
-            if expected.iter().any(|t| *t == token.kind) {
+            if token_types.contains(&token.kind) {
                 for _ in 0..skipped {
                     self.tokens.next();
                 }
@@ -54,7 +53,7 @@ impl TokenIterator<'_> {
         None
     }
 
-    pub fn consume_sequence(&mut self, token_types: Iter<TokenKind>) -> Option<Vec<Token>> {
+    pub fn consume_sequence(&mut self, token_types: &[TokenKind]) -> Option<Vec<Token>> {
         self.tokens.reset_cursor();
 
         for token_type in token_types {
@@ -88,7 +87,7 @@ impl TokenIterator<'_> {
         Some(tokens)
     }
 
-    pub fn check_sequence(&mut self, token_types: Iter<TokenKind>) -> bool {
+    pub fn check_sequence(&mut self, token_types: &[TokenKind]) -> bool {
         self.tokens.reset_cursor();
 
         for token_type in token_types {
@@ -187,11 +186,9 @@ impl TokenIterator<'_> {
         is_next_valid
     }
 
-    pub fn advance_while(&mut self, expected_types: Iter<TokenKind>) {
-        let token_types: Vec<TokenKind> = expected_types.cloned().collect();
-
+    pub fn advance_while(&mut self, expected_types: &[TokenKind]) {
         while let Some(token) = self.tokens.peek() {
-            if token_types.iter().any(|t| *t == token.kind) {
+            if expected_types.contains(&token.kind) {
                 self.tokens.next();
             } else {
                 break;
@@ -255,21 +252,11 @@ impl Drop for NewlineGuard {
 }
 
 #[macro_export]
-macro_rules! token_stream {
+macro_rules! token_slice {
     ($($kind:expr),*) => {
         {
             use tenda_scanner::TokenKind::*;
-            vec![$($kind),*].iter()
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! token_vec {
-    ($($kind:expr),*) => {
-        {
-            use tenda_scanner::TokenKind::*;
-            vec![$($kind),*]
+            &[$($kind),*]
         }
     };
 }

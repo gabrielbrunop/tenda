@@ -10,7 +10,7 @@ use crate::{
     parser_error::{unexpected_token, ParserError, Result},
     scope_tracker::{BlockScope, ScopeTracker},
     token_iter::TokenIterator,
-    token_stream, token_vec,
+    token_slice,
 };
 
 pub struct Parser<'a> {
@@ -81,7 +81,7 @@ impl<'a> Parser<'a> {
     fn parse_statement(&mut self) -> Result<ast::Stmt> {
         let token = match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Newline => {
-                self.tokens.advance_while(token_stream![Newline]);
+                self.tokens.advance_while(token_slice![Newline]);
 
                 return self.parse_statement();
             }
@@ -94,7 +94,7 @@ impl<'a> Parser<'a> {
             TokenKind::If => self.parse_if_statement(),
             TokenKind::While => self.parse_while_statement(),
             TokenKind::ForOrBreak => {
-                if self.tokens.check_sequence(token_stream![ForOrBreak, Each]) {
+                if self.tokens.check_sequence(token_slice![ForOrBreak, Each]) {
                     self.parse_for_each_statement()
                 } else {
                     self.parse_break_statement()
@@ -108,7 +108,7 @@ impl<'a> Parser<'a> {
 
         match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Newline => {
-                self.tokens.advance_while(token_stream![Newline]);
+                self.tokens.advance_while(token_slice![Newline]);
             }
             Some(token)
                 if matches!(
@@ -126,7 +126,7 @@ impl<'a> Parser<'a> {
 
     fn parse_block(
         &mut self,
-        end_token_types: Vec<TokenKind>,
+        end_token_types: &[TokenKind],
         scope: BlockScope,
     ) -> Result<(ast::Stmt, TokenKind)> {
         let span_start = self.tokens.next().unwrap().span.start();
@@ -136,14 +136,14 @@ impl<'a> Parser<'a> {
 
     fn parse_block_contents(
         &mut self,
-        end_token_types: Vec<TokenKind>,
+        end_token_types: &[TokenKind],
         scope: BlockScope,
         span_start: Option<usize>,
     ) -> Result<(ast::Stmt, TokenKind)> {
         let _guard = self.scope.guard(scope);
         let _newline_guard = self.tokens.halt_ignoring_newline();
 
-        self.tokens.advance_while(token_stream![Newline]);
+        self.tokens.advance_while(token_slice![Newline]);
 
         let block_first_token_span = match self.tokens.peek() {
             Some(token) => &token.span,
@@ -195,7 +195,7 @@ impl<'a> Parser<'a> {
 
         let (then_branch, block_end_delimiter) = match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::Then => {
-                self.parse_block(token_vec![BlockEnd, Else], BlockScope::If)?
+                self.parse_block(token_slice![BlockEnd, Else], BlockScope::If)?
             }
             Some(_) => return Err(vec![unexpected_token!(self.tokens.next().unwrap())]),
             None => unreachable!(),
@@ -203,7 +203,8 @@ impl<'a> Parser<'a> {
 
         let else_branch = match block_end_delimiter {
             TokenKind::Else => {
-                let (else_branch, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Else)?;
+                let (else_branch, _) =
+                    self.parse_block(token_slice![BlockEnd], BlockScope::Else)?;
                 Some(else_branch)
             }
             TokenKind::BlockEnd => None,
@@ -231,7 +232,7 @@ impl<'a> Parser<'a> {
             return Err(vec![unexpected_token!(token)]);
         }
 
-        let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
+        let (body, _) = self.parse_block(token_slice![BlockEnd], BlockScope::Loop)?;
 
         let span_end = body.get_span().end();
         let span = SourceSpan::new(span_start, span_end, self.source_id);
@@ -259,7 +260,7 @@ impl<'a> Parser<'a> {
             return Err(vec![unexpected_token!(token)]);
         }
 
-        let (body, _) = self.parse_block(token_vec![BlockEnd], BlockScope::Loop)?;
+        let (body, _) = self.parse_block(token_slice![BlockEnd], BlockScope::Loop)?;
 
         let span_end = body.get_span().end();
         let span = SourceSpan::new(span_start, span_end, self.source_id);
@@ -278,7 +279,7 @@ impl<'a> Parser<'a> {
         let parameters = self.parse_function_parameters_signature()?;
 
         let (body, _) =
-            self.parse_block_contents(token_vec![BlockEnd], BlockScope::Function, None)?;
+            self.parse_block_contents(token_slice![BlockEnd], BlockScope::Function, None)?;
 
         let span_end = body.get_span().end();
         let span = SourceSpan::new(span_start, span_end, self.source_id);
@@ -371,7 +372,7 @@ impl<'a> Parser<'a> {
     fn parse_assignment(&mut self) -> Result<ast::Expr> {
         let expr = self.parse_logical_or()?;
 
-        if let Some(equal_sign) = self.tokens.consume_one_of(token_stream![EqualSign]) {
+        if let Some(equal_sign) = self.tokens.consume_one_of(token_slice![EqualSign]) {
             let value = self.parse_assignment()?;
 
             return match expr {
@@ -398,7 +399,7 @@ impl<'a> Parser<'a> {
     fn parse_logical_or(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_logical_and()?;
 
-        while let Some(op) = self.tokens.consume_one_of(token_stream![Or]) {
+        while let Some(op) = self.tokens.consume_one_of(token_slice![Or]) {
             let lhs = expr;
             let rhs = self.parse_logical_and()?;
 
@@ -417,7 +418,7 @@ impl<'a> Parser<'a> {
     fn parse_logical_and(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_equality()?;
 
-        while let Some(op) = self.tokens.consume_one_of(token_stream![And]) {
+        while let Some(op) = self.tokens.consume_one_of(token_slice![And]) {
             let lhs = expr;
             let rhs = self.parse_equality()?;
 
@@ -438,19 +439,19 @@ impl<'a> Parser<'a> {
 
         loop {
             let op: Option<ast::BinaryOperator> = {
-                if self.tokens.consume_one_of(token_stream![Equals]).is_some() {
+                if self.tokens.consume_one_of(token_slice![Equals]).is_some() {
                     Some(ast::BinaryOperator::Equality)
-                } else if self.tokens.consume_one_of(token_stream![Has]).is_some() {
+                } else if self.tokens.consume_one_of(token_slice![Has]).is_some() {
                     Some(ast::BinaryOperator::Has)
                 } else if self
                     .tokens
-                    .consume_sequence(token_stream![Not, Has])
+                    .consume_sequence(token_slice![Not, Has])
                     .is_some()
                 {
                     Some(ast::BinaryOperator::Lacks)
                 } else if self
                     .tokens
-                    .consume_sequence(token_stream![Not, Equals])
+                    .consume_sequence(token_slice![Not, Equals])
                     .is_some()
                 {
                     Some(ast::BinaryOperator::Inequality)
@@ -481,12 +482,21 @@ impl<'a> Parser<'a> {
     fn parse_comparison(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_range()?;
 
-        while let Some(op) =
-            self.tokens
-                .consume_one_of(token_stream![Greater, GreaterOrEqual, Less, LessOrEqual])
-        {
+        const COMPARISON_OPS: &[TokenKind] =
+            token_slice![Greater, GreaterOrEqual, Less, LessOrEqual];
+
+        if let Some(op) = self.tokens.consume_one_of(COMPARISON_OPS) {
             let lhs = expr;
             let rhs = self.parse_range()?;
+
+            if let Some(op) = self.tokens.consume_one_of(COMPARISON_OPS) {
+                return Err(vec![ParserError::InvalidChaining {
+                    op: op.clone(),
+                    span: op.span.clone(),
+                    message: Some("operadores de comparação não podem ser encadeados".to_string()),
+                    help: Some("use parênteses para separar as expressões".to_string()),
+                }]);
+            }
 
             let span_start = lhs.get_span().start();
             let span_end = rhs.get_span().end();
@@ -503,8 +513,17 @@ impl<'a> Parser<'a> {
     fn parse_range(&mut self) -> Result<ast::Expr> {
         let lhs = self.parse_term()?;
 
-        if let Some(op) = self.tokens.consume_one_of(token_stream![Until]) {
+        if let Some(op) = self.tokens.consume_one_of(token_slice![Until]) {
             let rhs = self.parse_term()?;
+
+            if let Some(op) = self.tokens.consume_one_of(token_slice![Until]) {
+                return Err(vec![ParserError::InvalidChaining {
+                    op: op.clone(),
+                    span: op.span.clone(),
+                    message: None,
+                    help: None,
+                }]);
+            }
 
             let span_start = lhs.get_span().start();
             let span_end = rhs.get_span().end();
@@ -521,7 +540,7 @@ impl<'a> Parser<'a> {
     fn parse_term(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_factor()?;
 
-        while let Some(op) = self.tokens.consume_one_of(token_stream![Plus, Minus]) {
+        while let Some(op) = self.tokens.consume_one_of(token_slice![Plus, Minus]) {
             let lhs = expr;
             let rhs = self.parse_factor()?;
 
@@ -542,7 +561,7 @@ impl<'a> Parser<'a> {
 
         while let Some(op) = self
             .tokens
-            .consume_one_of(token_stream![Star, Slash, Percent])
+            .consume_one_of(token_slice![Star, Slash, Percent])
         {
             let lhs = expr;
             let rhs = self.parse_exponent()?;
@@ -562,7 +581,7 @@ impl<'a> Parser<'a> {
     fn parse_exponent(&mut self) -> Result<ast::Expr> {
         let mut expr = self.parse_unary()?;
 
-        while let Some(op) = self.tokens.consume_one_of(token_stream![Caret]) {
+        while let Some(op) = self.tokens.consume_one_of(token_slice![Caret]) {
             let lhs = expr;
             let rhs = self.parse_unary()?;
 
@@ -579,7 +598,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<ast::Expr> {
-        if let Some(op) = self.tokens.consume_one_of(token_stream![Minus, Not]) {
+        if let Some(op) = self.tokens.consume_one_of(token_slice![Minus, Not]) {
             let rhs = self.parse_unary()?;
 
             let span_start = op.span.start();
@@ -599,7 +618,7 @@ impl<'a> Parser<'a> {
 
         while let Some(token) = self
             .tokens
-            .consume_one_of(token_stream![LeftParen, LeftBracket])
+            .consume_one_of(token_slice![LeftParen, LeftBracket])
         {
             match token.kind {
                 TokenKind::LeftParen => lhs = self.parse_function_call(lhs)?,
@@ -618,7 +637,7 @@ impl<'a> Parser<'a> {
             loop {
                 arguments.push(self.parse_expression()?);
 
-                if self.tokens.consume_one_of(token_stream![Comma]).is_none() {
+                if self.tokens.consume_one_of(token_slice![Comma]).is_none() {
                     break;
                 }
             }
@@ -630,7 +649,7 @@ impl<'a> Parser<'a> {
             }]);
         }
 
-        let right_paran = match self.tokens.consume_one_of(token_stream![RightParen]) {
+        let right_paran = match self.tokens.consume_one_of(token_slice![RightParen]) {
             Some(token) => token,
             _ => {
                 return Err(vec![ParserError::MissingParentheses {
@@ -658,7 +677,7 @@ impl<'a> Parser<'a> {
             }]);
         }
 
-        let closing_bracket = match self.tokens.consume_one_of(token_stream![RightBracket]) {
+        let closing_bracket = match self.tokens.consume_one_of(token_slice![RightBracket]) {
             Some(token) => token,
             _ => {
                 return Err(vec![ParserError::MissingBrackets {
@@ -729,7 +748,7 @@ impl<'a> Parser<'a> {
 
         let id = self.gen_uid();
 
-        if self.tokens.consume_one_of(token_stream![Dot]).is_some() {
+        if self.tokens.consume_one_of(token_slice![Dot]).is_some() {
             let variable_expr = ast::Variable::new(name.clone(), id, span);
             let variable_expr = ast::Expr::Variable(variable_expr);
 
@@ -745,7 +764,7 @@ impl<'a> Parser<'a> {
         let token = self.tokens.next().unwrap();
         let expr = self.parse_expression()?;
 
-        let closing_paren = match self.tokens.consume_one_of(token_stream![RightParen]) {
+        let closing_paren = match self.tokens.consume_one_of(token_slice![RightParen]) {
             Some(token) => token,
             _ => {
                 return Err(vec![ParserError::MissingParentheses {
@@ -769,7 +788,7 @@ impl<'a> Parser<'a> {
 
         let parameters = self.parse_function_parameters_signature()?;
         let (body, _) =
-            self.parse_block_contents(token_vec![BlockEnd], BlockScope::Function, None)?;
+            self.parse_block_contents(token_slice![BlockEnd], BlockScope::Function, None)?;
 
         let span_start = function_token.span.start();
         let span_end = body.get_span().end();
@@ -792,14 +811,14 @@ impl<'a> Parser<'a> {
             }]);
         }
 
-        let parameters = match self.tokens.consume_one_of(token_stream![RightParen]) {
+        let parameters = match self.tokens.consume_one_of(token_slice![RightParen]) {
             Some(_) => vec![],
             None => {
                 let parameters = self.parse_function_parameters()?;
 
                 if self
                     .tokens
-                    .consume_one_of(token_stream![RightParen])
+                    .consume_one_of(token_slice![RightParen])
                     .is_none()
                 {
                     return Err(vec![ParserError::MissingParentheses {
@@ -829,7 +848,7 @@ impl<'a> Parser<'a> {
 
             parameters.push(FunctionParam::new(param_name, self.gen_uid(), param_span));
 
-            if self.tokens.consume_one_of(token_stream![Comma]).is_none() {
+            if self.tokens.consume_one_of(token_slice![Comma]).is_none() {
                 break;
             }
         }
@@ -845,7 +864,7 @@ impl<'a> Parser<'a> {
             loop {
                 elements.push(self.parse_expression()?);
 
-                if self.tokens.consume_one_of(token_stream![Comma]).is_none() {
+                if self.tokens.consume_one_of(token_slice![Comma]).is_none() {
                     break;
                 }
             }
@@ -857,7 +876,7 @@ impl<'a> Parser<'a> {
             }]);
         }
 
-        let closing_bracket = match self.tokens.consume_one_of(token_stream![RightBracket]) {
+        let closing_bracket = match self.tokens.consume_one_of(token_slice![RightBracket]) {
             Some(token) => token,
             _ => {
                 return Err(vec![ParserError::MissingBrackets {
@@ -882,14 +901,14 @@ impl<'a> Parser<'a> {
 
         if !self.tokens.is_next_token(TokenKind::RightBrace) {
             loop {
-                let key = match self.tokens.consume_one_of(token_stream![Number, String]) {
+                let key = match self.tokens.consume_one_of(token_slice![Number, String]) {
                     Some(token) => {
                         ast::Literal::new(token.literal.clone().unwrap(), token.span.clone())
                     }
                     None => return Err(vec![unexpected_token!(self.tokens.next().unwrap())]),
                 };
 
-                if self.tokens.consume_one_of(token_stream![Colon]).is_none() {
+                if self.tokens.consume_one_of(token_slice![Colon]).is_none() {
                     return Err(vec![ParserError::MissingColon {
                         span: self.tokens.next().unwrap().span.clone(),
                     }]);
@@ -899,7 +918,7 @@ impl<'a> Parser<'a> {
 
                 elements.push((key, value));
 
-                if self.tokens.consume_one_of(token_stream![Comma]).is_none() {
+                if self.tokens.consume_one_of(token_slice![Comma]).is_none() {
                     break;
                 }
             }
@@ -911,7 +930,7 @@ impl<'a> Parser<'a> {
             }]);
         }
 
-        let closing_brace = match self.tokens.consume_one_of(token_stream![RightBrace]) {
+        let closing_brace = match self.tokens.consume_one_of(token_slice![RightBrace]) {
             Some(token) => token,
             _ => {
                 return Err(vec![ParserError::MissingBraces {
@@ -944,7 +963,7 @@ impl<'a> Parser<'a> {
         let access_expr = ast::Access::new(name, index_expr, span);
         let mut access_expr = ast::Expr::Access(access_expr);
 
-        if self.tokens.consume_one_of(token_stream![Dot]).is_some() {
+        if self.tokens.consume_one_of(token_slice![Dot]).is_some() {
             access_expr = self.parse_dot_access(access_expr)?;
         }
 
