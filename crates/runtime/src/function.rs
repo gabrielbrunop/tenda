@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
+use tenda_common::span::SourceSpan;
 use tenda_parser::ast;
 
 use crate::environment::Environment;
@@ -13,6 +14,7 @@ static FUNCTION_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 pub struct Function {
     pub id: usize,
     pub object: FunctionObject,
+    pub metadata: Option<FunctionRuntimeMetadata>,
 }
 
 impl Function {
@@ -26,6 +28,7 @@ impl Function {
         Function {
             id: unique_id,
             object: FunctionObject::new(params, Box::new(captured_env), body),
+            metadata: None,
         }
     }
 
@@ -35,6 +38,7 @@ impl Function {
         Function {
             id: unique_id,
             object: FunctionObject::new_builtin(params, Box::new(Environment::new()), func_ptr),
+            metadata: None,
         }
     }
 
@@ -57,6 +61,10 @@ impl Function {
             FunctionObject::UserDefined { env, .. } => env,
             FunctionObject::Builtin { env, .. } => env,
         }
+    }
+
+    pub fn set_metadata(&mut self, metadata: FunctionRuntimeMetadata) {
+        self.metadata = Some(metadata);
     }
 }
 
@@ -124,6 +132,31 @@ impl FunctionObject {
             env,
             func_ptr,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionRuntimeMetadata {
+    span: Option<Box<SourceSpan>>,
+    name: Option<String>,
+}
+
+impl FunctionRuntimeMetadata {
+    pub fn new(span: Option<SourceSpan>, name: Option<String>) -> Self {
+        FunctionRuntimeMetadata {
+            span: span.map(Box::new),
+            name,
+        }
+    }
+}
+
+impl FunctionRuntimeMetadata {
+    pub fn get_span(&self) -> Option<Box<SourceSpan>> {
+        self.span.clone()
+    }
+
+    pub fn get_name(&self) -> Option<String> {
+        self.name.clone()
     }
 }
 

@@ -1,9 +1,10 @@
 [package]
-name = "tenda-prelude"
+name = "tenda-web-platform"
 version.workspace = true
 authors.workspace = true
 edition = "2021"
 
 [dependencies]
 tenda-runtime = { path = "../runtime" }
-indexmap = { workspace = true }
+tenda-os-platform = { path = "../os-platform" }
+delegate = "0.13.3"

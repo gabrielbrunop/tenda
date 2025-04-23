@@ -215,3 +215,10 @@ pub fn escape_special_chars(s: &str) -> String {
 
     result
 }
+
+pub fn escape_value(value: &Value) -> String {
+    match value {
+        Value::String(s) => format!("\"{}\"", escape_special_chars(s)),
+        _ => value.to_string(),
+    }
+}
