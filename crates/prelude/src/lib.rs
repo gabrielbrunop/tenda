@@ -322,7 +322,7 @@ fn setup_list_prelude(env: &mut Environment) {
                     let i = Value::Number(i as f64);
                     let args = vec![value.clone(), i];
 
-                    runtime.call_function(None, function.clone(), args, None)?;
+                    runtime.call_function(function.clone(), args, None)?;
                 }
 
                 Ok(Value::Nil)
@@ -363,7 +363,7 @@ fn setup_list_prelude(env: &mut Environment) {
 
                 for value in list.iter() {
                     let args = vec![value.clone()];
-                    let result = runtime.call_function(None, function.clone(), args, None)?;
+                    let result = runtime.call_function(function.clone(), args, None)?;
 
                     new_list.push(result);
                 }
@@ -619,6 +619,9 @@ fn setup_string_prelude(env: &mut Environment) {
     global!(
         env,
         def_assoc_array!("Texto", {
+            "erros" => assoc_array_enum! {
+                "CONVERSÃO_INVÁLIDA",
+            },
             "tamanho" => builtin_fn!(["texto"], |args, _, _| {
                 let text = ensure!(args!(args, 0), String(value) => value);
 
@@ -652,6 +655,13 @@ fn setup_string_prelude(env: &mut Environment) {
                 Ok(Value::List(Rc::new(RefCell::new(
                     text.chars().map(|c| Value::String(c.to_string())).collect(),
                 ))))
+            }),
+            "de_lista" => builtin_fn!(["lista"], |args, _, _| {
+                let list = args!(args, 0);
+
+                ensure!(list, List(_) => ());
+
+                Ok(Value::String(list.to_string()))
             }),
             "para_maiúsculas" => builtin_fn!(["texto"], |args, _, _| {
                 let text = ensure!(args!(args, 0), String(value) => value);
@@ -815,12 +825,8 @@ fn setup_string_prelude(env: &mut Environment) {
                 let text = ensure!(args!(args, 0), String(value) => value);
 
                 match text.parse::<f64>() {
-                    Ok(number) => Ok(Value::Number(number)),
-                    Err(_) => Err(Box::new(RuntimeError::InvalidValueForConversion  {
-                        value: Value::String(text.to_string()),
-                        span: None,
-                        stacktrace: vec![],
-                    })),
+                    Ok(number) => Ok(success_object!(Value::Number(number))),
+                    Err(_) => Ok(error_object!("CONVERSÃO_INVÁLIDA")),
                 }
             })
         })

@@ -12,7 +12,7 @@ use crate::{
     runtime_error::{Result, RuntimeError},
     stack::{Stack, StackError},
     value::{Value, ValueType},
-    StackFrame,
+    FunctionRuntimeMetadata, StackFrame,
 };
 
 #[derive(Debug)]
@@ -80,6 +80,15 @@ impl Runtime {
             Break(break_stmt) => self.visit_break(break_stmt),
             Continue(continue_stmt) => self.visit_continue(continue_stmt),
         }
+        .map_err(|err| {
+            let mut err = err;
+
+            if err.get_span().is_none() {
+                err.set_span(stmt.get_span());
+            }
+
+            err
+        })
     }
 }
 
@@ -259,7 +268,9 @@ impl Runtime {
             name, params, body, ..
         } = function;
 
-        let func = self.create_function(params, body.clone());
+        let metadata =
+            FunctionRuntimeMetadata::new(Some(function.span.clone()), Some(name.clone()));
+        let func = self.create_function(params, body.clone(), Some(metadata));
 
         match self
             .stack
@@ -624,15 +635,6 @@ impl Runtime {
     fn visit_call(&mut self, call: &ast::Call) -> Result<Value> {
         let ast::Call { callee, args, span } = call;
 
-        let fn_name = match *callee.clone() {
-            ast::Expr::Variable(ast::Variable { name, .. }) => Some(name.clone()),
-            ast::Expr::Access(ast::Access { subscripted, .. }) => match *subscripted {
-                ast::Expr::Variable(ast::Variable { name, .. }) => Some(name.clone()),
-                _ => None,
-            },
-            _ => None,
-        };
-
         let callee = self.visit_expr(callee)?;
 
         let args = args
@@ -649,7 +651,7 @@ impl Runtime {
                     stacktrace: vec![],
                 }))
             }
-            Value::Function(func) => self.call_function(fn_name, func, args, Some(span)),
+            Value::Function(func) => self.call_function(func, args, Some(span.clone())),
             _ => Err(Box::new(RuntimeError::UnexpectedTypeError {
                 expected: ValueType::Function,
                 found: callee.kind(),
@@ -767,14 +769,10 @@ impl Runtime {
 
                 match subscripted {
                     Value::List(list) => {
-                        let mut list = list.borrow_mut();
-
-                        self.visit_list_assign(&mut list, index, value)
+                        self.visit_list_assign(list, index, value)
                     }
                     Value::AssociativeArray(associative_array) => {
-                        let mut associative_array = associative_array.borrow_mut();
-
-                        self.visit_associative_array_assign(&mut associative_array, index, value)
+                        self.visit_associative_array_assign(associative_array, index, value)
                     }
                     Value::String(_) => Err(Box::new(RuntimeError::ImmutableString {
                         span: Some(span.clone()),
@@ -829,9 +827,12 @@ impl Runtime {
         &mut self,
         anonymous_function: &ast::AnonymousFunction,
     ) -> Result<Value> {
-        let ast::AnonymousFunction { params, body, .. } = anonymous_function;
+        let ast::AnonymousFunction {
+            params, body, span, ..
+        } = anonymous_function;
 
-        let func = self.create_function(params, body.clone());
+        let metadata = FunctionRuntimeMetadata::new(Some(span.clone()), None);
+        let func = self.create_function(params, body.clone(), Some(metadata));
 
         Ok(Value::Function(func))
     }
@@ -901,7 +902,7 @@ impl Runtime {
 
     fn visit_list_assign(
         &mut self,
-        list: &mut [Value],
+        list: Rc<RefCell<Vec<Value>>>,
         index: &ast::Expr,
         value: &ast::Expr,
     ) -> Result<Value> {
@@ -909,6 +910,8 @@ impl Runtime {
 
         let value = self.visit_expr(value)?;
         let index = self.resolve_index(index)?;
+
+        let mut list = list.borrow_mut();
 
         if index >= list.len() {
             return Err(Box::new(RuntimeError::IndexOutOfBounds {
@@ -930,7 +933,7 @@ impl Runtime {
 
     fn visit_associative_array_assign(
         &mut self,
-        associative_array: &mut indexmap::IndexMap<AssociativeArrayKey, Value>,
+        associative_array: Rc<RefCell<indexmap::IndexMap<AssociativeArrayKey, Value>>>,
         index: &ast::Expr,
         value: &ast::Expr,
     ) -> Result<Value> {
@@ -945,6 +948,8 @@ impl Runtime {
                 source
             })?;
 
+        let mut associative_array = associative_array.borrow_mut();
+
         associative_array.insert(index, value.clone());
 
         Ok(value)
@@ -954,10 +959,9 @@ impl Runtime {
 impl Runtime {
     pub fn call_function(
         &mut self,
-        name: Option<String>,
         func: Function,
         args: Vec<Value>,
-        span: Option<&SourceSpan>,
+        span: Option<SourceSpan>,
     ) -> Result<Value> {
         let args = func
             .get_params()
@@ -1003,35 +1007,26 @@ impl Runtime {
         match result {
             Ok(value) => Ok(value),
             Err(mut err) => {
-                let err_span = err.get_span();
+                let fn_name = func.metadata.as_ref().and_then(|m| m.get_name().clone());
 
-                if err.get_stacktrace().filter(|cs| !cs.is_empty()).is_none() {
-                    let stacktrace = vec![StackFrame::new(name.clone(), err_span)];
-
-                    err.set_stacktrace(stacktrace);
+                if let Some(stacktrace) = err.get_mut_stacktrace() {
+                    stacktrace.push(StackFrame::new(fn_name.clone(), span.clone()));
+                } else {
+                    let err_site = err.get_span().clone();
+                    err.set_stacktrace(vec![StackFrame::new(fn_name.clone(), err_site)]);
                 }
-
-                if err.get_span().is_none() && span.is_some() {
-                    if let Some(span) = err.get_span() {
-                        err.set_span(&span);
-                    }
-                }
-
-                let call_frame = StackFrame::new(name.clone(), span.cloned());
-
-                match err.get_mut_stacktrace() {
-                    Some(stacktrace) => {
-                        stacktrace.push(call_frame);
-                    }
-                    None => unreachable!(),
-                };
 
                 Err(err)
             }
         }
     }
 
-    fn create_function(&self, params: &[ast::FunctionParam], body: Box<ast::Stmt>) -> Function {
+    fn create_function(
+        &self,
+        params: &[ast::FunctionParam],
+        body: Box<ast::Stmt>,
+        metadata: Option<FunctionRuntimeMetadata>,
+    ) -> Function {
         let mut context = Environment::new();
 
         for frame in self.stack.into_iter() {
@@ -1046,11 +1041,17 @@ impl Runtime {
             }
         }
 
-        Function::new(
+        let mut func = Function::new(
             params.iter().map(|p| p.clone().into()).collect(),
             context,
             body,
-        )
+        );
+
+        if let Some(metadata) = metadata {
+            func.set_metadata(metadata);
+        }
+
+        func
     }
 
     fn resolve_associative_array_key(
