@@ -294,3 +294,15 @@ fn add_stacktrace(
 
     config.stacktrace(stacktrace.into_iter().map(|c| c.into()).collect())
 }
+
+macro_rules! attach_span_if_missing {
+    ($err:expr, $span:expr) => {{
+        if $err.get_span().is_none() {
+            $err.set_span($span);
+        }
+
+        $err
+    }};
+}
+
+pub(crate) use attach_span_if_missing;

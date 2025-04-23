@@ -5,6 +5,7 @@ use tenda_reporting::Diagnostic;
 
 use crate::{
     associative_array::{AssociativeArray, AssociativeArrayKey},
+    attach_span_if_missing,
     environment::{Environment, ValueCell},
     frame::Frame,
     function::{Function, FunctionObject},
@@ -80,15 +81,7 @@ impl Runtime {
             Break(break_stmt) => self.visit_break(break_stmt),
             Continue(continue_stmt) => self.visit_continue(continue_stmt),
         }
-        .map_err(|err| {
-            let mut err = err;
-
-            if err.get_span().is_none() {
-                err.set_span(stmt.get_span());
-            }
-
-            err
-        })
+        .map_err(|mut err| attach_span_if_missing!(err, stmt.get_span()))
     }
 }
 
@@ -651,7 +644,9 @@ impl Runtime {
                     stacktrace: vec![],
                 }))
             }
-            Value::Function(func) => self.call_function(func, args, Some(span.clone())),
+            Value::Function(func) => self
+                .call_function(func, args, Some(span.clone()))
+                .map_err(|mut err| attach_span_if_missing!(err, span)),
             _ => Err(Box::new(RuntimeError::UnexpectedTypeError {
                 expected: ValueType::Function,
                 found: callee.kind(),
