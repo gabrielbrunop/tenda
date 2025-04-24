@@ -13,7 +13,7 @@ use crate::{
     runtime_error::{Result, RuntimeError},
     stack::{Stack, StackError},
     value::{Value, ValueType},
-    FunctionRuntimeMetadata, StackFrame,
+    FunctionName, FunctionRuntimeMetadata, StackFrame,
 };
 
 #[derive(Debug)]
@@ -992,28 +992,27 @@ impl Runtime {
 
                         Ok(value)
                     }
-                    Err(err) => Err(err),
+                    Err(mut err) => {
+                        let trace = StackFrame::new(
+                            func.metadata
+                                .as_ref()
+                                .and_then(|m| m.get_name().clone())
+                                .map(FunctionName::Named)
+                                .unwrap_or(FunctionName::TopLevel),
+                            span.clone(),
+                        );
+
+                        err.get_mut_stacktrace().unwrap().push(trace);
+
+                        Err(err)
+                    }
                 }
             }
         };
 
         self.stack.pop();
 
-        match result {
-            Ok(value) => Ok(value),
-            Err(mut err) => {
-                let fn_name = func.metadata.as_ref().and_then(|m| m.get_name().clone());
-
-                if let Some(stacktrace) = err.get_mut_stacktrace() {
-                    stacktrace.push(StackFrame::new(fn_name.clone(), span.clone()));
-                } else {
-                    let err_site = err.get_span().clone();
-                    err.set_stacktrace(vec![StackFrame::new(fn_name.clone(), err_site)]);
-                }
-
-                Err(err)
-            }
-        }
+        result
     }
 
     fn create_function(
