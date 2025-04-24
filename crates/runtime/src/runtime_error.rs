@@ -1,5 +1,5 @@
 use tenda_common::span::SourceSpan;
-use tenda_reporting::{DiagnosticConfig, HasDiagnosticHooks};
+use tenda_reporting::{Diagnostic, DiagnosticConfig, HasDiagnosticHooks};
 use tenda_reporting_derive::Diagnostic;
 use thiserror::Error;
 
@@ -11,13 +11,20 @@ use crate::{
 pub type Result<T> = std::result::Result<T, Box<RuntimeError>>;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum FunctionName {
+    Anonymous,
+    TopLevel,
+    Named(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct StackFrame {
-    pub function_name: Option<String>,
+    pub function_name: FunctionName,
     pub location: Option<SourceSpan>,
 }
 
 impl StackFrame {
-    pub fn new(function_name: Option<String>, location: Option<SourceSpan>) -> Self {
+    pub fn new(function_name: FunctionName, location: Option<SourceSpan>) -> Self {
         Self {
             function_name,
             location,
@@ -27,7 +34,11 @@ impl StackFrame {
 
 impl From<StackFrame> for tenda_reporting::StackFrame<SourceSpan> {
     fn from(val: StackFrame) -> Self {
-        let function_name = val.function_name.unwrap_or_else(|| "<anônimo>".to_string());
+        let function_name = match val.function_name {
+            FunctionName::Anonymous => "<anônimo>".to_string(),
+            FunctionName::TopLevel => "<raiz>".to_string(),
+            FunctionName::Named(name) => name,
+        };
 
         tenda_reporting::StackFrame::new(function_name, val.location)
     }
@@ -283,16 +294,57 @@ impl HasDiagnosticHooks<SourceSpan> for RuntimeError {
     }
 }
 
+/// Builds a Vec<StackFrame> from a RuntimeError’s stacktrace:
+/// - Returns `None` if there’s no stacktrace or it’s empty.
+/// - Otherwise, returns `Some(frames)` where `frames.len() == original.len() + 1`:
+///     1. **First frame**: the first entry’s function name paired with the error span.
+///     2. **Middle frames**: for each adjacent pair in the original stacktrace,
+///        the later function name is paired with the previous call-site location.
+///     3. **Last frame**: a “top-level” placeholder (`FunctionName::TopLevel`)
+///        paired with the last call-site location.
+///
+/// Note: at the moment in the runtime we’re still associating function names with
+/// their call sites rather than their actual in-function error sites.
+/// This is a temporary workaround until we can implement a better solution.
+fn build_stack_frames(runtime_error: &RuntimeError) -> Option<Vec<StackFrame>> {
+    let st = runtime_error.get_stacktrace()?;
+
+    if st.is_empty() {
+        return None;
+    }
+
+    let mut frames = Vec::with_capacity(st.len() + 1);
+
+    frames.push(StackFrame::new(
+        st[0].function_name.clone(),
+        runtime_error.get_span().clone(),
+    ));
+
+    for window in st.windows(2) {
+        let (prev, curr) = (&window[0], &window[1]);
+
+        frames.push(StackFrame::new(
+            curr.function_name.clone(),
+            prev.location.clone(),
+        ));
+    }
+
+    frames.push(StackFrame::new(
+        FunctionName::TopLevel,
+        st.last().unwrap().location.clone(),
+    ));
+
+    Some(frames)
+}
+
 fn add_stacktrace(
     runtime_error: &RuntimeError,
     config: DiagnosticConfig<SourceSpan>,
 ) -> DiagnosticConfig<SourceSpan> {
-    let stacktrace = match runtime_error.get_stacktrace().cloned() {
-        Some(stacktrace) => stacktrace,
-        None => return config,
-    };
-
-    config.stacktrace(stacktrace.into_iter().map(|c| c.into()).collect())
+    match build_stack_frames(runtime_error) {
+        Some(frames) => config.stacktrace(frames.into_iter().map(Into::into).collect()),
+        None => config,
+    }
 }
 
 macro_rules! attach_span_if_missing {
