@@ -81,16 +81,7 @@ impl Display for Value {
                     false => Literal::FALSE_LITERAL.to_string(),
                 },
                 String(value) => format!("\"{}\"", value),
-                Function(value) => format!(
-                    "<função {}({})>",
-                    value.id,
-                    value
-                        .get_params()
-                        .iter()
-                        .map(|p| p.name.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
+                Function(value) => format!("<função {:#x}>", value.id),
                 List(value) => format!(
                     "[{}]",
                     value
