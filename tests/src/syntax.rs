@@ -34,3 +34,37 @@ expr_tests_should_panic!(
     escape_octal_too_short: "\"\\12\"",
     escape_unknown_escape: "\"\\q\""
 );
+
+expr_tests!(
+    number_zero: "0" => Number(0.0),
+    number_plain: "123" => Number(123.0),
+    number_underscores: "1_000_000" => Number(1_000_000.0),
+    number_leading_zero: "0123" => Number(123.0),
+    number_bin: "0b1010" => Number(10.0),
+    number_bin_underscores: "0b1010_0101" => Number(0b1010_0101 as f64),
+    number_bin_uppercase: "0B1101" => Number(13.0),
+    number_oct: "0o755" => Number(0o755 as f64),
+    number_oct_uppercase: "0O644" => Number(0o644 as f64),
+    number_hex: "0xdead_beef" => Number(0xDEAD_BEEFu32 as f64),
+    number_hex_uppercase: "0XCAFE" => Number(0xCAFE as f64),
+    number_float: "0.123" => Number(0.123),
+    number_float_trailing: "1." => Number(1.0),
+    number_exp: "1e3" => Number(1e3),
+    number_uppercase_exp: "1E3" => Number(1e3),
+    number_exp_signed: "2.5e-2" => Number(2.5e-2),
+    number_exp_plus: "2.5E+2" => Number(2.5e+2),
+    number_exp_underscores: "1_2e3_0" => Number(12e30),
+);
+
+expr_tests_should_panic!(
+    number_bad_bin_digit: "0b102",
+    number_bad_oct_digit: "0o9",
+    number_bad_hex_digit: "0xG1",
+    number_missing_bin_digits: "0b",
+    number_missing_oct_digits: "0o",
+    number_missing_hex_digits: "0x",
+    number_multi_dot: "1.2.3",
+    number_multi_exp: "1e2e3",
+    number_missing_exp_digits: "1e",
+    number_invalid_suffix: "123abc",
+);
