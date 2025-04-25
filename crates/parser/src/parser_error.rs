@@ -38,7 +38,7 @@ pub enum ParserError {
         span: SourceSpan,
     },
 
-    #[error("token inesperado: {}", .token.lexeme.escape_default())]
+    #[error("token inesperado: {}", .token.lexeme.escape_debug())]
     UnexpectedToken {
         token: Token,
 
