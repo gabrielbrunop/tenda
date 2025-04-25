@@ -1002,7 +1002,11 @@ impl Runtime {
                             span.clone(),
                         );
 
-                        err.get_mut_stacktrace().unwrap().push(trace);
+                        if let Some(stacktrace) = err.get_mut_stacktrace() {
+                            stacktrace.push(trace);
+                        } else {
+                            err.set_stacktrace(vec![trace]);
+                        }
 
                         Err(err)
                     }
