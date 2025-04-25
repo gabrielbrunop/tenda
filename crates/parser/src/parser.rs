@@ -609,20 +609,21 @@ impl<'a> Parser<'a> {
 
             Ok(ast::Expr::Unary(unary_op))
         } else {
-            self.parse_call()
+            self.parse_postfix()
         }
     }
 
-    fn parse_call(&mut self) -> Result<ast::Expr> {
+    fn parse_postfix(&mut self) -> Result<ast::Expr> {
         let mut lhs = self.parse_primary()?;
 
-        while let Some(token) = self
-            .tokens
-            .consume_one_of(token_slice![LeftParen, LeftBracket])
+        while let Some(token) =
+            self.tokens
+                .consume_one_of(token_slice![LeftParen, LeftBracket, Dot])
         {
             match token.kind {
                 TokenKind::LeftParen => lhs = self.parse_function_call(lhs)?,
                 TokenKind::LeftBracket => lhs = self.parse_access(lhs)?,
+                TokenKind::Dot => lhs = self.parse_dot_access(lhs)?,
                 _ => unreachable!(),
             }
         }
@@ -747,17 +748,9 @@ impl<'a> Parser<'a> {
         };
 
         let id = self.gen_uid();
+        let variable_expr = ast::Variable::new(name.clone(), id, span);
 
-        if self.tokens.consume_one_of(token_slice![Dot]).is_some() {
-            let variable_expr = ast::Variable::new(name.clone(), id, span);
-            let variable_expr = ast::Expr::Variable(variable_expr);
-
-            self.parse_dot_access(variable_expr)
-        } else {
-            let variable_expr = ast::Variable::new(name.clone(), id, span);
-
-            Ok(ast::Expr::Variable(variable_expr))
-        }
+        Ok(ast::Expr::Variable(variable_expr))
     }
 
     fn parse_grouping(&mut self) -> Result<ast::Expr> {
@@ -949,23 +942,19 @@ impl<'a> Parser<'a> {
         Ok(associative_array_expr)
     }
 
-    fn parse_dot_access(&mut self, name: ast::Expr) -> Result<ast::Expr> {
+    fn parse_dot_access(&mut self, lhs: ast::Expr) -> Result<ast::Expr> {
         let (field, field_span) = self.consume_identifier()?;
-        let field = tenda_scanner::Literal::String(field);
+        let literal = tenda_scanner::Literal::String(field);
 
-        let index_expr = ast::Literal::new(field, field_span);
+        let index_expr = ast::Literal::new(literal, field_span);
         let index_expr = ast::Expr::Literal(index_expr);
 
-        let span_start = name.get_span().start();
+        let span_start = lhs.get_span().start();
         let span_end = index_expr.get_span().end();
         let span = SourceSpan::new(span_start, span_end, self.source_id);
 
-        let access_expr = ast::Access::new(name, index_expr, span);
-        let mut access_expr = ast::Expr::Access(access_expr);
-
-        if self.tokens.consume_one_of(token_slice![Dot]).is_some() {
-            access_expr = self.parse_dot_access(access_expr)?;
-        }
+        let access_expr = ast::Access::new(lhs, index_expr, span);
+        let access_expr = ast::Expr::Access(access_expr);
 
         Ok(access_expr)
     }

@@ -405,3 +405,8 @@ expr_tests!(
 expr_tests_should_panic!(
     range_plus_num_error: "(1 até 5) + 1",
 );
+
+expr_tests!(
+    dot_access_on_assoc_array: "{ \"a\": 1 }.a"           => Number(1.0),
+    dot_access_chained:       "{ \"a\": { \"b\": 2 } }.a.b" => Number(2.0),
+);
