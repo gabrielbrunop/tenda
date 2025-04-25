@@ -131,6 +131,6 @@ impl tenda_runtime::Platform for Platform {
     fn read_line(&self) -> String {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
-        input.trim_end_matches('\n').to_string()
+        input.trim_end().to_string()
     }
 }
