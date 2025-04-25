@@ -125,17 +125,17 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn consume_string(&mut self, char: char) -> Result<Token, LexicalError> {
-        let mut buffer = String::new();
-        let mut consumed_end_quote = false;
+    fn consume_string(&mut self, first_quote: char) -> Result<Token, LexicalError> {
+        let mut buf = String::new();
+        let mut closed = false;
 
-        buffer.push(char);
+        buf.push(first_quote);
 
-        while let Some(&peeked) = self.source.peek() {
-            match peeked {
+        while let Some(&ch) = self.source.peek() {
+            match ch {
                 '"' => {
                     self.source.next();
-                    consumed_end_quote = true;
+                    closed = true;
                     break;
                 }
                 '\n' => {
@@ -146,61 +146,83 @@ impl<'a> Scanner<'a> {
                 '\\' => {
                     self.source.next();
 
-                    if let Some(&escaped_ch) = self.source.peek() {
-                        match escaped_ch {
-                            'n' => {
-                                buffer.push('\n');
-                                self.source.next();
-                            }
-                            'r' => {
-                                buffer.push('\r');
-                                self.source.next();
-                            }
-                            't' => {
-                                buffer.push('\t');
-                                self.source.next();
-                            }
-                            '\\' => {
-                                buffer.push('\\');
-                                self.source.next();
-                            }
-                            '"' => {
-                                buffer.push('"');
-                                self.source.next();
-                            }
-                            other => {
-                                buffer.push(other);
-                                self.source.next();
-                            }
+                    let esc = self
+                        .source
+                        .next()
+                        .ok_or(LexicalError::UnexpectedStringEol {
+                            span: self.source.consume_span(),
+                        })?;
+
+                    let resolved = match esc {
+                        '0' => Some('\0'),
+                        'a' => Some('\x07'),
+                        'b' => Some('\x08'),
+                        'e' => Some('\x1B'),
+                        'f' => Some('\x0C'),
+                        'n' => Some('\n'),
+                        'r' => Some('\r'),
+                        't' => Some('\t'),
+                        'v' => Some('\x0B'),
+                        '\\' => Some('\\'),
+                        '\'' => Some('\''),
+                        '"' => Some('"'),
+                        'x' => {
+                            let hi = self.read_hex_digit()?;
+                            let lo = self.read_hex_digit()?;
+                            Some(char::from(
+                                u8::from_str_radix(&format!("{hi}{lo}"), 16).unwrap(),
+                            ))
                         }
+                        'u' => {
+                            let code = self.read_n_hex(4)?;
+                            char::from_u32(code)
+                        }
+                        'U' => {
+                            let code = self.read_n_hex(8)?;
+                            char::from_u32(code)
+                        }
+                        d @ '1'..='7' => {
+                            let d2 = self.read_octal_digit()?;
+                            let d3 = self.read_octal_digit()?;
+                            let val = u8::from_str_radix(&format!("{d}{d2}{d3}"), 8).unwrap();
+                            Some(char::from(val))
+                        }
+                        _ => {
+                            return Err(LexicalError::UnknownEscape {
+                                span: self.source.consume_span(),
+                                found: esc,
+                            })
+                        }
+                    };
+
+                    if let Some(c) = resolved {
+                        buf.push(c);
                     } else {
-                        return Err(LexicalError::UnexpectedStringEol {
+                        return Err(LexicalError::InvalidUnicodeEscape {
                             span: self.source.consume_span(),
                         });
                     }
                 }
                 _ => {
-                    buffer.push(peeked);
+                    buf.push(ch);
                     self.source.next();
                 }
             }
         }
 
-        if !consumed_end_quote && self.source.peek().is_none() {
+        if !closed {
             return Err(LexicalError::UnexpectedStringEol {
                 span: self.source.consume_span(),
             });
         }
 
-        let string = buffer[1..].to_string();
+        let literal = buf[1..].to_owned();
 
-        let token = self.source.consume_token_with_literal(
+        Ok(self.source.consume_token_with_literal(
             TokenKind::String,
-            string.clone(),
-            Literal::String(string),
-        );
-
-        Ok(token)
+            literal.clone(),
+            Literal::String(literal),
+        ))
     }
 
     fn consume_number(&mut self, char: char) -> Result<Token, LexicalError> {
@@ -346,5 +368,33 @@ impl Scanner<'_> {
         }
 
         true
+    }
+
+    fn read_hex_digit(&mut self) -> Result<char, LexicalError> {
+        self.source
+            .next()
+            .filter(|c| c.is_ascii_hexdigit())
+            .ok_or(LexicalError::InvalidHexEscape {
+                span: self.source.consume_span(),
+            })
+    }
+
+    fn read_n_hex(&mut self, n: usize) -> Result<u32, LexicalError> {
+        let mut s = String::new();
+        for _ in 0..n {
+            s.push(self.read_hex_digit()?);
+        }
+        u32::from_str_radix(&s, 16).map_err(|_| LexicalError::InvalidHexEscape {
+            span: self.source.consume_span(),
+        })
+    }
+
+    fn read_octal_digit(&mut self) -> Result<char, LexicalError> {
+        self.source
+            .next()
+            .filter(|c| ('0'..='7').contains(c))
+            .ok_or(LexicalError::InvalidOctalEscape {
+                span: self.source.consume_span(),
+            })
     }
 }

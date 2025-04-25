@@ -53,3 +53,35 @@ pub fn interpret_stmt_and_get<P: Platform + 'static>(
 
     runtime.get_global_env().get(name).unwrap().extract()
 }
+
+#[macro_export]
+macro_rules! expr_tests {
+    ($($name:ident: $expr:expr => $variant:ident $parens:tt),+ $(,)?) => {
+        $(
+            #[rstest::rstest]
+            #[case(OSPlatform)]
+            fn $name(#[case] platform: impl Platform + 'static) {
+                use $crate::Value::*;
+
+                assert_eq!(
+                    $crate::interpret_expr_with_prelude(platform, $expr),
+                    $variant $parens
+                );
+            }
+        )*
+    };
+}
+
+#[macro_export]
+macro_rules! expr_tests_should_panic {
+    ($($name:ident: $expr:expr),+ $(,)?) => {
+        $(
+            #[rstest::rstest]
+            #[case(OSPlatform)]
+            #[should_panic]
+            fn $name(#[case] platform: impl Platform + 'static) {
+                $crate::interpret_expr_with_prelude(platform, $expr);
+            }
+        )*
+    };
+}

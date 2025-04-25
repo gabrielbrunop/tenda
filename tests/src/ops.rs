@@ -1,40 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 use tenda_core::{
     platform::OSPlatform,
-    runtime::{self, AssociativeArrayKey, Platform, Value},
+    runtime::{self, AssociativeArrayKey, Platform},
 };
 
-use crate::interpret_expr_with_prelude;
-
-macro_rules! expr_tests {
-    ($($name:ident: $expr:expr => $variant:ident $parens:tt),+ $(,)?) => {
-        $(
-            #[rstest::rstest]
-            #[case(OSPlatform)]
-            fn $name(#[case] platform: impl Platform + 'static) {
-                use Value::*;
-
-                assert_eq!(
-                    interpret_expr_with_prelude(platform, $expr),
-                    $variant $parens
-                );
-            }
-        )*
-    };
-}
-
-macro_rules! expr_tests_should_panic {
-    ($($name:ident: $expr:expr),+ $(,)?) => {
-        $(
-            #[rstest::rstest]
-            #[case(OSPlatform)]
-            #[should_panic]
-            fn $name(#[case] platform: impl Platform + 'static) {
-                interpret_expr_with_prelude(platform, $expr);
-            }
-        )*
-    };
-}
+use crate::{expr_tests, expr_tests_should_panic};
 
 expr_tests_should_panic!(
     chained_comparison_expr: "1 < 2 < 3",
