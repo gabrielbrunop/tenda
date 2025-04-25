@@ -225,52 +225,105 @@ impl<'a> Scanner<'a> {
         ))
     }
 
-    fn consume_number(&mut self, char: char) -> Result<Token, LexicalError> {
-        let mut number = String::new();
-        let mut matched_dot = false;
+    fn consume_number(&mut self, first: char) -> Result<Token, LexicalError> {
+        let mut raw = String::new();
+        raw.push(first);
 
-        number.push(char);
+        if first == '0' {
+            if let Some(&next) = self.source.peek() {
+                match next {
+                    'b' | 'B' | 'o' | 'O' | 'x' | 'X' => {
+                        self.source.next();
+                        raw.push(next);
 
-        while let Some(&peeked) = self.source.peek() {
-            let is_unexpected = |c: char| c == '.' && matched_dot || c.is_alphabetic();
+                        let (radix, valid_digit): (u32, fn(char) -> bool) = match next {
+                            'b' | 'B' => (2, |c: char| c == '0' || c == '1'),
+                            'o' | 'O' => (8, |c: char| ('0'..='7').contains(&c)),
+                            'x' | 'X' => (16, |c: char| c.is_ascii_hexdigit()),
+                            _ => unreachable!(),
+                        };
 
-            match peeked {
-                c if is_unexpected(c) => {
+                        let mut digits = String::new();
+
+                        while let Some(&ch) = self.source.peek() {
+                            if ch == '_' {
+                                self.source.next();
+                                continue;
+                            }
+                            if valid_digit(ch) {
+                                digits.push(ch);
+                                raw.push(ch);
+                                self.source.next();
+                            } else {
+                                break;
+                            }
+                        }
+
+                        if digits.is_empty() {
+                            return Err(LexicalError::UnexpectedChar {
+                                character: next,
+                                span: self.source.consume_span(),
+                            });
+                        }
+
+                        let value = u64::from_str_radix(&digits, radix).unwrap() as f64;
+
+                        return Ok(self.source.consume_token_with_literal(
+                            TokenKind::Number,
+                            raw,
+                            Literal::Number(value),
+                        ));
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        let mut matched_dot = first == '.';
+        let mut matched_exp = false;
+
+        while let Some(&ch) = self.source.peek() {
+            match ch {
+                '_' => {
+                    raw.push(ch);
+                    self.source.next();
+                }
+                d if d.is_ascii_digit() => {
+                    raw.push(d);
+                    self.source.next();
+                }
+                '.' if !matched_dot && !matched_exp => {
+                    matched_dot = true;
+                    raw.push('.');
+                    self.source.next();
+                }
+                'e' | 'E' if !matched_exp => {
+                    matched_exp = true;
+                    raw.push(ch);
+                    self.source.next();
+
+                    if let Some(&sign @ ('+' | '-')) = self.source.peek() {
+                        raw.push(sign);
+                        self.source.next();
+                    }
+                }
+                c if c.is_alphabetic() => {
                     return Err(LexicalError::UnexpectedChar {
                         character: c,
                         span: self.source.consume_span(),
                     });
                 }
-                c if c.is_numeric() || c == '.' => {
-                    if c == '.' {
-                        matched_dot = true;
-                    }
 
-                    number.push(peeked);
-                    self.source.next();
-                }
                 _ => break,
             }
         }
 
-        let illegal_leading_zero =
-            number.starts_with('0') && !number.starts_with("0.") && number != "0";
+        let cleaned: String = raw.chars().filter(|c| *c != '_').collect();
+        let value: f64 = cleaned.parse().unwrap();
 
-        if illegal_leading_zero {
-            return Err(LexicalError::LeadingZeroNumberLiterals {
-                span: self.source.consume_span(),
-            });
-        }
-
-        let number: f64 = number.parse().unwrap();
-
-        let token = self.source.consume_token_with_literal(
-            TokenKind::Number,
-            number.to_string(),
-            Literal::Number(number),
-        );
-
-        Ok(token)
+        Ok(self
+            .source
+            .consume_token_with_literal(TokenKind::Number, raw, Literal::Number(value)))
     }
 
     fn consume_identifier(&mut self, char: char) -> Result<Token, LexicalError> {
