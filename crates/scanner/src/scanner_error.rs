@@ -29,4 +29,29 @@ pub enum LexicalError {
         #[span]
         span: SourceSpan,
     },
+
+    #[error("escape hexadecimal inválido")]
+    InvalidHexEscape {
+        #[span]
+        span: SourceSpan,
+    },
+
+    #[error("escape octal inválido")]
+    InvalidOctalEscape {
+        #[span]
+        span: SourceSpan,
+    },
+
+    #[error("escape unicode inválido")]
+    InvalidUnicodeEscape {
+        #[span]
+        span: SourceSpan,
+    },
+
+    #[error("escape não reconhecido: {}", .found)]
+    UnknownEscape {
+        #[span]
+        span: SourceSpan,
+        found: char,
+    },
 }

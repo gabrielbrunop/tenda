@@ -195,11 +195,24 @@ pub fn escape_special_chars(s: &str) -> String {
 
     for c in s.chars() {
         match c {
+            '\0' => result.push_str("\\0"),
+            '\x07' => result.push_str("\\a"),
+            '\x08' => result.push_str("\\b"),
+            '\x0C' => result.push_str("\\f"),
+            '\x0B' => result.push_str("\\v"),
+            '\x1B' => result.push_str("\\e"),
             '\r' => result.push_str("\\r"),
             '\n' => result.push_str("\\n"),
             '\t' => result.push_str("\\t"),
             '\\' => result.push_str("\\\\"),
             '"' => result.push_str("\\\""),
+            '\'' => result.push_str("\\\'"),
+
+            c if c.is_control() => {
+                let byte = c as u32;
+                result.push_str(&format!("\\x{byte:02X}"));
+            }
+
             _ => result.push(c),
         }
     }
