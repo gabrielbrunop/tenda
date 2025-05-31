@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tenda_core::platform::web::*;
+use tenda_playground_platform::ProtocolMessage;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -16,9 +16,9 @@ pub enum JsonProtocolMessage {
     Error { payload: Vec<String> },
 }
 
-impl From<WebPlatformProtocolMessage> for JsonProtocolMessage {
-    fn from(message: WebPlatformProtocolMessage) -> Self {
-        use WebPlatformProtocolMessage::*;
+impl From<ProtocolMessage> for JsonProtocolMessage {
+    fn from(message: ProtocolMessage) -> Self {
+        use ProtocolMessage::*;
 
         match message {
             Ready => JsonProtocolMessage::Ready,

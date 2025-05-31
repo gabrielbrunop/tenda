@@ -4,15 +4,17 @@ use std::rc::Rc;
 use tenda_core::common::span::SourceSpan;
 use tenda_core::runtime::escape_value;
 use tenda_core::{
-    common::source::IdentifiedSource, parser::Parser, platform::web::*,
-    prelude::setup_runtime_prelude, runtime::Runtime, scanner::Scanner,
+    common::source::IdentifiedSource, parser::Parser, prelude::setup_runtime_prelude,
+    runtime::Runtime, scanner::Scanner,
 };
+use tenda_playground_platform::Platform;
+use tenda_playground_platform::ProtocolMessage;
 
 const PROMPT_TERMINATOR: u8 = b'\x04';
 
 mod protocol_message;
 
-fn send(message: WebPlatformProtocolMessage) {
+fn send(message: ProtocolMessage) {
     let json_message = JsonProtocolMessage::from(message);
     let json_string = json_message.to_string();
 
@@ -41,7 +43,7 @@ fn send_diagnostic(
         })
         .collect();
 
-    send(WebPlatformProtocolMessage::Error(errs_str));
+    send(ProtocolMessage::Error(errs_str));
 }
 
 fn read_line() -> String {
@@ -80,7 +82,7 @@ fn read_prompt(buffer: &mut Vec<u8>) -> Result<Option<String>, io::Error> {
 }
 
 fn main() -> io::Result<()> {
-    let platform = WebPlatform::new(send, read_line);
+    let platform = Platform::new(send, read_line);
 
     let mut runtime = Runtime::new(platform);
     setup_runtime_prelude(runtime.get_global_env_mut());
@@ -130,7 +132,7 @@ fn main() -> io::Result<()> {
 
         match runtime.eval(&ast) {
             Ok(result) => {
-                send(WebPlatformProtocolMessage::Result(
+                send(ProtocolMessage::Result(
                     result.kind(),
                     escape_value(&result),
                 ));

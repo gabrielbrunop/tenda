@@ -12,4 +12,3 @@ tenda-common = { path = "../common" }
 tenda-reporting = { path = "../reporting" }
 tenda-prelude = { path = "../prelude" }
 tenda-os-platform = { path = "../os-platform" }
-tenda-web-platform = { path = "../web-platform" }
