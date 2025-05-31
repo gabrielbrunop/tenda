@@ -10,4 +10,4 @@ indexmap = "1.7.0"
 
 [workspace.package]
 version = "1.0.0-alpha.1"
-authors = ["Gabriel Bruno Oliveira Pereira <gabrielbrunop@gmail.com>"]
+authors = ["Gabriel Bruno Oliveira Pereira <gabrielbrunoes@gmail.com>"]
