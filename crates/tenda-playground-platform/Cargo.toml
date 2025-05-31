@@ -1,5 +1,5 @@
 [package]
-name = "tenda-web-platform"
+name = "tenda-playground-platform"
 version.workspace = true
 authors.workspace = true
 edition = "2021"
