@@ -14,7 +14,7 @@ pub enum ProtocolMessage {
     Unlock,
     Output(String),
     Result(ValueType, String),
-    Error(String),
+    Error(Vec<String>),
 }
 
 impl Platform {

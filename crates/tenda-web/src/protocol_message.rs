@@ -13,7 +13,7 @@ pub enum JsonProtocolMessage {
     #[serde(rename = "result")]
     Result { value_type: String, value: String },
     #[serde(rename = "error")]
-    Error { payload: String },
+    Error { payload: Vec<String> },
 }
 
 impl From<WebPlatformProtocolMessage> for JsonProtocolMessage {
