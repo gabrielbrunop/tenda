@@ -23,16 +23,25 @@ fn send(message: WebPlatformProtocolMessage) {
 }
 
 fn send_diagnostic(
-    caches: impl tenda_core::reporting::Cache<IdentifiedSource>,
-    err: impl tenda_core::reporting::Diagnostic<SourceSpan>,
+    errs: Vec<(
+        impl tenda_core::reporting::Diagnostic<SourceSpan>,
+        impl tenda_core::reporting::Cache<IdentifiedSource>,
+    )>,
 ) {
-    let mut buf = Vec::<u8>::new();
+    let errs_str: Vec<_> = errs
+        .into_iter()
+        .map(|(err, cache)| {
+            let mut buf = Vec::<u8>::new();
 
-    err.to_report().write(caches, &mut buf).unwrap();
+            err.to_report().write(cache, &mut buf).unwrap();
 
-    let message = String::from_utf8_lossy(&buf).into_owned();
+            let message = String::from_utf8_lossy(&buf).into_owned();
 
-    send(WebPlatformProtocolMessage::Error(message));
+            message
+        })
+        .collect();
+
+    send(WebPlatformProtocolMessage::Error(errs_str));
 }
 
 fn read_line() -> String {
@@ -96,11 +105,12 @@ fn main() -> io::Result<()> {
         let tokens = match Scanner::new(&source, source_id).scan() {
             Ok(tokens) => tokens,
             Err(errs) => {
-                for err in errs {
-                    let caches = tenda_core::reporting::sources(source_history.clone());
-                    send_diagnostic(caches, err);
-                }
+                let diagnostic_pairs = errs
+                    .into_iter()
+                    .map(|err| (err, tenda_core::reporting::sources(source_history.clone())))
+                    .collect();
 
+                send_diagnostic(diagnostic_pairs);
                 continue;
             }
         };
@@ -108,11 +118,12 @@ fn main() -> io::Result<()> {
         let ast = match Parser::new(&tokens, source_id).parse() {
             Ok(ast) => ast,
             Err(errors) => {
-                for err in errors {
-                    let caches = tenda_core::reporting::sources(source_history.clone());
-                    send_diagnostic(caches, err);
-                }
+                let diagnostic_pairs = errors
+                    .into_iter()
+                    .map(|err| (err, tenda_core::reporting::sources(source_history.clone())))
+                    .collect();
 
+                send_diagnostic(diagnostic_pairs);
                 continue;
             }
         };
@@ -125,8 +136,10 @@ fn main() -> io::Result<()> {
                 ));
             }
             Err(err) => {
-                let caches = tenda_core::reporting::sources(source_history.clone());
-                send_diagnostic(caches, *err);
+                send_diagnostic(vec![(
+                    *err,
+                    tenda_core::reporting::sources(source_history.clone()),
+                )]);
             }
         }
     }
