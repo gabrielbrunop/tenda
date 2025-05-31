@@ -103,6 +103,7 @@ impl Runtime {
         match expr {
             Binary(binary) => self.visit_binary(binary),
             Unary(unary) => self.visit_unary(unary),
+            Ternary(ternary) => self.visit_ternary(ternary),
             Grouping(grouping) => self.visit_grouping(grouping),
             List(list) => self.visit_list(list),
             Literal(literal) => self.visit_literal(literal),
@@ -625,6 +626,24 @@ impl Runtime {
         Ok(expr)
     }
 
+    fn visit_ternary(&mut self, ternary: &ast::TernaryOp) -> Result<Value> {
+        let ast::TernaryOp {
+            cond,
+            then,
+            or_else,
+            span,
+        } = ternary;
+
+        let cond_value = self.visit_expr(cond)?;
+
+        if cond_value.to_bool() {
+            self.visit_expr(then)
+        } else {
+            self.visit_expr(or_else)
+        }
+        .map_err(|mut err| attach_span_if_missing!(err, span))
+    }
+
     fn visit_call(&mut self, call: &ast::Call) -> Result<Value> {
         let ast::Call { callee, args, span } = call;
 
@@ -987,16 +1006,16 @@ impl Runtime {
                 match self.interpret_stmt(&body) {
                     Ok(value) => {
                         if is_expr {
-                            return Ok(value);
+                            Ok(value)
+                        } else {
+                            let value = self
+                                .stack
+                                .consume_return_value()
+                                .map(|v| v.extract())
+                                .unwrap_or(Value::Nil);
+
+                            Ok(value)
                         }
-
-                        let value = self
-                            .stack
-                            .consume_return_value()
-                            .map(|v| v.extract())
-                            .unwrap_or(Value::Nil);
-
-                        Ok(value)
                     }
                     Err(mut err) => {
                         let trace = StackFrame::new(

@@ -100,6 +100,7 @@ impl<'a> Parser<'a> {
                     self.parse_break_statement()
                 }
             }
+            TokenKind::Do => self.parse_do_statement(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Continue => self.parse_continue_statement(),
             _ => self.parse_expression().map(ast::Stmt::Expr),
@@ -192,18 +193,25 @@ impl<'a> Parser<'a> {
         let span_start = self.tokens.next().unwrap().span.start();
         let condition = self.parse_expression()?;
 
-        let (then_branch, block_end_delimiter) = match self.tokens.peek() {
-            Some(token) if token.kind == TokenKind::Then => {
-                self.parse_block(token_slice![BlockEnd, Else], BlockScope::If)?
-            }
-            Some(_) => return Err(vec![unexpected_token!(self.tokens.next().unwrap())]),
-            None => unreachable!(),
+        self.skip_token(TokenKind::Then)?;
+
+        let (then_branch, block_end_delimiter) = if self.tokens.is_next_token(TokenKind::Do) {
+            self.parse_block(token_slice![BlockEnd, Else], BlockScope::If)?
+        } else {
+            let _guard = self.tokens.set_ignoring_newline();
+
+            return self
+                .parse_ternary_branches(condition, span_start)
+                .map(ast::Stmt::Expr);
         };
 
         let else_branch = match block_end_delimiter {
             TokenKind::Else => {
+                self.skip_token(TokenKind::Do)?;
+
                 let (else_branch, _) =
                     self.parse_block(token_slice![BlockEnd], BlockScope::Else)?;
+
                 Some(else_branch)
             }
             TokenKind::BlockEnd => None,
@@ -325,6 +333,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_do_statement(&mut self) -> Result<ast::Stmt> {
+        let span_start = self.tokens.next().unwrap().span.start();
+
+        let (body, _) = self.parse_block(token_slice![BlockEnd], BlockScope::Global)?;
+
+        let span_end = body.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
+
+        let body = ast::Ast::from(vec![body], span.clone());
+        let do_stmt = ast::Block::new(body, span);
+        let do_stmt = ast::Stmt::Block(do_stmt);
+
+        Ok(do_stmt)
+    }
+
     fn parse_return_statement(&mut self) -> Result<ast::Stmt> {
         let return_token = self.tokens.next().unwrap();
 
@@ -387,7 +410,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_assignment(&mut self) -> Result<ast::Expr> {
-        let expr = self.parse_logical_or()?;
+        let expr = self.parse_ternary()?;
 
         if let Some(equal_sign) = self.tokens.consume_one_of(token_slice![EqualSign]) {
             let value = self.parse_assignment()?;
@@ -411,6 +434,18 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expr)
+    }
+
+    fn parse_ternary(&mut self) -> Result<ast::Expr> {
+        if let Some(token) = self.tokens.consume_one_of(token_slice![If]) {
+            let span_start = token.span.start();
+            let condition = self.parse_logical_or()?;
+
+            self.skip_token(TokenKind::Then)?;
+            self.parse_ternary_branches(condition, span_start)
+        } else {
+            self.parse_logical_or()
+        }
     }
 
     fn parse_logical_or(&mut self) -> Result<ast::Expr> {
@@ -974,6 +1009,24 @@ impl<'a> Parser<'a> {
         let access_expr = ast::Expr::Access(access_expr);
 
         Ok(access_expr)
+    }
+
+    fn parse_ternary_branches(
+        &mut self,
+        condition: ast::Expr,
+        span_start: usize,
+    ) -> Result<ast::Expr> {
+        let then_branch = self.parse_expression()?;
+
+        self.skip_token(TokenKind::Else)?;
+
+        let else_branch = self.parse_expression()?;
+
+        let span_end = else_branch.get_span().end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
+        let stmt = ast::TernaryOp::new(condition, then_branch, else_branch, span);
+
+        Ok(ast::Expr::Ternary(stmt))
     }
 }
 

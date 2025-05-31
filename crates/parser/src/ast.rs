@@ -278,6 +278,7 @@ impl ForEach {
 pub enum Expr {
     Binary(BinaryOp),
     Unary(UnaryOp),
+    Ternary(TernaryOp),
     Call(Call),
     Assign(Assign),
     Access(Access),
@@ -294,6 +295,7 @@ impl Expr {
         match self {
             Expr::Binary(binary_op) => &binary_op.span,
             Expr::Unary(unary_op) => &unary_op.span,
+            Expr::Ternary(ternary_op) => &ternary_op.span,
             Expr::Call(call) => &call.span,
             Expr::Assign(assign) => &assign.span,
             Expr::Access(access) => &access.span,
@@ -338,6 +340,25 @@ impl UnaryOp {
         UnaryOp {
             op,
             rhs: Box::new(rhs),
+            span,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TernaryOp {
+    pub cond: Box<Expr>,
+    pub then: Box<Expr>,
+    pub or_else: Box<Expr>,
+    pub span: SourceSpan,
+}
+
+impl TernaryOp {
+    pub fn new(cond: Expr, then: Expr, or_else: Expr, span: SourceSpan) -> Self {
+        TernaryOp {
+            cond: Box::new(cond),
+            then: Box::new(then),
+            or_else: Box::new(or_else),
             span,
         }
     }
