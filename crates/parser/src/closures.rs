@@ -201,6 +201,16 @@ fn annotate_expr_with_var_captures(expr: &mut ast::Expr, closure_list: &VarCaptu
             annotate_expr_with_var_captures(rhs, closure_list);
         }
         Expr::Unary(UnaryOp { rhs, .. }) => annotate_expr_with_var_captures(rhs, closure_list),
+        Expr::Ternary(TernaryOp {
+            cond,
+            then,
+            or_else,
+            ..
+        }) => {
+            annotate_expr_with_var_captures(cond, closure_list);
+            annotate_expr_with_var_captures(then, closure_list);
+            annotate_expr_with_var_captures(or_else, closure_list);
+        }
         Expr::Grouping(Grouping { expr, .. }) => {
             annotate_expr_with_var_captures(expr, closure_list)
         }
@@ -380,6 +390,18 @@ fn get_var_captures_from_expr(expr: &ast::Expr) -> Vec<VarCapture> {
             var_captures
         }
         Expr::Unary(UnaryOp { rhs, .. }) => get_var_captures_from_expr(rhs),
+        Expr::Ternary(TernaryOp {
+            cond,
+            then,
+            or_else,
+            ..
+        }) => {
+            let mut var_captures = get_var_captures_from_expr(cond);
+            var_captures.extend(get_var_captures_from_expr(then));
+            var_captures.extend(get_var_captures_from_expr(or_else));
+
+            var_captures
+        }
         Expr::Call(Call { args, callee, .. }) => {
             let mut var_captures = args
                 .iter()
@@ -535,6 +557,19 @@ fn get_free_vars_in_expr(expr: &ast::Expr, name: &str) -> Vec<FreeVarRef> {
             references
         }
         Expr::Unary(ast::UnaryOp { rhs, .. }) => get_free_vars_in_expr(rhs, name),
+        Expr::Ternary(ast::TernaryOp {
+            cond,
+            then,
+            or_else,
+            ..
+        }) => {
+            let mut references = get_free_vars_in_expr(cond, name);
+
+            references.extend(get_free_vars_in_expr(then, name));
+            references.extend(get_free_vars_in_expr(or_else, name));
+
+            references
+        }
         Expr::Call(ast::Call { args, callee, .. }) => {
             let mut references = args
                 .iter()
@@ -666,6 +701,16 @@ fn get_var_refs_in_expr(expr: &ast::Expr, name: &str) -> Vec<usize> {
             .chain(get_var_refs_in_expr(rhs, name))
             .collect(),
         Unary(ast::UnaryOp { rhs, .. }) => get_var_refs_in_expr(rhs, name),
+        Ternary(ast::TernaryOp {
+            cond,
+            then,
+            or_else,
+            ..
+        }) => get_var_refs_in_expr(cond, name)
+            .into_iter()
+            .chain(get_var_refs_in_expr(then, name))
+            .chain(get_var_refs_in_expr(or_else, name))
+            .collect(),
         Call(ast::Call { args, callee, .. }) => args
             .iter()
             .flat_map(|arg| get_var_refs_in_expr(arg, name))
