@@ -90,8 +90,8 @@ impl Runtime {
         use ast::Decl::*;
 
         match decl {
-            Local(local) => self.visit_local(local)?,
-            Function(function) => self.visit_function(function)?,
+            Local(local) => self.visit_local_decl(local)?,
+            Function(function) => self.visit_function_decl(function)?,
         };
 
         Ok(Value::Nil)
@@ -230,7 +230,7 @@ impl Runtime {
 }
 
 impl Runtime {
-    fn visit_local(&mut self, local: &ast::LocalDecl) -> Result<Value> {
+    fn visit_local_decl(&mut self, local: &ast::LocalDecl) -> Result<Value> {
         let ast::LocalDecl {
             name, value, span, ..
         } = local;
@@ -256,7 +256,7 @@ impl Runtime {
         }
     }
 
-    fn visit_function(&mut self, function: &ast::FunctionDecl) -> Result<Value> {
+    fn visit_function_decl(&mut self, function: &ast::FunctionDecl) -> Result<Value> {
         let ast::FunctionDecl {
             name, params, body, ..
         } = function;
@@ -982,8 +982,14 @@ impl Runtime {
                     self.stack.define(param.name.clone(), stored_value).unwrap();
                 }
 
+                let is_expr = matches!(body.as_ref(), ast::Stmt::Expr(_));
+
                 match self.interpret_stmt(&body) {
-                    Ok(_) => {
+                    Ok(value) => {
+                        if is_expr {
+                            return Ok(value);
+                        }
+
                         let value = self
                             .stack
                             .consume_return_value()

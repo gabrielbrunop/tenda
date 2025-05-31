@@ -441,6 +441,7 @@ fn get_var_captures_from_fn_body(decl: &ast::Decl) -> Vec<VarCapture> {
     match decl {
         Decl::Function(FunctionDecl { body, .. }) => match body.as_ref() {
             Stmt::Block(Block { inner, .. }) => get_var_captures_from_ast(inner),
+            Stmt::Expr(expr) => get_var_captures_from_expr(expr),
             _ => unreachable!(),
         },
         _ => vec![],

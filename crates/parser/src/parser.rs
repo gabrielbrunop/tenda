@@ -100,7 +100,6 @@ impl<'a> Parser<'a> {
                     self.parse_break_statement()
                 }
             }
-            TokenKind::Function => self.parse_function_declaration(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Continue => self.parse_continue_statement(),
             _ => self.parse_expression().map(ast::Stmt::Expr),
@@ -272,40 +271,58 @@ impl<'a> Parser<'a> {
         Ok(for_each_stmt)
     }
 
-    fn parse_function_declaration(&mut self) -> Result<ast::Stmt> {
-        let span_start = self.tokens.next().unwrap().span.start();
-
-        let (name, _) = self.consume_identifier()?;
-        let parameters = self.parse_function_parameters_signature()?;
-
-        let (body, _) =
-            self.parse_block_contents(token_slice![BlockEnd], BlockScope::Function, None)?;
-
-        let span_end = body.get_span().end();
-        let span = SourceSpan::new(span_start, span_end, self.source_id);
-
-        let function_decl = ast::FunctionDecl::new(name, parameters, body, self.gen_uid(), span);
-        let function_decl = ast::Decl::Function(function_decl);
-        let function_decl = ast::Stmt::Decl(function_decl);
-
-        Ok(function_decl)
-    }
-
     fn parse_declaration(&mut self) -> Result<ast::Stmt> {
         let span_start = self.tokens.next().unwrap().span.start();
         let (name, _) = self.consume_identifier()?;
 
-        self.skip_token(TokenKind::EqualSign)?;
+        match self.tokens.peek() {
+            Some(token) if token.kind == TokenKind::LeftParen => {
+                let parameters = self.parse_function_parameters_signature()?;
 
-        let expr = self.parse_expression()?;
+                self.skip_token(TokenKind::EqualSign)?;
 
-        let span_end = expr.get_span().end();
-        let span = SourceSpan::new(span_start, span_end, self.source_id);
+                let stmt = if self.tokens.is_next_token(TokenKind::Do) {
+                    self.tokens.next().unwrap();
 
-        let local_decl = ast::LocalDecl::new(name, expr, self.gen_uid(), span);
-        let local_decl = ast::Decl::Local(local_decl);
+                    let (body, _) = self.parse_block_contents(
+                        token_slice![BlockEnd],
+                        BlockScope::Function,
+                        None,
+                    )?;
 
-        Ok(ast::Stmt::Decl(local_decl))
+                    body
+                } else {
+                    ast::Stmt::Expr(self.parse_expression()?)
+                };
+
+                let span_end = stmt.get_span().end();
+                let span = SourceSpan::new(span_start, span_end, self.source_id);
+
+                let function_decl =
+                    ast::FunctionDecl::new(name, parameters, stmt, self.gen_uid(), span);
+                let function_decl = ast::Decl::Function(function_decl);
+                let function_decl = ast::Stmt::Decl(function_decl);
+
+                Ok(function_decl)
+            }
+            Some(token) if token.kind == TokenKind::EqualSign => {
+                self.skip_token(TokenKind::EqualSign)?;
+
+                let expr = self.parse_expression()?;
+
+                let span_end = expr.get_span().end();
+                let span = SourceSpan::new(span_start, span_end, self.source_id);
+
+                let local_decl = ast::LocalDecl::new(name, expr, self.gen_uid(), span);
+                let local_decl = ast::Decl::Local(local_decl);
+
+                Ok(ast::Stmt::Decl(local_decl))
+            }
+            Some(token) => Err(vec![unexpected_token!(token)]),
+            None => Err(vec![ParserError::UnexpectedEoi {
+                span: self.tokens.last_token().span.clone(),
+            }]),
+        }
     }
 
     fn parse_return_statement(&mut self) -> Result<ast::Stmt> {
