@@ -288,6 +288,7 @@ impl<'a> Parser<'a> {
                 let parameters = self.parse_function_parameters_signature()?;
 
                 self.skip_token(TokenKind::EqualSign)?;
+                self.tokens.advance_while(token_slice![Newline]);
 
                 let stmt = if self.tokens.is_next_token(TokenKind::Do) {
                     self.tokens.next().unwrap();
