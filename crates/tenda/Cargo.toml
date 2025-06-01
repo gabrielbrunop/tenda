@@ -3,6 +3,7 @@ name = "tenda"
 version.workspace = true
 authors.workspace = true
 edition = "2021"
+default-run = "tenda"
 
 [dependencies]
 tenda-core = { path = "../core" }
