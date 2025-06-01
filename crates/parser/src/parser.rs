@@ -207,12 +207,16 @@ impl<'a> Parser<'a> {
 
         let else_branch = match block_end_delimiter {
             TokenKind::Else => {
-                self.skip_token(TokenKind::Do)?;
+                if self.tokens.is_next_token(TokenKind::If) {
+                    Some(self.parse_if_statement()?)
+                } else {
+                    self.skip_token(TokenKind::Do)?;
 
-                let (else_branch, _) =
-                    self.parse_block(token_slice![BlockEnd], BlockScope::Else)?;
+                    let (else_branch, _) =
+                        self.parse_block(token_slice![BlockEnd], BlockScope::Else)?;
 
-                Some(else_branch)
+                    Some(else_branch)
+                }
             }
             TokenKind::BlockEnd => None,
             _ => unreachable!(),
