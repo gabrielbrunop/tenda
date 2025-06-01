@@ -79,7 +79,14 @@ impl<'a> Scanner<'a> {
             '}' => self.source.consume_token(TokenKind::RightBrace, "}").into(),
             ':' => self.source.consume_token(TokenKind::Colon, ":").into(),
             '+' => self.source.consume_token(TokenKind::Plus, "+").into(),
-            '-' => self.source.consume_token(TokenKind::Minus, "-").into(),
+            '-' => {
+                if let Some('>') = self.source.peek() {
+                    self.source.next();
+                    self.source.consume_token(TokenKind::Arrow, "->").into()
+                } else {
+                    self.source.consume_token(TokenKind::Minus, "-").into()
+                }
+            }
             '*' => self.source.consume_token(TokenKind::Star, "*").into(),
             '^' => self.source.consume_token(TokenKind::Caret, "^").into(),
             '%' => self.source.consume_token(TokenKind::Percent, "%").into(),

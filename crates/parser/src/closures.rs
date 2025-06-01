@@ -356,6 +356,9 @@ fn get_var_captures_from_expr(expr: &ast::Expr) -> Vec<VarCapture> {
         Expr::AnonymousFunction(AnonymousFunction { body, params, .. }) => {
             let body = match body.as_ref() {
                 Stmt::Block(Block { inner, .. }) => inner,
+                Stmt::Expr(expr) => {
+                    return get_var_captures_from_expr(expr);
+                }
                 _ => unreachable!(),
             };
 

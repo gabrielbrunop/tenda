@@ -831,16 +831,26 @@ impl<'a> Parser<'a> {
 
     fn parse_anonymous_function(&mut self) -> Result<ast::Expr> {
         let function_token = self.tokens.next().unwrap();
-
         let parameters = self.parse_function_parameters_signature()?;
-        let (body, _) =
-            self.parse_block_contents(token_slice![BlockEnd], BlockScope::Function, None)?;
+
+        self.skip_token(TokenKind::Arrow)?;
+
+        let stmt = if self.tokens.is_next_token(TokenKind::Do) {
+            self.tokens.next().unwrap();
+
+            let (body, _) =
+                self.parse_block_contents(token_slice![BlockEnd], BlockScope::Function, None)?;
+
+            body
+        } else {
+            ast::Stmt::Expr(self.parse_expression()?)
+        };
 
         let span_start = function_token.span.start();
-        let span_end = body.get_span().end();
+        let span_end = stmt.get_span().end();
         let span = SourceSpan::new(span_start, span_end, self.source_id);
 
-        let function_expr = ast::AnonymousFunction::new(parameters, body, self.gen_uid(), span);
+        let function_expr = ast::AnonymousFunction::new(parameters, stmt, self.gen_uid(), span);
         let function_expr = ast::Expr::AnonymousFunction(function_expr);
 
         Ok(function_expr)

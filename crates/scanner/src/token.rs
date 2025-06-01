@@ -85,6 +85,7 @@ pub enum TokenKind {
     RightBrace,
     Comma,
     Dot,
+    Arrow,
     Newline,
     Eof,
 }
