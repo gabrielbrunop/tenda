@@ -148,9 +148,7 @@ fn nested_closures(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn anonymous_function(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja resultado = (função(x, y)
-            retorna x + y
-        fim)(2, 3)
+        seja resultado = (função(x, y) -> x + y)(2, 3)
     "#;
 
     assert_eq!(
