@@ -9,3 +9,4 @@ default-run = "tenda"
 tenda-core = { path = "../core" }
 reedline = "0.39.0"
 yansi = "1.0"
+clap = { version = "4.5", features = ["derive"] }
