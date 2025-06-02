@@ -37,7 +37,7 @@ impl Function {
 
         Function {
             id: unique_id,
-            object: FunctionObject::new_builtin(params, Box::new(Environment::new()), func_ptr),
+            object: FunctionObject::new_builtin(params, Box::default(), func_ptr),
             metadata: None,
         }
     }
