@@ -17,4 +17,4 @@ assignees: []
 ## Ambiente (opcional)
 
 - SO/Versão:
-- Versão do Tenda:
+- Versão da Tenda (`tenda --version`):
