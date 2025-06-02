@@ -2,7 +2,7 @@
 
 Este documento descreve o fluxo de trabalho Git e CI/CD usado neste projeto.
 
-## Visão Geral
+## Visão geral
 
 ```
 feat/* → dev → main → tag vX.Y.Z → Publicação
@@ -33,7 +33,7 @@ git switch -c feat/nova-funcionalidade
 git push origin feat/nova-funcionalidade
 ```
 
-Abra Pull Request para `dev`.
+Abra pull request para `dev`.
 
 ### Preparação de release
 
@@ -45,7 +45,7 @@ git commit -am "chore: vX.Y.Z"
 git push
 ```
 
-Abra Pull Request para `main`. Após revisão e CI aprovados, faça merge.
+Abra pull request para `main`. Após revisão e CI aprovados, faça merge.
 
 ### Gerando a versão oficial
 
@@ -56,7 +56,11 @@ git tag -a vX.Y.Z -m "Versão vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-## Fluxo Resumido
+## Contribuições externas
+
+Colaboradores externos normalmente fariam um fork e criariam um branch `feat/<sua-funcionalidade>` a partir de `dev`, para depois abrir um pull request; **no entanto, atualmente este projeto está fechado a contribuições externas**. Se você tiver sugestões ou encontrar bugs, por favor abra uma **issue** no repositório do GitHub.
+
+## Fluxo resumido
 
 ```
 feat/* (CI/Testes) → dev (CI/Testes) → main (CI/Testes) → tag vX.Y.Z → CI/CD Publicação
