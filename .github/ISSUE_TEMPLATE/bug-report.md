@@ -27,7 +27,7 @@ assignees: []
 ## Ambiente
 
 - SO/Versão:
-- Versão do Tenda (`tenda --version`):
+- Versão da Tenda (`tenda --version`):
 - Outras dependências relevantes:
 
 ## Observações adicionais
