@@ -1,9 +1,10 @@
+use clap::{CommandFactory, Parser as CommandParser};
 use reedline::{
     default_emacs_keybindings, DefaultPrompt, Reedline, Signal, ValidationResult, Validator,
 };
 use std::io::{IsTerminal, Read};
 use std::rc::Rc;
-use std::{env, io};
+use std::{io, process};
 use tenda_core::runtime::escape_value;
 use tenda_core::{
     common::source::IdentifiedSource, parser::Parser, parser::ParserError, platform::OSPlatform,
@@ -11,6 +12,37 @@ use tenda_core::{
     scanner::Scanner,
 };
 use yansi::Paint;
+
+#[derive(CommandParser)]
+#[command(
+    author,
+    version,
+    about = "Tenda - interpretador e REPL",
+    long_about = "Execute arquivos .tnd ou inicie o REPL da linguagem Tenda.",
+    disable_help_flag = true,
+    disable_version_flag = true,
+    help_template = "\
+{name} {version}\n\n\
+{about-with-newline}\n\
+\x1b[1;4mUso:\x1b[0m {usage}\n\n\
+\x1b[1;4mArgumentos:\x1b[0m\n{positionals}\n\n\
+\x1b[1;4mOpções:\x1b[0m\n{options}\n"
+)]
+struct Cli {
+    #[arg(value_name = "ARQUIVO")]
+    file: Option<String>,
+
+    #[arg(
+        short = 'h',
+        long = "help",
+        alias = "ajuda",
+        help = "Exibe ajuda (use '-h' para ver resumo)"
+    )]
+    help: bool,
+
+    #[arg(short = 'V', long = "version", alias = "versão", help = "Exibe versão")]
+    version: bool,
+}
 
 struct BlockValidator;
 
@@ -52,14 +84,24 @@ impl Validator for BlockValidator {
 }
 
 fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    if args.len() > 1 {
-        let path: &'static str = Box::leak(args[1].clone().into_boxed_str());
-        let file_content = std::fs::read_to_string(path);
+    if cli.help {
+        Cli::command().print_long_help().unwrap();
+        println!();
+        process::exit(0);
+    }
+
+    if cli.version {
+        println!("tenda {}", env!("CARGO_PKG_VERSION"));
+        process::exit(0);
+    }
+
+    if let Some(path) = cli.file {
+        let file_content = std::fs::read_to_string(&path);
 
         match file_content {
-            Ok(source) => run_source(&source, path),
+            Ok(source) => run_source(&source, Box::leak(path.into_boxed_str())),
             Err(err) => match err.kind() {
                 io::ErrorKind::NotFound => eprintln!("Arquivo não encontrado: {}", path),
                 _ => eprintln!("Erro ao ler arquivo: {}", err),
@@ -71,15 +113,16 @@ fn main() -> io::Result<()> {
 
     let mut stdin = io::stdin();
 
-    if stdin.is_terminal() {
-        start_repl();
+    if !stdin.is_terminal() {
+        let mut buffer = String::new();
+        stdin.read_to_string(&mut buffer)?;
+
+        run_source(&buffer, "stdin");
 
         return Ok(());
     }
 
-    let mut buffer = String::new();
-    stdin.read_to_string(&mut buffer)?;
-    run_source(&buffer, "stdin");
+    start_repl();
 
     Ok(())
 }
@@ -133,9 +176,8 @@ fn start_repl() {
                     Ok(ast) => ast,
                     Err(errs) => {
                         for err in errs {
-                            let source_caches =
-                                tenda_core::reporting::sources(source_history.clone());
-                            err.to_report().eprint(source_caches).unwrap();
+                            let caches = tenda_core::reporting::sources(source_history.clone());
+                            err.to_report().eprint(caches).unwrap();
                         }
 
                         continue;
@@ -143,12 +185,10 @@ fn start_repl() {
                 };
 
                 match runtime.eval(&ast) {
-                    Ok(result) => {
-                        println!("{}", escape_value(&result));
-                    }
+                    Ok(result) => println!("{}", escape_value(&result)),
                     Err(err) => {
-                        let source_caches = tenda_core::reporting::sources(source_history.clone());
-                        err.to_report().eprint(source_caches).unwrap();
+                        let caches = tenda_core::reporting::sources(source_history.clone());
+                        err.to_report().eprint(caches).unwrap();
                     }
                 }
             }
