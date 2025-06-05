@@ -2,11 +2,13 @@
 name = "tenda-playground"
 version = "0.0.0"  
 authors.workspace = true
+license.workspace = true
+repository.workspace = true
 publish = false
 edition = "2021"
 
 [dependencies]
-tenda-core = { path = "../core" }
+tenda-core = { version = "0.1.0", path = "../core" }
 tenda-playground-platform = { path = "../tenda-playground-platform" }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

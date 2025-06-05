@@ -2,10 +2,12 @@
 name = "tenda-playground-platform"
 version = "0.0.0"  
 authors.workspace = true
+license.workspace = true
+repository.workspace = true
 publish = false
 edition = "2021"
 
 [dependencies]
-tenda-runtime = { path = "../runtime" }
-tenda-os-platform = { path = "../os-platform" }
+tenda-runtime = { version = "0.1.0", path = "../runtime" }
+tenda-os-platform = { version = "0.1.0", path = "../os-platform" }
 delegate = "0.13.3"
