@@ -14,6 +14,6 @@ authors = ["Gabriel Bruno Oliveira Pereira <gabrielbrunoes@gmail.com>"]
 license = "GPL-3.0-or-later"
 description = "Tenda - a programming language for Portuguese speakers"
 repository = "https://github.com/gabrielbrunop/tenda"
-readme = "README.md"
+readme = "README.en.md"
 keywords = ["language", "interpreter", "cli"]
 categories = ["command-line-utilities", "parsing", "compilers"]
