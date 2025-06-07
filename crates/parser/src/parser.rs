@@ -91,7 +91,10 @@ impl<'a> Parser<'a> {
 
         let result = match token.kind {
             TokenKind::Let => self.parse_declaration(),
-            TokenKind::If => self.parse_if_statement(),
+            TokenKind::If => match self.try_parse_if_expression_as_stmt()? {
+                Some(expr_stmt) => Ok(expr_stmt),
+                None => self.parse_if_statement(),
+            },
             TokenKind::While => self.parse_while_statement(),
             TokenKind::ForOrBreak => {
                 if self.tokens.check_sequence(token_slice![ForOrBreak, Each]) {
@@ -189,29 +192,46 @@ impl<'a> Parser<'a> {
         Ok((block_stmt, end_token.kind))
     }
 
+    fn try_parse_if_expression_as_stmt(&mut self) -> Result<Option<ast::Stmt>> {
+        let saved_tokens = self.tokens.clone();
+
+        match self.parse_expression() {
+            Err(_) => {
+                self.tokens = saved_tokens;
+                Ok(None)
+            }
+            Ok(expr) => {
+                let _guard = self.tokens.set_ignoring_newline();
+
+                let is_stmt_continuation = matches!(
+                    self.tokens.peek(),
+                    Some(token) if matches!(token.kind, TokenKind::BlockEnd | TokenKind::Else)
+                );
+
+                if is_stmt_continuation {
+                    self.tokens = saved_tokens;
+                    Ok(None)
+                } else {
+                    Ok(Some(ast::Stmt::Expr(expr)))
+                }
+            }
+        }
+    }
+
     fn parse_if_statement(&mut self) -> Result<ast::Stmt> {
         let span_start = self.tokens.next().unwrap().span.start();
         let condition = self.parse_expression()?;
 
         self.skip_token(TokenKind::Then)?;
 
-        let (then_branch, block_end_delimiter) = if self.tokens.is_next_token(TokenKind::Do) {
-            self.parse_block(token_slice![BlockEnd, Else], BlockScope::If)?
-        } else {
-            let _guard = self.tokens.set_ignoring_newline();
-
-            return self
-                .parse_ternary_branches(condition, span_start)
-                .map(ast::Stmt::Expr);
-        };
+        let (then_branch, block_end_delimiter) =
+            self.parse_block(token_slice![BlockEnd, Else], BlockScope::If)?;
 
         let else_branch = match block_end_delimiter {
             TokenKind::Else => {
                 if self.tokens.is_next_token(TokenKind::If) {
                     Some(self.parse_if_statement()?)
                 } else {
-                    self.skip_token(TokenKind::Do)?;
-
                     let (else_branch, _) =
                         self.parse_block(token_slice![BlockEnd], BlockScope::Else)?;
 

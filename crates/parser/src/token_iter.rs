@@ -2,7 +2,7 @@ use peekmore::{PeekMore, PeekMoreIterator};
 use std::{cell::RefCell, ops::Neg, rc::Rc, slice::Iter};
 use tenda_scanner::{Token, TokenKind};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TokenIterator<'a> {
     tokens: PeekMoreIterator<Iter<'a, Token>>,
     ignoring_newline_counter: Rc<RefCell<isize>>,
