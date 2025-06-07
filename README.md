@@ -1,10 +1,10 @@
-[![Português](https://img.shields.io/badge/lang-pt--BR-green)](README.md)
+[![Português](https://img.shields.io/badge/idioma-pt--BR-green)](README.md)
 [![English](https://img.shields.io/badge/lang-en-blue)](README.en.md)
 
 # Tenda
 
-[![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)](https://tenda.dev/)  
-[![License: GPL-3.0](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
+[![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)](https://tenda.dev/)
+[![License: GPL-3.0](https://img.shields.io/badge/licença-GPLv3-blue)](LICENSE)
 
 ## Recursos
 
