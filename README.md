@@ -1,3 +1,6 @@
+[![Português](https://img.shields.io/badge/lang-pt--BR-green)](README.md)
+[![English](https://img.shields.io/badge/lang-en-blue)](README.en.md)
+
 # Tenda
 
 [![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)](https://tenda.dev/)  
@@ -11,7 +14,7 @@
 
 ## Descrição
 
-Tenda é uma linguagem de programação moderna em português que visa facilitar o aprendizado de programação para falantes de português. A sintaxe é projetada para possibilitar a leitura _narrativa_ do código, tornando-a mais acessível e intuitiva.
+**Tenda** é uma linguagem de programação moderna em português que tem como objetivo tornar a programação mais acessível. Para isso, utiliza palavras-chave em português e uma sintaxe próxima da linguagem natural, permitindo uma _leitura narrativa_ do código. Essa abordagem busca reduzir a barreira de entrada para iniciantes e educadores nos países lusófonos.
 
 ## Mantenedores
 
