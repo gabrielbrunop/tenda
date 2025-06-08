@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Common utilities for the Tenda programming language"
 edition = "2021"
 
 [dependencies]

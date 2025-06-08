@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Procedural macros for Tenda reporting utilities"
 edition = "2021"
 
 [dependencies]
