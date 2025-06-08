@@ -8,4 +8,4 @@ edition = "2021"
 
 [dependencies]
 thiserror = { workspace = true }
-ariadne = { git = "https://github.com/gabrielbrunop/ariadne.git", branch = "main" }
+aegean = "0.6.0"

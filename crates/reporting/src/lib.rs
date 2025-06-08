@@ -1,4 +1,4 @@
-pub use ariadne::*;
+pub use aegean::*;
 
 pub trait Diagnostic<S: crate::Span> {
     fn to_report(&self) -> crate::Report<S>;
