@@ -3,6 +3,16 @@ members = ["crates/*", "tests"]
 resolver = "2"
 
 [workspace.dependencies]
+tenda-reporting = { path = "crates/reporting", version = "0.1.0" }
+tenda-reporting-derive = { path = "crates/reporting-derive", version = "0.1.0" }
+tenda-core = { path = "crates/core", version = "0.1.0" }
+tenda-common = { path = "crates/common", version = "0.1.0" }
+tenda-parser = { path = "crates/parser", version = "0.1.0" }
+tenda-scanner = { path = "crates/scanner", version = "0.1.0" }
+tenda-runtime = { path = "crates/runtime", version = "0.1.0" }
+tenda-prelude = { path = "crates/prelude", version = "0.1.0" }
+tenda-os-platform = { path = "crates/os-platform", version = "0.1.0" }
+
 peekmore = "1.3.0"
 thiserror = "1.0"
 chrono = "0.4.40"

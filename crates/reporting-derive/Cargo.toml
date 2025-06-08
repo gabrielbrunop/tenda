@@ -7,8 +7,8 @@ repository.workspace = true
 edition = "2021"
 
 [dependencies]
-tenda-common = { path = "../common" }
-tenda-reporting = { path = "../reporting" }
+tenda-common = { workspace = true }
+tenda-reporting = { workspace = true }
 thiserror = { workspace = true }
 
 [dependencies.syn]

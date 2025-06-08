@@ -7,9 +7,9 @@ repository.workspace = true
 edition = "2021"
 
 [dependencies]
-tenda-scanner = { path = "../scanner" }
-tenda-common = { path = "../common" }
-tenda-reporting = { path = "../reporting" }
-tenda-reporting-derive = { path = "../reporting-derive" }
+tenda-scanner = { workspace = true }
+tenda-common = { workspace = true }
+tenda-reporting = { workspace = true }
+tenda-reporting-derive = { workspace = true }
 thiserror = { workspace = true }
 peekmore = { workspace = true }

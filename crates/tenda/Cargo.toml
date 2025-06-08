@@ -12,7 +12,7 @@ edition = "2021"
 default-run = "tenda"
 
 [dependencies]
-tenda-core = { path = "../core" }
+tenda-core = { workspace = true }
 reedline = "0.39.0"
 yansi = "1.0"
 clap = { version = "4.5", features = ["derive"] }

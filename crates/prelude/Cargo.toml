@@ -7,5 +7,5 @@ repository.workspace = true
 edition = "2021"
 
 [dependencies]
-tenda-runtime = { path = "../runtime" }
+tenda-runtime = { workspace = true }
 indexmap = { workspace = true }
