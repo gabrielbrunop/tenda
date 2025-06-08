@@ -16,6 +16,27 @@
 
 **Tenda** é uma linguagem de programação moderna em português que tem como objetivo tornar a programação mais acessível. Para isso, utiliza palavras-chave em português e uma sintaxe próxima da linguagem natural, permitindo uma _leitura narrativa_ do código. Essa abordagem busca reduzir a barreira de entrada para iniciantes e educadores nos países lusófonos.
 
+## Instalação
+
+### macOS / Linux
+
+```bash
+curl -fsSL https://tenda.dev/instalar | bash
+```
+
+### Windows (PowerShell)
+
+```powershell
+iwr https://tenda.dev/instalar.ps1 -UseBasicParsing | iex
+```
+
+_Por padrão, a Tenda é instalada em `$HOME/.tenda/bin` (ou `%USERPROFILE%\.tenda\bin` no Windows) e seu perfil de usuário é atualizado automaticamente com:_
+
+```bash
+export TENDA_INSTALL="$HOME/.tenda"
+export PATH="$TENDA_INSTALL/bin:$PATH"
+```
+
 ## Mantenedores
 
 - [@gabrielbrunop](https://github.com/gabrielbrunop)
