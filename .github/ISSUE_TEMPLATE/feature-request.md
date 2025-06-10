@@ -1,8 +1,8 @@
 ---
-name: Solicitação de Funcionalidade
+name: Proposta de Funcionalidade
 about: Sugerir uma nova funcionalidade ou melhoria
 title: "[Melhoria] "
-labels: ["enhancement"]
+labels: ["proposta"]
 assignees: []
 ---
 

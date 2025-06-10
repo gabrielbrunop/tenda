@@ -2,7 +2,7 @@
 name: Pergunta / Ajuda
 about: Tirar dúvidas ou pedir ajuda com o projeto
 title: "[Pergunta] "
-labels: ["question"]
+labels: ["dúvida"]
 assignees: []
 ---
 

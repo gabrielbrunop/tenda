@@ -2,6 +2,7 @@
 name: Tarefa
 about: Uma tarefa específica a ser realizada
 title: "[Tarefa] "
+labels: ["tarefa"]
 ---
 
 ### Descrição
