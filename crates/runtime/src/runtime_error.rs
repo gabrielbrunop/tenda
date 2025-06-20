@@ -230,13 +230,47 @@ pub enum RuntimeError {
         stacktrace: Vec<StackFrame>,
     },
 
-    #[error("textos são imutáveis e não podem ser modificados")]
-    ImmutableString {
+    #[error("valores do tipo '{}' são imutáveis e não podem ser modificados", .value.to_string())]
+    ImmutableValueType {
+        value: ValueType,
+
         #[span]
         span: Option<SourceSpan>,
 
         #[help]
         help: Option<String>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
+    },
+
+    #[error("não é possível reatribuir um módulo ou seus membros")]
+    ReassignModule {
+        #[span]
+        span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
+    },
+
+    #[error("variável '{}' não pode ser reatribuída", .name)]
+    UnreassignableVariable {
+        name: String,
+
+        #[span]
+        span: Option<SourceSpan>,
+
+        #[help]
+        help: Option<String>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
+    },
+
+    #[error("valor está congelado e não pode ser modificado")]
+    FrozenValue {
+        #[span]
+        span: Option<SourceSpan>,
 
         #[metadata]
         stacktrace: Vec<StackFrame>,

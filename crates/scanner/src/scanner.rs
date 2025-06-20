@@ -347,7 +347,8 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        let token = match identifier.as_str() {
+        let ident = identifier.as_str();
+        let token = match ident {
             Literal::TRUE_LITERAL => self.source.consume_token_with_literal(
                 TokenKind::True,
                 Literal::TRUE_LITERAL.to_string(),
@@ -363,25 +364,28 @@ impl<'a> Scanner<'a> {
                 Literal::NIL_LITERAL.to_string(),
                 Literal::Nil,
             ),
-            "função" => self.source.consume_token(TokenKind::Function, "função"),
-            "não" => self.source.consume_token(TokenKind::Not, "não"),
-            "é" => self.source.consume_token(TokenKind::Equals, "é"),
-            "seja" => self.source.consume_token(TokenKind::Let, "seja"),
-            "se" => self.source.consume_token(TokenKind::If, "se"),
-            "então" => self.source.consume_token(TokenKind::Then, "então"),
-            "retorna" => self.source.consume_token(TokenKind::Return, "retorna"),
-            "senão" => self.source.consume_token(TokenKind::Else, "senão"),
-            "fim" => self.source.consume_token(TokenKind::BlockEnd, "fim"),
-            "ou" => self.source.consume_token(TokenKind::Or, "ou"),
-            "e" => self.source.consume_token(TokenKind::And, "e"),
-            "até" => self.source.consume_token(TokenKind::Until, "até"),
-            "para" => self.source.consume_token(TokenKind::ForOrBreak, "para"),
-            "cada" => self.source.consume_token(TokenKind::Each, "cada"),
-            "em" => self.source.consume_token(TokenKind::In, "em"),
-            "tem" => self.source.consume_token(TokenKind::Has, "tem"),
-            "enquanto" => self.source.consume_token(TokenKind::While, "enquanto"),
-            "faça" => self.source.consume_token(TokenKind::Do, "faça"),
-            "continua" => self.source.consume_token(TokenKind::Continue, "continua"),
+            "função" => self.source.consume_token(TokenKind::Function, ident),
+            "não" => self.source.consume_token(TokenKind::Not, ident),
+            "é" => self.source.consume_token(TokenKind::Equals, ident),
+            "seja" => self.source.consume_token(TokenKind::Let, ident),
+            "se" => self.source.consume_token(TokenKind::If, ident),
+            "então" => self.source.consume_token(TokenKind::Then, ident),
+            "retorna" => self.source.consume_token(TokenKind::Return, ident),
+            "senão" => self.source.consume_token(TokenKind::Else, ident),
+            "fim" => self.source.consume_token(TokenKind::BlockEnd, ident),
+            "ou" => self.source.consume_token(TokenKind::Or, ident),
+            "e" => self.source.consume_token(TokenKind::And, ident),
+            "até" => self.source.consume_token(TokenKind::Until, ident),
+            "para" => self.source.consume_token(TokenKind::ForOrBreak, ident),
+            "cada" => self.source.consume_token(TokenKind::Each, ident),
+            "em" => self.source.consume_token(TokenKind::In, ident),
+            "tem" => self.source.consume_token(TokenKind::Has, ident),
+            "enquanto" => self.source.consume_token(TokenKind::While, ident),
+            "faça" => self.source.consume_token(TokenKind::Do, ident),
+            "continua" => self.source.consume_token(TokenKind::Continue, ident),
+            "usa" => self.source.consume_token(TokenKind::Use, ident),
+            "como" => self.source.consume_token(TokenKind::As, ident),
+            "exporta" => self.source.consume_token(TokenKind::Export, ident),
             identifier => self.source.consume_token_with_literal(
                 TokenKind::Identifier,
                 identifier.to_string(),
@@ -457,4 +461,18 @@ impl Scanner<'_> {
                 span: self.source.consume_span(),
             })
     }
+}
+
+pub fn is_identifier(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+
+    let mut chars = s.chars();
+
+    if !matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_') {
+        return false;
+    }
+
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }

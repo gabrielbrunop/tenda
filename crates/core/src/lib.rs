@@ -25,3 +25,7 @@ pub mod prelude {
 pub mod platform {
     pub use ::tenda_os_platform::Platform as OSPlatform;
 }
+
+pub mod loader {
+    pub use ::tenda_loader::*;
+}

@@ -1,11 +1,14 @@
 use protocol_message::JsonProtocolMessage;
+use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
+use std::path::Path;
 use std::rc::Rc;
+use std::vec;
 use tenda_core::common::span::SourceSpan;
+use tenda_core::loader::{Loader, LoaderError};
 use tenda_core::runtime::escape_value;
 use tenda_core::{
-    common::source::IdentifiedSource, parser::Parser, prelude::setup_runtime_prelude,
-    runtime::Runtime, scanner::Scanner,
+    common::source::IdentifiedSource, prelude::get_runtime_prelude, runtime::Runtime,
 };
 use tenda_playground_platform::Platform;
 use tenda_playground_platform::ProtocolMessage;
@@ -84,13 +87,13 @@ fn read_prompt(buffer: &mut Vec<u8>) -> Result<Option<String>, io::Error> {
 fn main() -> io::Result<()> {
     let platform = Platform::new(send, read_line);
 
-    let mut runtime = Runtime::new(platform);
-    setup_runtime_prelude(runtime.get_global_env_mut());
+    let mut runtime = Runtime::with_builtins(platform, get_runtime_prelude());
+    let mut loader = Loader::new(|p: &Path| std::fs::read_to_string(p));
 
     let mut buffer = Vec::new();
-    let mut source_history: Vec<(IdentifiedSource, Rc<str>)> = Vec::new();
+    let mut source_history: HashMap<IdentifiedSource, Rc<str>> = HashMap::new();
 
-    loop {
+    'repl: loop {
         let source = match read_prompt(&mut buffer)? {
             Some(source) => source,
             None => continue,
@@ -98,51 +101,85 @@ fn main() -> io::Result<()> {
 
         let source_id = IdentifiedSource::new();
         let source_rc = Rc::from(source.clone());
-        source_history.push((source_id, source_rc));
+        source_history.insert(source_id, source_rc);
 
         if source.trim().is_empty() {
             continue;
         }
 
-        let tokens = match Scanner::new(&source, source_id).scan() {
-            Ok(tokens) => tokens,
-            Err(errs) => {
-                let diagnostic_pairs = errs
-                    .into_iter()
-                    .map(|err| (err, tenda_core::reporting::sources(source_history.clone())))
-                    .collect();
+        let result = match loader.register_virtual(source) {
+            Ok(o) => o,
+            Err(e) => {
+                handle_loader_error(e, &source_history);
 
-                send_diagnostic(diagnostic_pairs);
                 continue;
             }
         };
 
-        let ast = match Parser::new(&tokens, source_id).parse() {
-            Ok(ast) => ast,
-            Err(errors) => {
-                let diagnostic_pairs = errors
-                    .into_iter()
-                    .map(|err| (err, tenda_core::reporting::sources(source_history.clone())))
-                    .collect();
+        for (p, po) in result.modules.clone() {
+            if let Err(err) = runtime.load_module(p.clone(), po.unit.into()) {
+                source_history.insert(po.source_id, po.text.clone());
 
-                send_diagnostic(diagnostic_pairs);
-                continue;
-            }
-        };
+                let err = err.as_ref().clone();
 
-        match runtime.eval(&ast) {
-            Ok(result) => {
-                send(ProtocolMessage::Result(
-                    result.kind(),
-                    escape_value(&result),
-                ));
-            }
-            Err(err) => {
                 send_diagnostic(vec![(
-                    *err,
+                    err,
+                    tenda_core::reporting::sources(source_history.clone()),
+                )]);
+
+                continue 'repl;
+            }
+        }
+
+        match runtime.eval(result.prompt.unit.into()) {
+            Ok(result) => println!("{}", escape_value(&result)),
+            Err(err) => {
+                source_history.insert(result.prompt.source_id, result.prompt.text.clone());
+
+                let err = err.as_ref().clone();
+
+                send_diagnostic(vec![(
+                    err,
                     tenda_core::reporting::sources(source_history.clone()),
                 )]);
             }
+        }
+    }
+}
+
+fn handle_loader_error(err: LoaderError, source_history: &HashMap<IdentifiedSource, Rc<str>>) {
+    use tenda_core::loader::LoaderError;
+
+    match err {
+        LoaderError::Lexical { errors, .. } => {
+            let diagnostic_pairs = errors
+                .into_iter()
+                .map(|err| (err, tenda_core::reporting::sources(source_history.clone())))
+                .collect();
+
+            send_diagnostic(diagnostic_pairs);
+        }
+        LoaderError::Parse { errors, .. } => {
+            let diagnostic_pairs = errors
+                .into_iter()
+                .map(|err| (err, tenda_core::reporting::sources(source_history.clone())))
+                .collect();
+
+            send_diagnostic(diagnostic_pairs);
+        }
+        LoaderError::Resolution { error, .. } => {
+            let error = (
+                error.as_ref().clone(),
+                tenda_core::reporting::sources(source_history.clone()),
+            );
+
+            send_diagnostic(vec![error]);
+        }
+        LoaderError::EntryFileNotFound { path, .. } => {
+            send(ProtocolMessage::Error(vec![format!(
+                "erro: ao ler o arquivo `{}`",
+                path.display(),
+            )]));
         }
     }
 }

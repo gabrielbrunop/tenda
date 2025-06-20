@@ -4,7 +4,7 @@ macro_rules! global {
     ($env:ident, $builtin:expr) => {{
         let builtin = $builtin;
 
-        $env.set(builtin.0, ValueCell::Owned(builtin.1));
+        $env.set_or_replace(builtin.0, ValueCell::Owned(builtin.1));
     }};
     ($stack:ident, $($builtin:expr),+) => {{
         $(global!($stack, $builtin);)+
@@ -19,9 +19,8 @@ macro_rules! def_value {
 
 macro_rules! builtin_assoc_array {
     ($($name:literal => $value:expr),+ $(,)?) => {{
-        use std::cell::RefCell;
         use std::rc::Rc;
-        use tenda_runtime::AssociativeArrayKey;
+        use tenda_runtime::{AssociativeArrayKey, DynamicValue};
 
         let mut map = indexmap::IndexMap::new();
 
@@ -30,7 +29,7 @@ macro_rules! builtin_assoc_array {
             map.insert(key, $value);
         )+
 
-        Value::AssociativeArray(Rc::new(RefCell::new(map)))
+        Value::AssociativeArray(Rc::new(DynamicValue::new_frozen(map)))
     }};
 }
 
@@ -111,14 +110,18 @@ macro_rules! ensure {
     }};
 }
 
-pub fn setup_runtime_prelude(env: &mut Environment) {
-    setup_io_prelude(env);
-    setup_list_prelude(env);
-    setup_math_prelude(env);
-    setup_string_prelude(env);
-    setup_file_prelude(env);
-    setup_program_prelude(env);
-    setup_date_prelude(env);
+pub fn get_runtime_prelude() -> Environment {
+    let mut env = Environment::new();
+
+    setup_io_prelude(&mut env);
+    setup_list_prelude(&mut env);
+    setup_math_prelude(&mut env);
+    setup_string_prelude(&mut env);
+    setup_file_prelude(&mut env);
+    setup_program_prelude(&mut env);
+    setup_date_prelude(&mut env);
+
+    env
 }
 
 fn setup_io_prelude(env: &mut Environment) {
@@ -203,14 +206,30 @@ fn setup_list_prelude(env: &mut Environment) {
                 Ok(Value::Number(list.len() as f64))
             }),
             "insira" => builtin_fn!(["lista", "valor"], |args, _, _| {
-                let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
+                let mut list = ensure!(args!(args, 0), List(list) => list
+                    .borrow_mut_checked()
+                    .map_err(|e| match e {
+                        DynamicValueError::Frozen => RuntimeError::FrozenValue {
+                            span: None,
+                            stacktrace: vec![],
+                        },
+                    })?);
+
 
                 list.push(args!(args, 1).clone());
 
                 Ok(Value::Nil)
             }),
             "remova" => builtin_fn!(["lista", "valor"], |args, _, _| {
-                let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
+                let mut list = ensure!(args!(args, 0), List(list) => list
+                    .borrow_mut_checked()
+                    .map_err(|e| match e {
+                        DynamicValueError::Frozen => RuntimeError::FrozenValue {
+                            span: None,
+                            stacktrace: vec![],
+                        },
+                    })?);
+
                 let value = args!(args, 1);
                 let index = list.iter().position(|v| v == value);
 
@@ -221,7 +240,15 @@ fn setup_list_prelude(env: &mut Environment) {
                 Ok(Value::Nil)
             }),
             "remova_todos" => builtin_fn!(["lista", "valor"], |args, _, _| {
-                let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
+                let mut list = ensure!(args!(args, 0), List(list) => list
+                    .borrow_mut_checked()
+                    .map_err(|e| match e {
+                        DynamicValueError::Frozen => RuntimeError::FrozenValue {
+                            span: None,
+                            stacktrace: vec![],
+                        },
+                    })?);
+
                 let value = args!(args, 1);
 
                 list.retain(|v| v != value);
@@ -229,7 +256,15 @@ fn setup_list_prelude(env: &mut Environment) {
                 Ok(Value::Nil)
             }),
             "remova_por_índice" => builtin_fn!(["lista", "índice"], |args, _, _| {
-                let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
+                let mut list = ensure!(args!(args, 0), List(list) => list
+                    .borrow_mut_checked()
+                    .map_err(|e| match e {
+                        DynamicValueError::Frozen => RuntimeError::FrozenValue {
+                            span: None,
+                            stacktrace: vec![],
+                        },
+                    })?);
+
                 let index = ensure!(args!(args, 1), Number(value) => *value as usize);
 
                 if list.len() <= index {
@@ -281,7 +316,15 @@ fn setup_list_prelude(env: &mut Environment) {
                 Ok(Value::Boolean(list.is_empty()))
             }),
             "limpa" => builtin_fn!(["lista"], |args, _, _| {
-                let mut list = ensure!(args!(args, 0), List(list) => list.borrow_mut());
+                let mut list = ensure!(args!(args, 0), List(list) => list
+                    .borrow_mut_checked()
+                    .map_err(|e| match e {
+                        DynamicValueError::Frozen => RuntimeError::FrozenValue {
+                            span: None,
+                            stacktrace: vec![],
+                        },
+                    })?);
+
 
                 list.clear();
 
@@ -312,7 +355,7 @@ fn setup_list_prelude(env: &mut Environment) {
 
                 let extracted = list[start..=end].to_vec();
 
-                Ok(Value::List(Rc::new(RefCell::new(extracted))))
+                Ok(Value::List(Rc::new(DynamicValue::new(extracted))))
             }),
             "para_cada" => builtin_fn!(["lista", "função"], |args, runtime, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
@@ -343,7 +386,7 @@ fn setup_list_prelude(env: &mut Environment) {
                     .map(|i| Value::Number(i as f64))
                     .collect::<Vec<_>>();
 
-                Ok(Value::List(Rc::new(RefCell::new(list))))
+                Ok(Value::List(Rc::new(DynamicValue::new(list))))
             }),
             "de_texto" => builtin_fn!(["texto"], |args, _, _| {
                 let text = ensure!(args!(args, 0), String(value) => value);
@@ -353,7 +396,7 @@ fn setup_list_prelude(env: &mut Environment) {
                     .map(|c| Value::String(c.to_string()))
                     .collect::<Vec<_>>();
 
-                Ok(Value::List(Rc::new(RefCell::new(list))))
+                Ok(Value::List(Rc::new(DynamicValue::new(list))))
             }),
             "transforma" => builtin_fn!(["lista", "função"], |args, runtime, _| {
                 let list = ensure!(args!(args, 0), List(list) => list.borrow());
@@ -368,7 +411,7 @@ fn setup_list_prelude(env: &mut Environment) {
                     new_list.push(result);
                 }
 
-                Ok(Value::List(Rc::new(RefCell::new(new_list))))
+                Ok(Value::List(Rc::new(DynamicValue::new(new_list))))
             })
         })
     );
@@ -652,7 +695,7 @@ fn setup_string_prelude(env: &mut Environment) {
             "para_lista" => builtin_fn!(["texto"], |args, _, _| {
                 let text = ensure!(args!(args, 0), String(value) => value);
 
-                Ok(Value::List(Rc::new(RefCell::new(
+                Ok(Value::List(Rc::new(DynamicValue::new(
                     text.chars().map(|c| Value::String(c.to_string())).collect(),
                 ))))
             }),
@@ -883,7 +926,7 @@ fn setup_file_prelude(env: &mut Environment) {
                 match runtime.get_platform().list_files(path) {
                     Ok(files) => {
                         let files = files.into_iter().map(Value::String).collect();
-                        let value = Value::List(Rc::new(RefCell::new(files)));
+                        let value = Value::List(Rc::new(DynamicValue::new(files)));
 
                         Ok(success_object!(value))
                     },
@@ -923,7 +966,7 @@ fn setup_program_prelude(env: &mut Environment) {
             "argumentos" => builtin_fn!(|_, runtime, _| {
                 let args = runtime.get_platform().args();
                 let args = args.into_iter().map(Value::String).collect();
-                let value = Value::List(Rc::new(RefCell::new(args)));
+                let value = Value::List(Rc::new(DynamicValue::new(args)));
 
                 Ok(value)
             }),

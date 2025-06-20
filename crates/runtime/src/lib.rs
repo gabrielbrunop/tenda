@@ -7,6 +7,7 @@ mod platform;
 mod runtime;
 mod runtime_error;
 mod stack;
+mod store;
 mod value;
 
 pub use associative_array::*;

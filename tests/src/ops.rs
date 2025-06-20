@@ -1,7 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 use tenda_core::{
     platform::OSPlatform,
-    runtime::{self, AssociativeArrayKey, Platform},
+    runtime::{self, AssociativeArrayKey, DynamicValue, Platform},
 };
 
 use crate::{expr_tests, expr_tests_should_panic};
@@ -203,60 +203,60 @@ expr_tests_should_panic!(
 
 expr_tests!(
     list_expr: "[1, 2, 3]" =>
-        List(Rc::new(RefCell::new(vec![Number(1.0), Number(2.0), Number(3.0)]))),
+        List(Rc::new(DynamicValue::new(vec![Number(1.0), Number(2.0), Number(3.0)]))),
     list_concat_expr: "[1, 2] + [3, 4]" =>
-        List(Rc::new(RefCell::new(vec![Number(1.0), Number(2.0), Number(3.0), Number(4.0)]))),
+        List(Rc::new(DynamicValue::new(vec![Number(1.0), Number(2.0), Number(3.0), Number(4.0)]))),
     list_equality_expr: "[1, 2] é [1, 2]" => Boolean(true),
     list_equality2_expr: "[1, 2] é [1, 2, 3]" => Boolean(false),
     list_has_expr: "[1, 2, 3] tem 2" => Boolean(true),
     list_lacks_expr: "[1, 2, 3] não tem 4" => Boolean(true),
     empty_list_expr: "[]" =>
-        List(Rc::new(RefCell::new(vec![]))),
+        List(Rc::new(DynamicValue::new(vec![]))),
     nested_list_of_numbers_expr: "[[1, 2], [3, 4]]" =>
-        List(Rc::new(RefCell::new(vec![
-            List(Rc::new(RefCell::new(vec![Number(1.0), Number(2.0)]))),
-            List(Rc::new(RefCell::new(vec![Number(3.0), Number(4.0)]))),
+        List(Rc::new(DynamicValue::new(vec![
+            List(Rc::new(DynamicValue::new(vec![Number(1.0), Number(2.0)]))),
+            List(Rc::new(DynamicValue::new(vec![Number(3.0), Number(4.0)]))),
         ]))),
     list_with_nested_list_mixed_expr: "[1, [2, 3], 4]" =>
-        List(Rc::new(RefCell::new(vec![
+        List(Rc::new(DynamicValue::new(vec![
             Number(1.0),
-            List(Rc::new(RefCell::new(vec![Number(2.0), Number(3.0)]))),
+            List(Rc::new(DynamicValue::new(vec![Number(2.0), Number(3.0)]))),
             Number(4.0),
         ]))),
     list_of_mixed_types_expr: "[\"olá\", verdadeiro, 123, Nada]" =>
-        List(Rc::new(RefCell::new(vec![
+        List(Rc::new(DynamicValue::new(vec![
             String("olá".to_string()),
             Boolean(true),
             Number(123.0),
             Nil,
         ]))),
     list_including_range_expr: "[(1 até 3), \"coisas\", 42]" =>
-        List(Rc::new(RefCell::new(vec![
+        List(Rc::new(DynamicValue::new(vec![
             Range(1, 3),
             String("coisas".to_string()),
             Number(42.0),
         ]))),
     list_arithmetic_expressions_expr: "[1 + 2, 3 * 4]" =>
-        List(Rc::new(RefCell::new(vec![Number(3.0), Number(12.0)]))),
+        List(Rc::new(DynamicValue::new(vec![Number(3.0), Number(12.0)]))),
     list_chained_concatenation_expr: "([1, 2] + [3, 4]) + [5]" =>
-        List(Rc::new(RefCell::new(vec![
+        List(Rc::new(DynamicValue::new(vec![
             Number(1.0), Number(2.0), Number(3.0), Number(4.0), Number(5.0)
         ]))),
     list_deeply_nested_empty_expr: "[[[]]]" =>
-        List(Rc::new(RefCell::new(vec![
-            List(Rc::new(RefCell::new(vec![
-                List(Rc::new(RefCell::new(vec![]))),
+        List(Rc::new(DynamicValue::new(vec![
+            List(Rc::new(DynamicValue::new(vec![
+                List(Rc::new(DynamicValue::new(vec![]))),
             ]))),
         ]))),
     list_nested_equality_true_expr: "[[1], [2]] é [[1], [2]]" => Boolean(true),
     list_string_elements_equality_false_expr: "[\"abc\", \"def\"] é [\"abc\", \"xyz\"]" => Boolean(false),
     list_inequality_due_to_order_expr: "[1, 2] não é [2, 1]" => Boolean(true),
     list_multiple_concatenation_expr: "[1, 2] + [3] + [4, 5]" =>
-        List(Rc::new(RefCell::new(vec![
+        List(Rc::new(DynamicValue::new(vec![
             Number(1.0), Number(2.0), Number(3.0), Number(4.0), Number(5.0)
         ]))),
     list_empty_concatenation_expr: "[] + []" =>
-        List(Rc::new(RefCell::new(vec![]))),
+        List(Rc::new(DynamicValue::new(vec![]))),
     list_membership_found_numeric_expr: "[1, 2, 3] tem 1" => Boolean(true),
     list_membership_not_found_wrong_type_expr: "[1, 2, 3] tem \"1\"" => Boolean(false),
     list_membership_boolean_nil_expr: "[Nada, verdadeiro, falso] tem verdadeiro" => Boolean(true),
@@ -268,7 +268,7 @@ expr_tests!(
 );
 
 expr_tests!(
-    assoc_array_expr: "{ 1: 2, 3: 4 }" => AssociativeArray(Rc::new(RefCell::new(
+    assoc_array_expr: "{ 1: 2, 3: 4 }" => AssociativeArray(Rc::new(DynamicValue::new(
         runtime::AssociativeArray::from([
             (AssociativeArrayKey::Number(1), Number(2.0)),
             (AssociativeArrayKey::Number(3), Number(4.0)),
@@ -279,23 +279,23 @@ expr_tests!(
     assoc_array_equality_expr: "{ 1: 2, 3: 4 } é { 1: 2, 3: 4 }" => Boolean(true),
     assoc_array_equality2_expr: "{ 1: 2, 3: 4 } é { 1: 2, 3: 5 }" => Boolean(false),
     assoc_array_empty_expr: "{ }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([])
         ))),
     assoc_array_single_string_key_expr: "{ \"foo\": \"bar\" }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([
                 (AssociativeArrayKey::String("foo".to_string()),
                     String("bar".to_string()))
             ])
         ))),
     assoc_array_nested_list_and_map_expr: "{ \"aninhado\": [1, 2], \"dicionário\": { \"interior\": 42 } }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([
                 (AssociativeArrayKey::String("aninhado".to_string()),
-                List(Rc::new(RefCell::new(vec![Number(1.0), Number(2.0)])))),
+                List(Rc::new(DynamicValue::new(vec![Number(1.0), Number(2.0)])))),
                 (AssociativeArrayKey::String("dicionário".to_string()),
-                AssociativeArray(Rc::new(RefCell::new(
+                AssociativeArray(Rc::new(DynamicValue::new(
                     runtime::AssociativeArray::from([
                         (AssociativeArrayKey::String("interior".to_string()),
                         Number(42.0))
@@ -304,16 +304,16 @@ expr_tests!(
             ])
         ))),
     assoc_array_numeric_keys_with_list_expr: "{ 1: [2, 3], 2: \"algo\" }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([
                 (AssociativeArrayKey::Number(1),
-                List(Rc::new(RefCell::new(vec![Number(2.0), Number(3.0)])))),
+                List(Rc::new(DynamicValue::new(vec![Number(2.0), Number(3.0)])))),
                 (AssociativeArrayKey::Number(2),
                     String("algo".to_string()))
             ])
         ))),
     assoc_array_mixed_numeric_values_expr: "{ \"a\": 1.5, \"b\": -2 }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([
                 (AssociativeArrayKey::String("a".to_string()), Number(1.5)),
                 (AssociativeArrayKey::String("b".to_string()), Number(-2.0))
@@ -329,10 +329,10 @@ expr_tests!(
     assoc_array_equality_nested_maps_true_expr: "{ \"x\": {1: 2}, \"y\": {1: 2} } é { \"x\": {1: 2}, \"y\": {1: 2} }" => Boolean(true),
     assoc_array_inequality_nested_maps_diff_expr: "{ \"x\": {1: 2}, \"y\": {1: 2} } é { \"x\": {1: 2}, \"y\": {1: 3} }" => Boolean(false),
     assoc_array_empty_inner_assoc_expr: "{ \"vazio\": { } }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([
                 (AssociativeArrayKey::String("vazio".to_string()),
-                    AssociativeArray(Rc::new(RefCell::new(
+                    AssociativeArray(Rc::new(DynamicValue::new(
                         runtime::AssociativeArray::from([])
                     ))))
             ])
@@ -340,13 +340,13 @@ expr_tests!(
     assoc_array_membership_numeric_key_true_expr: "{ 10: 20, 11: 21 } tem 10" => Boolean(true),
     assoc_array_membership_numeric_key_false_expr: "{ 10: 20, 11: 21 } tem 12" => Boolean(false),
     assoc_array_deeply_nested_assoc_expr: "{ 1: {2: {3: 4}} }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([
                 (AssociativeArrayKey::Number(1),
-                    AssociativeArray(Rc::new(RefCell::new(
+                    AssociativeArray(Rc::new(DynamicValue::new(
                         runtime::AssociativeArray::from([
                             (AssociativeArrayKey::Number(2),
-                            AssociativeArray(Rc::new(RefCell::new(
+                            AssociativeArray(Rc::new(DynamicValue::new(
                                 runtime::AssociativeArray::from([
                                     (AssociativeArrayKey::Number(3),
                                     Number(4.0))
@@ -363,10 +363,10 @@ expr_tests!(
     assoc_array_unordered_keys_equality_expr:
         "{ \"k1\": \"v1\", \"k2\": \"v2\" } é { \"k2\": \"v2\", \"k1\": \"v1\" }" => Boolean(true),
     assoc_array_mixed_elements_membership_expr: "{ \"arr\": [1,2,3], \"flag\": verdadeiro }" =>
-        AssociativeArray(Rc::new(RefCell::new(
+        AssociativeArray(Rc::new(DynamicValue::new(
             runtime::AssociativeArray::from([
                 (tenda_core::runtime::AssociativeArrayKey::String("arr".to_string()),
-                List(Rc::new(RefCell::new(vec![
+                List(Rc::new(DynamicValue::new(vec![
                     Number(1.0), Number(2.0), Number(3.0)
                 ])))),
                 (tenda_core::runtime::AssociativeArrayKey::String("flag".to_string()),

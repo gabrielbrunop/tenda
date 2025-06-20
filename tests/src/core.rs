@@ -12,10 +12,10 @@ fn if_statement(#[case] platform: impl Platform + 'static) {
     let source = r#"
         seja resultado = 0
 
-        se verdadeiro então faça
-            resultado = 1
-        senão faça
-            resultado = 2
+        se verdadeiro então
+          resultado = 1
+        senão
+          resultado = 2
         fim
     "#;
 
@@ -33,7 +33,7 @@ fn for_loop_with_list(#[case] platform: impl Platform + 'static) {
         seja lista = [1, 2, 3, 4, 5]
 
         para cada i em lista faça
-            resultado = resultado + i
+          resultado = resultado + i
         fim
     "#;
 
@@ -50,7 +50,7 @@ fn for_loop_with_range(#[case] platform: impl Platform + 'static) {
         seja resultado = 0
 
         para cada i em 1 até 5 faça
-            resultado = resultado + i
+          resultado = resultado + i
         fim
     "#;
 
@@ -68,8 +68,8 @@ fn while_loop(#[case] platform: impl Platform + 'static) {
         seja i = 1
 
         enquanto i <= 5 faça
-            resultado = resultado + i
-            i = i + 1
+          resultado = resultado + i
+          i = i + 1
         fim
     "#;
 
@@ -83,9 +83,10 @@ fn while_loop(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn function_definition_and_call(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja soma(a, b) = faça
+        seja soma(a, b) =
+          faça
             retorna a + b
-        fim
+          fim
 
         seja resultado = soma(2, 3)
     "#;
@@ -100,13 +101,15 @@ fn function_definition_and_call(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn closures(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja cria_somador(x) = faça
-            seja somador(y) = faça
+        seja cria_somador(x) =
+          faça
+            seja somador(y) =
+              faça
                 retorna x + y
-            fim
+              fim
 
             retorna somador
-        fim
+          fim
 
         seja somador = cria_somador(2)
         seja resultado = somador(3)
@@ -122,17 +125,20 @@ fn closures(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn nested_closures(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja cria_multiplicador(x) = faça
-            seja multiplicador(y) = faça
-                seja multiplicador_interno(z) = faça
+        seja cria_multiplicador(x) =
+          faça
+            seja multiplicador(y) =
+              faça
+                seja multiplicador_interno(z) =
+                  faça
                     retorna x * y * z
-                fim
+                  fim
 
                 retorna multiplicador_interno
-            fim
+              fim
 
             retorna multiplicador
-        fim
+          fim
 
         seja multiplicador = cria_multiplicador(2)
         seja resultado = multiplicador(3)(4)
@@ -227,11 +233,11 @@ fn for_loop_break(#[case] platform: impl Platform + 'static) {
         seja resultado = 0
 
         para cada i em 1 até 10 faça
-            se i é 5 então faça
-                para
-            fim
+          se i é 5 então
+            para
+          fim
 
-            resultado = resultado + i
+          resultado = resultado + i
         fim
     "#;
 
@@ -248,11 +254,11 @@ fn for_loop_continue(#[case] platform: impl Platform + 'static) {
         seja resultado = 0
 
         para cada i em 1 até 10 faça
-            se i é 5 então faça
-                continua
-            fim
+          se i é 5 então
+            continua
+          fim
 
-            resultado = resultado + i
+          resultado = resultado + i
         fim
     "#;
 
@@ -286,10 +292,7 @@ fn already_declared(#[case] platform: impl Platform + 'static) {
 #[should_panic]
 fn wrong_number_of_arguments(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        função soma(a, b)
-            retorna a + b
-        fim
-
+        seja soma(a, b) = a + b
         seja resultado = soma(1)
     "#;
 
@@ -339,9 +342,9 @@ fn invalid_associative_array_key_value(#[case] platform: impl Platform + 'static
 #[should_panic]
 fn associative_array_key_not_found(#[case] platform: impl Platform + 'static) {
     let source = r#"
-            seja dicionário = { "chave1": 1, "chave2": 2 }
-            seja resultado = dicionário["chave3"]
-        "#;
+        seja dicionário = { "chave1": 1, "chave2": 2 }
+        seja resultado = dicionário["chave3"]
+    "#;
 
     interpret_stmt(platform, source);
 }
@@ -354,7 +357,7 @@ fn not_iterable(#[case] platform: impl Platform + 'static) {
         seja resultado = 0
 
         para cada i em 1.5 faça
-            resultado = resultado + i
+          resultado = resultado + i
         fim
     "#;
 
@@ -391,10 +394,11 @@ fn short_circuit_and(#[case] platform: impl Platform + 'static) {
     let source = r#"
         seja x = 0
 
-        seja incrementa() = faça
+        seja incrementa() =
+          faça
             x = x + 1
             retorna verdadeiro
-        fim
+          fim
 
         falso e incrementa()
     "#;
@@ -411,10 +415,11 @@ fn short_circuit_or(#[case] platform: impl Platform + 'static) {
     let source = r#"
         seja x = 0
 
-        seja incrementa() = faça
+        seja incrementa() =
+          faça
             x = x + 1
             retorna verdadeiro
-        fim
+          fim
 
         verdadeiro ou incrementa()
     "#;
@@ -431,15 +436,15 @@ fn nested_loops_break(#[case] platform: impl Platform + 'static) {
     let source = r#"
         seja soma_exterior = 0
 
-        para cada i em [1,2] faça
-            seja soma_interior = 0
+        para cada i em [1, 2] faça
+          seja soma_interior = 0
 
-            enquanto verdadeiro faça
-                soma_interior = soma_interior + 1
-                para
-            fim
+          enquanto verdadeiro faça
+            soma_interior = soma_interior + 1
+            para
+          fim
 
-            soma_exterior = soma_exterior + soma_interior
+          soma_exterior = soma_exterior + soma_interior
         fim
     "#;
 
@@ -460,17 +465,17 @@ fn nested_loops_break_outer(#[case] platform: impl Platform + 'static) {
         seja soma_exterior = 0
 
         para cada i em [1, 2, 3, 4, 5] faça
-            seja j = 0
+          seja j = 0
 
-            enquanto j < 3 faça
-                j = j + 1
-            fim
+          enquanto j < 3 faça
+            j = j + 1
+          fim
 
-            soma_exterior = soma_exterior + i
+          soma_exterior = soma_exterior + i
 
-            se i é 3 então faça
-                para
-            fim
+          se i é 3 então
+            para
+          fim
         fim
     "#;
 
@@ -490,9 +495,10 @@ fn overshadow_local_in_nested_block(#[case] platform: impl Platform + 'static) {
     let source = r#"
         seja x = 1
 
-        seja testa() = faça
+        seja testa() =
+          faça
             seja x = 2
-        fim
+          fim
 
         testa()
     "#;
@@ -507,10 +513,11 @@ fn overshadow_local_in_nested_block(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn overshadow_function_param(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja duplica(x) = faça
+        seja duplica(x) =
+          faça
             seja x = x * 2
             retorna x
-        fim
+          fim
 
         seja resultado = duplica(3)
     "#;
@@ -541,13 +548,14 @@ fn empty_block_in_if(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn if_return(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja testa(a) = faça
-            se a > 5 então faça
-                retorna 100
+        seja testa(a) =
+          faça
+            se a > 5 então 
+              retorna 100
             fim
 
             retorna 0
-        fim
+          fim
 
         seja resultado1 = testa(10)
         seja resultado2 = testa(2)
@@ -574,13 +582,14 @@ fn if_return(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn else_return(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja testa(b) = faça
-            se b é 0 então faça
-                retorna 999
+        seja testa(b) =
+          faça
+            se b é 0 então
+              retorna 999
             senão faça
-                retorna -1
+              retorna -1
             fim
-        fim
+          fim
 
         seja a = testa(0)
         seja c = testa(42)
@@ -600,13 +609,15 @@ fn closure_sees_updated_var(#[case] platform: impl Platform + 'static) {
     let source = r#"
         seja x = 1
 
-        seja cria() = faça
-            seja closure() = faça
+        seja cria() =
+          faça
+            seja closure() =
+              faça
                 retorna x
-            fim
+              fim
 
             retorna closure
-        fim
+          fim
 
         seja c = cria()
 
@@ -640,9 +651,10 @@ fn function_reference_equality(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn same_function_reference_equality(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja f() = faça
+        seja f() =
+          faça
             retorna 0
-        fim
+          fim
 
         seja cmp = f é f
     "#;
@@ -661,13 +673,13 @@ fn while_break_in_nested_if(#[case] platform: impl Platform + 'static) {
         seja total = 0
 
         enquanto i < 10 faça
-            i = i + 1
+          i = i + 1
 
-            se i é 5 então faça
-                para
-            fim
+          se i é 5 então faça
+            para
+          fim
 
-            total = total + i
+          total = total + i
         fim
     "#;
 
@@ -696,9 +708,10 @@ fn continue_outside_loop(#[case] platform: impl Platform + 'static) {
 #[should_panic]
 fn repeated_function_param(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja f(a, a) = faça
+        seja f(a, a) =
+          faça
             retorna a
-        fim
+          fim
     "#;
 
     interpret_stmt(platform, source);
@@ -710,7 +723,7 @@ fn repeated_function_param(#[case] platform: impl Platform + 'static) {
 fn block_scope_after_while(#[case] platform: impl Platform + 'static) {
     let source = r#"
         enquanto falso faça
-            seja x = 1
+          seja x = 1
         fim
 
         seja y = x
@@ -723,9 +736,10 @@ fn block_scope_after_while(#[case] platform: impl Platform + 'static) {
 #[case(OSPlatform)]
 fn function_returns_no_explicit_value(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja sem_retorno() = faça
+        seja sem_retorno() =
+          faça
             seja x = 123
-        fim
+          fim
 
         seja resultado = sem_retorno()
     "#;
@@ -766,11 +780,11 @@ fn overshadow_variable_in_function_block(#[case] platform: impl Platform + 'stat
     let source = r#"
         seja x = 10
 
-        seja testa() = faça
+        seja testa() =
+          faça
             seja x = 999
-
             retorna x
-        fim
+          fim
 
         seja resultado = testa()
     "#;
@@ -787,10 +801,11 @@ fn overshadow_variable_in_function_block(#[case] platform: impl Platform + 'stat
 #[case(OSPlatform)]
 fn overshadow_parameter_in_function_block(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja soma_duas_vezes(a) = faça
+        seja soma_duas_vezes(a) =
+          faça
             seja a = a + a
             retorna a
-        fim
+          fim
 
         seja resultado = soma_duas_vezes(5)
     "#;
@@ -805,13 +820,14 @@ fn overshadow_parameter_in_function_block(#[case] platform: impl Platform + 'sta
 #[case(OSPlatform)]
 fn partial_return_in_if(#[case] platform: impl Platform + 'static) {
     let source = r#"
-        seja checa_flag(flag) = faça
-            se flag então faça
-                retorna 111
+        seja checa_flag(flag) =
+          faça
+            se flag então
+              retorna 111
             fim
 
             retorna 222
-        fim
+          fim
 
         seja r1 = checa_flag(verdadeiro)
         seja r2 = checa_flag(falso)
@@ -844,8 +860,8 @@ fn parse_error_incomplete_function_declaration_2(#[case] platform: impl Platform
 #[should_panic]
 fn parse_error_incomplete_if(#[case] platform: impl Platform + 'static) {
     let input = r#"
-        se verdadeiro então faça
-            seja x = 1
+        se verdadeiro então
+          seja x = 1
     "#;
 
     interpret_stmt(platform, input);
@@ -857,7 +873,7 @@ fn parse_error_incomplete_if(#[case] platform: impl Platform + 'static) {
 fn parse_error_incomplete_while(#[case] platform: impl Platform + 'static) {
     let input = r#"
         enquanto verdadeiro faça
-            seja x = 1
+          seja x = 1
     "#;
 
     interpret_stmt(platform, input);
@@ -869,7 +885,7 @@ fn parse_error_incomplete_while(#[case] platform: impl Platform + 'static) {
 fn parse_error_incomplete_for(#[case] platform: impl Platform + 'static) {
     let input = r#"
         para cada i em [1, 2]
-            seja x = i
+          seja x = i
     "#;
 
     interpret_stmt(platform, input);
@@ -903,7 +919,7 @@ fn zero_or_negative_range_iteration(#[case] platform: impl Platform + 'static) {
         seja soma = 0
 
         para cada i em 5 até 1 faça
-            soma = soma + i
+          soma = soma + i
         fim
     "#;
 

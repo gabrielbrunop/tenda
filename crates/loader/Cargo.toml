@@ -1,20 +1,18 @@
 [package]
-name = "tenda-runtime"
+name = "tenda-loader"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Runtime support for the Tenda programming language"
+description = "Module loader for the Tenda programming language"
 edition = "2021"
 
 [dependencies]
 tenda-parser = { workspace = true }
-tenda-scanner = { workspace = true }
 tenda-common = { workspace = true }
+tenda-scanner = { workspace = true }
+thiserror = { workspace = true }
 tenda-reporting = { workspace = true }
 tenda-reporting-derive = { workspace = true }
-tenda-loader = { workspace = true }
-thiserror = { workspace = true }
-chrono = { workspace = true }
 indexmap = { workspace = true }
-chrono-tz = "0.10.1"
+petgraph = "0.8.2"

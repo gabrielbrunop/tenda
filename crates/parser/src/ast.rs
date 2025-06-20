@@ -40,6 +40,7 @@ pub enum Stmt {
     Return(Return),
     Break(Break),
     Continue(Continue),
+    Import(Import),
 }
 
 impl Stmt {
@@ -57,6 +58,7 @@ impl Stmt {
             Stmt::Return(return_stmt) => &return_stmt.span,
             Stmt::Break(break_stmt) => &break_stmt.span,
             Stmt::Continue(continue_stmt) => &continue_stmt.span,
+            Stmt::Import(import_spec) => &import_spec.span,
         }
     }
 }
@@ -93,6 +95,13 @@ impl Continue {
     pub fn new(span: SourceSpan) -> Self {
         Continue { span }
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Import {
+    pub raw_path: String,
+    pub alias: Option<String>,
+    pub span: SourceSpan,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -134,18 +143,20 @@ pub struct LocalDecl {
     pub name: String,
     pub value: Expr,
     pub captured: bool,
+    pub exported: bool,
     pub uid: usize,
     pub span: SourceSpan,
 }
 
 impl LocalDecl {
-    pub fn new(name: String, value: Expr, uid: usize, span: SourceSpan) -> Self {
+    pub fn new(name: String, value: Expr, uid: usize, exported: bool, span: SourceSpan) -> Self {
         LocalDecl {
             name,
             value,
             captured: false,
             uid,
             span,
+            exported,
         }
     }
 }
@@ -176,6 +187,7 @@ pub struct FunctionDecl {
     pub body: Box<Stmt>,
     pub free_vars: Vec<String>,
     pub captured: bool,
+    pub exported: bool,
     pub uid: usize,
     pub span: SourceSpan,
 }
@@ -186,6 +198,7 @@ impl FunctionDecl {
         params: Vec<FunctionParam>,
         body: Stmt,
         uid: usize,
+        exported: bool,
         span: SourceSpan,
     ) -> Self {
         FunctionDecl {
@@ -195,6 +208,7 @@ impl FunctionDecl {
             free_vars: vec![],
             captured: false,
             uid,
+            exported,
             span,
         }
     }
@@ -566,5 +580,13 @@ impl From<Token> for UnaryOperator {
             TokenKind::Not => LogicalNot,
             _ => panic!("invalid token for unary operation"),
         }
+    }
+}
+
+pub fn get_root_variable(expr: &Expr) -> Option<&Variable> {
+    match expr {
+        Expr::Variable(v) => Some(v),
+        Expr::Access(Access { subscripted, .. }) => get_root_variable(subscripted),
+        _ => None,
     }
 }

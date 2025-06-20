@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
@@ -7,6 +7,7 @@ use tenda_scanner::Literal;
 use crate::associative_array::{AssociativeArray, AssociativeArrayKey};
 use crate::date::Date;
 use crate::function::Function;
+use crate::Environment;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -14,10 +15,11 @@ pub enum Value {
     Boolean(bool),
     String(String),
     Function(Function),
-    List(Rc<RefCell<Vec<Value>>>),
     Range(usize, usize),
-    AssociativeArray(Rc<RefCell<AssociativeArray>>),
+    List(Rc<DynamicValue<Vec<Value>>>),
+    AssociativeArray(Rc<DynamicValue<AssociativeArray>>),
     Date(Date),
+    Module(Environment),
     Nil,
 }
 
@@ -35,6 +37,7 @@ impl Value {
             Nil => ValueType::Nil,
             AssociativeArray(_) => ValueType::AssociativeArray,
             Date(_) => ValueType::Date,
+            Module(_) => ValueType::Module,
         }
     }
 
@@ -49,6 +52,7 @@ impl Value {
             Value::Nil => false,
             Value::AssociativeArray(_) => true,
             Value::Date(_) => true,
+            Value::Module(_) => true,
         }
     }
 
@@ -113,6 +117,7 @@ impl Display for Value {
                         .join(", ")
                 ),
                 Date(value) => value.to_iso_string(),
+                Module(_) => "<módulo>".to_string(),
             }
         )
     }
@@ -141,7 +146,10 @@ impl IntoIterator for Value {
         }
 
         match self {
-            Value::List(list) => list.borrow_mut().clone().into_iter(),
+            Value::List(list) => {
+                let inner = list.borrow().clone();
+                inner.into_iter()
+            }
             Value::Range(start, end) => (start..=end)
                 .map(|i| Value::Number(i as f64))
                 .collect::<Vec<_>>()
@@ -162,6 +170,7 @@ pub enum ValueType {
     Nil,
     AssociativeArray,
     Date,
+    Module,
 }
 
 impl From<Value> for ValueType {
@@ -184,10 +193,76 @@ impl Display for ValueType {
             AssociativeArray => "dicionário".to_string(),
             Date => "data".to_string(),
             Nil => "Nada".to_string(),
+            Module => "módulo".to_string(),
         };
 
         write!(f, "{}", str)
     }
+}
+
+#[derive(Debug)]
+pub struct DynamicValue<T> {
+    value: RefCell<T>,
+    frozen: Cell<bool>,
+}
+
+impl<T: Clone> Clone for DynamicValue<T> {
+    fn clone(&self) -> Self {
+        let cloned_inner = { (*self.value.borrow()).clone() };
+
+        Self {
+            value: RefCell::new(cloned_inner),
+            frozen: Cell::new(self.frozen.get()),
+        }
+    }
+}
+
+impl<T: PartialEq> PartialEq for DynamicValue<T> {
+    fn eq(&self, other: &Self) -> bool {
+        *self.value.borrow() == *other.value.borrow()
+    }
+}
+
+impl<T> DynamicValue<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            value: RefCell::new(value),
+            frozen: Cell::new(false),
+        }
+    }
+
+    pub fn new_frozen(value: T) -> Self {
+        Self {
+            value: RefCell::new(value),
+            frozen: Cell::new(true),
+        }
+    }
+
+    pub fn freeze(&self) {
+        self.frozen.set(true);
+    }
+
+    pub fn is_frozen(&self) -> bool {
+        self.frozen.get()
+    }
+
+    pub fn borrow(&self) -> Ref<'_, T> {
+        self.value.borrow()
+    }
+
+    pub fn borrow_mut_checked(&self) -> Result<RefMut<'_, T>, DynamicValueError> {
+        if self.is_frozen() {
+            Err(DynamicValueError::Frozen)
+        } else {
+            Ok(self.value.borrow_mut())
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum DynamicValueError {
+    #[error("cannot modify a frozen value")]
+    Frozen,
 }
 
 pub fn escape_special_chars(s: &str) -> String {

@@ -155,6 +155,7 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
         Stmt::Return(Return { value: None, .. }) => {}
         Stmt::Continue(_) => {}
         Stmt::Break(_) => {}
+        Stmt::Import(_) => {}
     }
 }
 
@@ -344,6 +345,7 @@ fn get_var_captures_from_ast(ast: &Ast) -> Vec<VarCapture> {
         },
         Stmt::Break(_) => vec![],
         Stmt::Continue(_) => vec![],
+        Stmt::Import(_) => vec![],
     });
 
     iter.collect()
@@ -542,6 +544,7 @@ fn get_free_vars_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<FreeVarRef> {
         Stmt::Expr(expr) => get_free_vars_in_expr(expr, name),
         Stmt::Break(_) => vec![],
         Stmt::Continue(_) => vec![],
+        Stmt::Import(_) => vec![],
     }
 }
 
@@ -692,6 +695,7 @@ fn get_free_vars_in_fn_body(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> 
         Stmt::Return(ast::Return { value: None, .. }) => vec![],
         Stmt::Break(_) => vec![],
         Stmt::Continue(_) => vec![],
+        Stmt::Import(_) => vec![],
     }
 }
 
@@ -844,5 +848,6 @@ fn get_var_refs_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<usize> {
         },
         Break(_) => vec![],
         Continue(_) => vec![],
+        Import(_) => vec![],
     }
 }

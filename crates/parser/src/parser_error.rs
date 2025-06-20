@@ -72,6 +72,12 @@ pub enum ParserError {
         span: SourceSpan,
     },
 
+    #[error("esperado caminho de importação")]
+    MissingImportPath {
+        #[span]
+        span: SourceSpan,
+    },
+
     #[error("parâmetro '{}' duplicado na função", .name)]
     DuplicateParameter {
         name: String,
@@ -92,6 +98,19 @@ pub enum ParserError {
 
         #[help]
         help: Option<String>,
+    },
+
+    #[error("caminho de importação inválido")]
+    InvalidImportPath {
+        #[span]
+        span: SourceSpan,
+    },
+
+    #[error("nome de importação inválido: '{alias}'")]
+    InvalidImportAlias {
+        alias: String,
+        #[span]
+        span: SourceSpan,
     },
 }
 

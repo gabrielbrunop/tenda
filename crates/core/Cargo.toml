@@ -15,3 +15,4 @@ tenda-common = { workspace = true }
 tenda-reporting = { workspace = true }
 tenda-prelude = { workspace = true }
 tenda-os-platform = { workspace = true }
+tenda-loader = { workspace = true }

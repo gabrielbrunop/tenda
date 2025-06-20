@@ -2,14 +2,17 @@ use clap::{CommandFactory, Parser as CommandParser};
 use reedline::{
     default_emacs_keybindings, DefaultPrompt, Reedline, Signal, ValidationResult, Validator,
 };
+use std::collections::HashMap;
+use std::io;
 use std::io::{IsTerminal, Read};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::{io, process};
+use tenda_core::loader::LoaderError;
 use tenda_core::runtime::escape_value;
 use tenda_core::{
-    common::source::IdentifiedSource, parser::Parser, parser::ParserError, platform::OSPlatform,
-    prelude::setup_runtime_prelude, reporting::Diagnostic, runtime::Runtime, scanner::LexicalError,
-    scanner::Scanner,
+    common::source::IdentifiedSource, loader::Loader, parser::Parser, parser::ParserError,
+    platform::OSPlatform, prelude::get_runtime_prelude, reporting::Diagnostic, runtime::Runtime,
+    scanner::LexicalError, scanner::Scanner,
 };
 use yansi::Paint;
 
@@ -89,24 +92,18 @@ fn main() -> io::Result<()> {
     if cli.help {
         Cli::command().print_long_help().unwrap();
         println!();
-        process::exit(0);
+
+        return Ok(());
     }
 
     if cli.version {
         println!("tenda {}", env!("CARGO_PKG_VERSION"));
-        process::exit(0);
+
+        return Ok(());
     }
 
     if let Some(path) = cli.file {
-        let file_content = std::fs::read_to_string(&path);
-
-        match file_content {
-            Ok(source) => run_source(&source, Box::leak(path.into_boxed_str())),
-            Err(err) => match err.kind() {
-                io::ErrorKind::NotFound => eprintln!("Arquivo não encontrado: {}", path),
-                _ => eprintln!("Erro ao ler arquivo: {}", err),
-            },
-        }
+        run_file(PathBuf::from(path));
 
         return Ok(());
     }
@@ -117,7 +114,7 @@ fn main() -> io::Result<()> {
         let mut buffer = String::new();
         stdin.read_to_string(&mut buffer)?;
 
-        run_source(&buffer, "stdin");
+        run_source(&buffer);
 
         return Ok(());
     }
@@ -142,13 +139,12 @@ fn start_repl() {
     );
 
     let platform = OSPlatform;
-    let mut runtime = Runtime::new(platform);
+    let mut loader = Loader::new(|p: &Path| std::fs::read_to_string(p));
+    let mut runtime = Runtime::with_builtins(platform, get_runtime_prelude());
     let mut exiting = false;
-    let mut source_history: Vec<(IdentifiedSource, Rc<str>)> = Vec::new();
+    let mut source_history: HashMap<IdentifiedSource, Rc<str>> = HashMap::new();
 
-    setup_runtime_prelude(runtime.get_global_env_mut());
-
-    loop {
+    'repl: loop {
         let sig = rl.read_line(&prompt);
 
         match sig {
@@ -156,38 +152,34 @@ fn start_repl() {
             Ok(Signal::Success(line)) => {
                 exiting = false;
 
-                let source_id = IdentifiedSource::new();
-                let source_rc = Rc::from(line.clone());
-                source_history.push((source_id, source_rc));
-
-                let tokens = match Scanner::new(&line, source_id).scan() {
-                    Ok(tokens) => tokens,
-                    Err(errs) => {
-                        for err in errs {
-                            let caches = tenda_core::reporting::sources(source_history.clone());
-                            err.to_report().eprint(caches).unwrap();
-                        }
+                let result = match loader.register_virtual(line) {
+                    Ok(o) => o,
+                    Err(e) => {
+                        handle_loader_error(e, false);
 
                         continue;
                     }
                 };
 
-                let ast = match Parser::new(&tokens, source_id).parse() {
-                    Ok(ast) => ast,
-                    Err(errs) => {
-                        for err in errs {
-                            let caches = tenda_core::reporting::sources(source_history.clone());
-                            err.to_report().eprint(caches).unwrap();
-                        }
+                source_history.insert(result.prompt.source_id, result.prompt.text.clone());
 
-                        continue;
+                for (p, po) in result.modules.clone() {
+                    if let Err(err) = runtime.load_module(p.clone(), po.unit.into()) {
+                        source_history.insert(po.source_id, po.text.clone());
+
+                        let caches = tenda_core::reporting::sources(source_history.clone());
+                        err.to_report().eprint(caches).unwrap();
+
+                        continue 'repl;
                     }
-                };
+                }
 
-                match runtime.eval(&ast) {
+                match runtime.eval(result.prompt.unit.into()) {
                     Ok(result) => println!("{}", escape_value(&result)),
                     Err(err) => {
-                        let caches = tenda_core::reporting::sources(source_history.clone());
+                        let sources = source_history.clone();
+                        let caches = tenda_core::reporting::sources(sources);
+
                         err.to_report().eprint(caches).unwrap();
                     }
                 }
@@ -211,62 +203,161 @@ fn start_repl() {
     }
 }
 
-fn run_source(source: &str, name: &'static str) {
+fn run_file(path: PathBuf) {
+    let mut loader = Loader::new(|p: &Path| std::fs::read_to_string(p));
+
+    let result = match loader.load_entry(path.clone()) {
+        Ok(o) => o,
+        Err(e) => return handle_loader_error(e, true),
+    };
+
+    let mut runtime = Runtime::with_builtins(OSPlatform, get_runtime_prelude());
+    let mut source_history: HashMap<IdentifiedSource, Rc<str>> = HashMap::new();
+
+    let last = result
+        .modules
+        .last()
+        .map(|(_, po)| po.source_id)
+        .expect("there should be at least one module");
+
+    for (p, po) in result.modules {
+        source_history.insert(po.source_id, po.text.clone());
+
+        let res = if po.source_id != last {
+            runtime.load_module(p.clone(), po.unit.into()).err()
+        } else {
+            runtime.eval(po.unit.into()).err()
+        };
+
+        if let Some(err) = res {
+            let caches = tenda_core::reporting::sources(source_history.clone());
+            err.to_report().eprint(caches).unwrap();
+
+            println!(
+                "\n{} programa encerrado devido a um erro durante a execução",
+                Paint::red("erro:").bold(),
+            );
+
+            return;
+        }
+    }
+}
+
+fn run_source(source: &str) {
     let platform = OSPlatform;
+    let mut loader = Loader::new(|p: &Path| std::fs::read_to_string(p));
 
-    let mut source_id = IdentifiedSource::new();
-    source_id.set_name(name);
+    let mut runtime = Runtime::with_builtins(platform, get_runtime_prelude());
 
-    let cache = (source_id, tenda_core::reporting::Source::from(source));
-
-    let tokens = match Scanner::new(source, source_id).scan() {
-        Ok(tokens) => tokens,
-        Err(errs) => {
-            let len = errs.len();
-
-            for err in errs {
-                err.to_report().eprint(cache.clone()).unwrap();
-            }
-
-            println!(
-                "\n{} programa não pôde ser executado devido a {} erro(s) léxico(s) encontrado(s)",
-                Paint::red("erro:").bold(),
-                len,
-            );
-
-            return;
-        }
+    let result = match loader.register_virtual(source.to_string()) {
+        Ok(o) => o,
+        Err(e) => return handle_loader_error(e, false),
     };
 
-    let ast = match Parser::new(&tokens, source_id).parse() {
-        Ok(ast) => ast,
-        Err(errs) => {
-            let len = errs.len();
-
-            for err in errs {
-                err.to_report().eprint(cache.clone()).unwrap();
-            }
+    for (p, po) in result.modules.clone() {
+        if let Err(err) = runtime.load_module(p.clone(), po.unit.into()) {
+            let cache = (po.source_id, tenda_core::reporting::Source::from(po.text));
+            err.to_report().eprint(cache).unwrap();
 
             println!(
-                "\n{} programa não pôde ser executado devido a {} erro(s) de sintaxe encontrado(s)",
+                "\n{} programa encerrado devido a um erro durante a execução",
                 Paint::red("erro:").bold(),
-                len,
             );
 
-            return;
+            continue;
         }
-    };
+    }
 
-    let mut runtime = Runtime::new(platform);
+    if let Err(err) = runtime.eval(result.prompt.unit.into()) {
+        let cache = (
+            result.prompt.source_id,
+            tenda_core::reporting::Source::from(result.prompt.text),
+        );
 
-    setup_runtime_prelude(runtime.get_global_env_mut());
-
-    if let Err(err) = runtime.eval(&ast) {
         err.to_report().eprint(cache.clone()).unwrap();
 
         println!(
             "\n{} programa encerrado devido a um erro durante a execução",
             Paint::red("erro:").bold(),
         );
+    }
+}
+
+fn handle_loader_error(err: LoaderError, end: bool) {
+    use tenda_core::loader::LoaderError;
+
+    match err {
+        LoaderError::Lexical {
+            source_id,
+            source_code,
+            errors,
+            ..
+        } => {
+            let len = errors.len();
+            let cache = (source_id, tenda_core::reporting::Source::from(source_code));
+
+            for err in errors {
+                err.to_report().eprint(cache.clone()).unwrap();
+            }
+
+            if end {
+                println!(
+                    "\n{} programa não pôde ser executado devido a {} erro(s) léxico(s) encontrado(s)",
+                    Paint::red("erro:").bold(),
+                    len,
+                );
+            }
+        }
+        LoaderError::Parse {
+            source_id,
+            source_code,
+            errors,
+            ..
+        } => {
+            let len = errors.len();
+            let cache = (source_id, tenda_core::reporting::Source::from(source_code));
+
+            for err in errors {
+                err.to_report().eprint(cache.clone()).unwrap();
+            }
+
+            if end {
+                println!(
+                    "\n{} programa não pôde ser executado devido a {} erro(s) de sintaxe encontrado(s)",
+                    Paint::red("erro:").bold(),
+                    len,
+                );
+            }
+        }
+        LoaderError::Resolution {
+            source_id,
+            source_code,
+            error,
+        } => {
+            let cache = (source_id, tenda_core::reporting::Source::from(source_code));
+
+            error.to_report().eprint(cache).unwrap();
+
+            if end {
+                println!(
+                    "\n{} programa não pôde ser executado devido a erro(s) de resolução",
+                    Paint::red("erro:").bold(),
+                );
+            }
+        }
+        LoaderError::EntryFileNotFound { path, .. } => {
+            eprintln!(
+                "{} ao ler o arquivo `{}`",
+                Paint::red("erro:").bold(),
+                path.display(),
+            );
+
+            if end {
+                println!(
+                    "\n{} programa não pôde ser executado devido a erro(s) de leitura de arquivo",
+                    Paint::red("erro:").bold(),
+                );
+            }
+        }
     }
 }

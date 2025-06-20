@@ -86,6 +86,9 @@ pub enum TokenKind {
     Comma,
     Dot,
     Arrow,
+    Use,
+    As,
+    Export,
     Newline,
     Eof,
 }

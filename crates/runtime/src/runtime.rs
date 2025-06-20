@@ -1,6 +1,9 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{fmt::Debug, path::PathBuf, rc::Rc};
 use tenda_common::span::SourceSpan;
-use tenda_parser::{self, ast};
+use tenda_parser::{
+    self,
+    ast::{self},
+};
 use tenda_reporting::Diagnostic;
 
 use crate::{
@@ -11,35 +14,101 @@ use crate::{
     function::{Function, FunctionObject},
     platform::{self},
     runtime_error::{Result, RuntimeError},
-    stack::{Stack, StackError},
+    store::Store,
     value::{Value, ValueType},
-    FunctionName, FunctionRuntimeMetadata, StackFrame,
+    DynamicValue, DynamicValueError, FunctionName, FunctionRuntimeMetadata, StackAssignmentError,
+    StackDefinitionError, StackFrame,
 };
+
+#[derive(Debug, Clone)]
+pub struct Unit {
+    pub ast: ast::Ast,
+    pub imports: Vec<ImportPath>,
+}
+
+impl Unit {
+    pub fn new(ast: ast::Ast, imports: Vec<ImportPath>) -> Self {
+        Unit { ast, imports }
+    }
+}
+
+impl From<tenda_loader::ModuleUnit> for Unit {
+    fn from(unit: tenda_loader::ModuleUnit) -> Self {
+        Unit {
+            ast: unit.ast,
+            imports: unit
+                .imports
+                .into_iter()
+                .map(|import| ImportPath {
+                    raw: import.raw_path,
+                    canonical: import.canonical,
+                    alias: import.alias,
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportPath {
+    pub raw: String,
+    pub canonical: PathBuf,
+    pub alias: String,
+}
 
 #[derive(Debug)]
 pub struct Runtime {
-    stack: Stack,
+    store: Store,
     platform: Box<dyn platform::Platform>,
 }
 
 impl Runtime {
     pub fn new(platform: impl platform::Platform + 'static) -> Self {
         Runtime {
-            stack: Stack::new(),
+            store: Store::new(),
             platform: Box::new(platform),
         }
     }
 
-    pub fn eval(&mut self, ast: &ast::Ast) -> Result<Value> {
-        self.interpret_ast(ast)
+    pub fn with_builtins(
+        platform: impl platform::Platform + 'static,
+        builtins: Environment,
+    ) -> Self {
+        Runtime {
+            store: Store::with_builtins(builtins),
+            platform: Box::new(platform),
+        }
+    }
+
+    pub fn eval(&mut self, unit: Unit) -> Result<Value> {
+        for import in unit.imports {
+            self.load_import_into_scope(import)?;
+        }
+
+        self.interpret_ast(&unit.ast)
+    }
+
+    pub fn load_module(&mut self, path: PathBuf, unit: Unit) -> Result<()> {
+        if self.store.find_module(&path).is_some() {
+            return Ok(());
+        }
+
+        self.store.create_module(path.clone());
+        self.store.switch_to_module(path);
+
+        self.eval(unit)?;
+
+        self.store.switch_to_main();
+
+        Ok(())
     }
 
     pub fn get_global_env(&self) -> &Environment {
-        self.stack.global().get_env()
+        self.store.get_current().global()
     }
 
     pub fn get_global_env_mut(&mut self) -> &mut Environment {
-        self.stack.global_mut().get_env_mut()
+        self.store.get_current_mut().global_mut()
     }
 
     pub fn get_platform(&self) -> &dyn platform::Platform {
@@ -56,9 +125,9 @@ impl Runtime {
 
             last_value = value;
 
-            if self.stack.has_return_value()
-                || self.stack.has_loop_break_flag()
-                || self.stack.has_loop_continue_flag()
+            if self.store.get_current().has_return_value()
+                || self.store.get_current().has_loop_break_flag()
+                || self.store.get_current().has_loop_continue_flag()
             {
                 break;
             }
@@ -80,8 +149,30 @@ impl Runtime {
             ForEach(for_each) => self.visit_for_each(for_each),
             Break(break_stmt) => self.visit_break(break_stmt),
             Continue(continue_stmt) => self.visit_continue(continue_stmt),
+            Import(import) => self.visit_import(import),
         }
         .map_err(|mut err| attach_span_if_missing!(err, stmt.get_span()))
+    }
+
+    fn load_import_into_scope(&mut self, import: ImportPath) -> Result<()> {
+        let alias = import.alias.clone();
+        let import_path = import.canonical.clone();
+
+        self.store.add_import_to_current(import);
+
+        let stack = self
+            .store
+            .find_module(&import_path)
+            .expect("module should be loaded");
+
+        let module = Value::Module(stack.global().external());
+
+        let env = self.store.get_current_mut().global_mut();
+
+        env.set_or_replace(alias.clone(), ValueCell::new(module));
+        env.seal(alias).expect("alias should be defined");
+
+        Ok(())
     }
 }
 
@@ -121,11 +212,11 @@ impl Runtime {
     fn visit_block(&mut self, block: &ast::Block) -> Result<Value> {
         let ast::Block { inner, .. } = block;
 
-        self.stack.push(Frame::new());
+        self.store.get_current_mut().push(Frame::new());
 
         self.interpret_ast(inner)?;
 
-        self.stack.pop();
+        self.store.get_current_mut().pop();
 
         Ok(Value::Nil)
     }
@@ -135,7 +226,9 @@ impl Runtime {
 
         if let Some(expr) = value {
             let value = self.visit_expr(expr)?;
-            self.stack.set_return_value(ValueCell::new(value));
+            self.store
+                .get_current_mut()
+                .set_return_value(ValueCell::new(value));
         }
 
         Ok(Value::Nil)
@@ -161,13 +254,12 @@ impl Runtime {
     fn visit_while(&mut self, while_stmt: &ast::While) -> Result<Value> {
         let ast::While { cond, body, .. } = while_stmt;
 
-        while self.visit_expr(cond)?.to_bool() && !self.stack.has_loop_break_flag() {
+        while !self.store.get_current().has_loop_break_flag() && self.visit_expr(cond)?.to_bool() {
             self.interpret_stmt(body)?;
-
-            self.stack.set_loop_continue_flag(false);
+            self.store.get_current_mut().set_loop_continue_flag(false);
         }
 
-        self.stack.set_loop_break_flag(false);
+        self.store.get_current_mut().set_loop_break_flag(false);
 
         Ok(Value::Nil)
     }
@@ -199,33 +291,39 @@ impl Runtime {
                 ValueCell::new(value.clone())
             };
 
-            frame.get_env_mut().set(item.name.clone(), stored_value);
+            frame
+                .get_env_mut()
+                .set_or_replace(item.name.clone(), stored_value);
 
-            self.stack.push(frame);
+            self.store.get_current_mut().push(frame);
             self.interpret_stmt(body)?;
 
-            if self.stack.has_loop_break_flag() {
+            if self.store.get_current().has_loop_break_flag() {
                 break;
             }
 
-            self.stack.set_loop_continue_flag(false);
-            self.stack.pop();
+            self.store.get_current_mut().set_loop_continue_flag(false);
+            self.store.get_current_mut().pop();
         }
 
-        self.stack.set_loop_break_flag(false);
+        self.store.get_current_mut().set_loop_continue_flag(false);
 
         Ok(Value::Nil)
     }
 
     fn visit_break(&mut self, _break_stmt: &ast::Break) -> Result<Value> {
-        self.stack.set_loop_break_flag(true);
+        self.store.get_current_mut().set_loop_break_flag(true);
 
         Ok(Value::Nil)
     }
 
     fn visit_continue(&mut self, _continue_stmt: &ast::Continue) -> Result<Value> {
-        self.stack.set_loop_continue_flag(true);
+        self.store.get_current_mut().set_loop_continue_flag(true);
 
+        Ok(Value::Nil)
+    }
+
+    fn visit_import(&mut self, _imp: &ast::Import) -> Result<Value> {
         Ok(Value::Nil)
     }
 }
@@ -238,21 +336,23 @@ impl Runtime {
 
         let value = self.visit_expr(value)?;
 
-        let value = match local.captured {
-            true => ValueCell::new_shared(value),
-            false => ValueCell::new(value),
+        let value = if local.exported {
+            ValueCell::new_external(value)
+        } else if local.captured {
+            ValueCell::new_shared(value)
+        } else {
+            ValueCell::new(value)
         };
 
-        match self.stack.define(name.clone(), value) {
+        match self.store.get_current_mut().define(name.clone(), value) {
             Ok(_) => Ok(Value::Nil),
             Err(err) => match err {
-                StackError::AlreadyDeclared => Err(Box::new(RuntimeError::AlreadyDeclared {
+                StackDefinitionError::AlreadyDeclared => Err(Box::new(RuntimeError::AlreadyDeclared {
                     var_name: name.to_string(),
                     span: Some(span.clone()),
                     help: Some("declare a variável com outro nome ou use `=` para atribuir um novo valor a ela".to_string()),
                     stacktrace: vec![],
                 })),
-                _ => unreachable!(),
             },
         }
     }
@@ -265,20 +365,27 @@ impl Runtime {
         let metadata =
             FunctionRuntimeMetadata::new(Some(function.span.clone()), Some(name.clone()));
         let func = self.create_function(params, body.clone(), Some(metadata));
+        let func = Value::Function(func);
 
-        match self
-            .stack
-            .define(name.clone(), ValueCell::new(Value::Function(func)))
-        {
+        let value = if function.exported {
+            ValueCell::new_external(func)
+        } else if function.captured {
+            ValueCell::new_shared(func)
+        } else {
+            ValueCell::new(func)
+        };
+
+        match self.store.get_current_mut().define(name.clone(), value) {
             Ok(_) => Ok(Value::Nil),
             Err(err) => match err {
-                StackError::AlreadyDeclared => Err(Box::new(RuntimeError::AlreadyDeclared {
-                    var_name: name.to_string(),
-                    span: Some(function.span.clone()),
-                    help: Some("declare a função com outro nome".to_string()),
-                    stacktrace: vec![],
-                })),
-                _ => unreachable!(),
+                StackDefinitionError::AlreadyDeclared => {
+                    Err(Box::new(RuntimeError::AlreadyDeclared {
+                        var_name: name.to_string(),
+                        span: Some(function.span.clone()),
+                        help: Some("declare a função com outro nome".to_string()),
+                        stacktrace: vec![],
+                    }))
+                }
             },
         }
     }
@@ -325,7 +432,7 @@ impl Runtime {
                     let mut list = lhs.borrow().clone();
                     list.extend_from_slice(&rhs.borrow());
 
-                    List(Rc::new(RefCell::new(list)))
+                    List(Rc::new(DynamicValue::new(list)))
                 }
                 (Date(rhs), Number(millis)) => Value::Date(rhs + millis as i64),
                 (Number(millis), Date(rhs)) => Value::Date(rhs + millis as i64),
@@ -694,6 +801,7 @@ impl Runtime {
             Value::AssociativeArray(associative_array) => {
                 self.visit_associative_array_access(associative_array.borrow().clone(), index)
             }
+            Value::Module(env) => self.visit_module_access(&env, index),
             value => Err(Box::new(RuntimeError::WrongIndexType {
                 value: value.kind(),
                 span: Some(span.clone()),
@@ -710,7 +818,7 @@ impl Runtime {
             elements.push(value);
         }
 
-        Ok(Value::List(Rc::new(RefCell::new(elements))))
+        Ok(Value::List(Rc::new(DynamicValue::new(elements))))
     }
 
     fn visit_grouping(&mut self, grouping: &ast::Grouping) -> Result<Value> {
@@ -728,8 +836,11 @@ impl Runtime {
     fn visit_variable(&mut self, variable: &ast::Variable) -> Result<Value> {
         let ast::Variable { name, span, .. } = variable;
 
-        self.stack.lookup(name).map(|v| v.extract()).ok_or(Box::new(
-            RuntimeError::UndefinedReference {
+        self.store
+            .get_current_mut()
+            .lookup(name)
+            .map(|v| v.extract())
+            .ok_or(Box::new(RuntimeError::UndefinedReference {
                 var_name: name.clone(),
                 span: Some(span.clone()),
                 help: Some(format!(
@@ -737,8 +848,7 @@ impl Runtime {
                     name, name
                 )),
                 stacktrace: vec![],
-            },
-        ))
+            }))
     }
 
     fn visit_assign(&mut self, assign: &ast::Assign) -> Result<Value> {
@@ -753,13 +863,14 @@ impl Runtime {
                 let value = self.visit_expr(value)?;
 
                 let result = self
-                    .stack
+                    .store
+                    .get_current_mut()
                     .assign(name.clone(), ValueCell::new(value.clone()));
 
                 match result {
                     Ok(_) => Ok(value),
                     Err(err) => match err {
-                        StackError::AssignToUndefined(name) => {
+                        StackAssignmentError::AssignToUndefined(name) => {
                             Err(Box::new(RuntimeError::UndefinedReference {
                                 var_name: name.clone(),
                                 span: Some(span.clone()),
@@ -770,7 +881,39 @@ impl Runtime {
                                 stacktrace: vec![],
                             }))
                         }
-                        _ => unreachable!(),
+                        StackAssignmentError::AssignToBaseEnvironment => {
+                            Err(Box::new(RuntimeError::UnreassignableVariable {
+                                name: name.clone(),
+                                help: Some(
+                                    "você não pode atribuir um valor a uma variável embutida, \
+                                     pois elas são imutáveis. Se você precisa de uma variável mutável, \
+                                     declare-a com `seja`.".to_string(),
+                                ),
+                                span: Some(span.clone()),
+                                stacktrace: vec![],
+                            }))
+                        }
+                        StackAssignmentError::Unreassignable(name)
+                            if self
+                                .store
+                                .get_current()
+                                .lookup(&name)
+                                .map(|v| v.extract().kind() == ValueType::Module)
+                                .unwrap_or(false) =>
+                        {
+                            Err(Box::new(RuntimeError::ReassignModule {
+                                span: Some(span.clone()),
+                                stacktrace: vec![],
+                            }))
+                        }
+                        StackAssignmentError::Unreassignable(name) => {
+                            Err(Box::new(RuntimeError::UnreassignableVariable {
+                                name,
+                                span: Some(span.clone()),
+                                stacktrace: vec![],
+                                help: None,
+                            }))
+                        }
                     },
                 }
             }
@@ -788,7 +931,8 @@ impl Runtime {
                     Value::AssociativeArray(associative_array) => {
                         self.visit_associative_array_assign(associative_array, index, value)
                     }
-                    Value::String(_) => Err(Box::new(RuntimeError::ImmutableString {
+                    Value::String(_) => Err(Box::new(RuntimeError::ImmutableValueType {
+                        value: ValueType::String,
                         span: Some(span.clone()),
                         help: Some(
                             concat!(
@@ -799,6 +943,10 @@ impl Runtime {
                             )
                             .to_string(),
                         ),
+                        stacktrace: vec![],
+                    })),
+                    Value::Module(_) => Err(Box::new(RuntimeError::ReassignModule {
+                        span: Some(span.clone()),
                         stacktrace: vec![],
                     })),
                     value => Err(Box::new(RuntimeError::WrongIndexType {
@@ -834,7 +982,7 @@ impl Runtime {
             map.insert(key, value);
         }
 
-        Ok(Value::AssociativeArray(Rc::new(RefCell::new(map))))
+        Ok(Value::AssociativeArray(Rc::new(DynamicValue::new(map))))
     }
 
     fn visit_anonymous_function(
@@ -914,9 +1062,35 @@ impl Runtime {
         }
     }
 
+    fn visit_module_access(&mut self, env: &Environment, index: &ast::Expr) -> Result<Value> {
+        let key_span = index.get_span();
+        let key = self.visit_expr(index)?;
+
+        let field = match key {
+            Value::String(s) => s,
+            _ => {
+                return Err(Box::new(RuntimeError::WrongIndexType {
+                    value: key.kind(),
+                    span: Some(key_span.clone()),
+                    stacktrace: vec![],
+                }))
+            }
+        };
+
+        match env.get(&field) {
+            Some(v) => Ok(v.extract()),
+            None => Err(Box::new(RuntimeError::UndefinedReference {
+                var_name: field,
+                span: Some(key_span.clone()),
+                help: Some("verifique se o módulo exporta esse identificador".into()),
+                stacktrace: vec![],
+            })),
+        }
+    }
+
     fn visit_list_assign(
         &mut self,
-        list: Rc<RefCell<Vec<Value>>>,
+        list: Rc<DynamicValue<Vec<Value>>>,
         index: &ast::Expr,
         value: &ast::Expr,
     ) -> Result<Value> {
@@ -925,7 +1099,12 @@ impl Runtime {
         let value = self.visit_expr(value)?;
         let index = self.resolve_index(index)?;
 
-        let mut list = list.borrow_mut();
+        let mut list = list.borrow_mut_checked().map_err(|e| match e {
+            DynamicValueError::Frozen => RuntimeError::FrozenValue {
+                span: Some(index_span.clone()),
+                stacktrace: vec![],
+            },
+        })?;
 
         if index >= list.len() {
             return Err(Box::new(RuntimeError::IndexOutOfBounds {
@@ -947,7 +1126,7 @@ impl Runtime {
 
     fn visit_associative_array_assign(
         &mut self,
-        associative_array: Rc<RefCell<indexmap::IndexMap<AssociativeArrayKey, Value>>>,
+        associative_array: Rc<DynamicValue<indexmap::IndexMap<AssociativeArrayKey, Value>>>,
         index: &ast::Expr,
         value: &ast::Expr,
     ) -> Result<Value> {
@@ -962,7 +1141,15 @@ impl Runtime {
                 source
             })?;
 
-        let mut associative_array = associative_array.borrow_mut();
+        let mut associative_array =
+            associative_array
+                .borrow_mut_checked()
+                .map_err(|e| match e {
+                    DynamicValueError::Frozen => RuntimeError::FrozenValue {
+                        span: Some(span.clone()),
+                        stacktrace: vec![],
+                    },
+                })?;
 
         associative_array.insert(index, value.clone());
 
@@ -986,7 +1173,7 @@ impl Runtime {
 
         let context_frame = Frame::from_env(func.get_env().clone());
 
-        self.stack.push(context_frame);
+        self.store.get_current_mut().push(context_frame);
 
         let result = match func.object {
             FunctionObject::Builtin { func_ptr, env, .. } => func_ptr(args, self, env),
@@ -998,7 +1185,10 @@ impl Runtime {
                         ValueCell::new(arg_value)
                     };
 
-                    self.stack.define(param.name.clone(), stored_value).unwrap();
+                    self.store
+                        .get_current_mut()
+                        .define(param.name.clone(), stored_value)
+                        .unwrap();
                 }
 
                 let is_expr = matches!(body.as_ref(), ast::Stmt::Expr(_));
@@ -1009,7 +1199,8 @@ impl Runtime {
                             Ok(value)
                         } else {
                             let value = self
-                                .stack
+                                .store
+                                .get_current_mut()
                                 .consume_return_value()
                                 .map(|v| v.extract())
                                 .unwrap_or(Value::Nil);
@@ -1039,7 +1230,7 @@ impl Runtime {
             }
         };
 
-        self.stack.pop();
+        self.store.get_current_mut().pop();
 
         result
     }
@@ -1052,14 +1243,14 @@ impl Runtime {
     ) -> Function {
         let mut context = Environment::new();
 
-        for frame in self.stack.into_iter() {
-            for (name, value) in frame.get_env() {
+        for env in self.store.get_current().into_iter() {
+            for (name, value) in env {
                 if params.iter().any(|param| param.name == *name) {
                     continue;
                 }
 
                 if let ValueCell::Shared(value) = value {
-                    context.set(name.clone(), ValueCell::Shared(value.clone()));
+                    context.set_or_replace(name.clone(), ValueCell::Shared(value.clone()));
                 }
             }
         }

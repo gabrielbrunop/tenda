@@ -1,8 +1,10 @@
+use std::path::Path;
+
 use tenda_common::{
     source::IdentifiedSource,
     span::{SourceSpan, Span},
 };
-use tenda_scanner::{self, Token, TokenKind};
+use tenda_scanner::{self, is_identifier, Token, TokenKind};
 
 use crate::{
     ast::{self, FunctionParam},
@@ -13,11 +15,25 @@ use crate::{
     token_slice,
 };
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseOutput {
+    pub ast: ast::Ast,
+    pub imports: Vec<ImportSpec>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportSpec {
+    pub raw_path: String,
+    pub alias: String,
+    pub span: SourceSpan,
+}
+
 pub struct Parser<'a> {
     tokens: TokenIterator<'a>,
     scope: ScopeTracker,
     uid_counter: usize,
     source_id: IdentifiedSource,
+    imports: Vec<ImportSpec>,
 }
 
 impl<'a> Parser<'a> {
@@ -27,10 +43,11 @@ impl<'a> Parser<'a> {
             scope: ScopeTracker::new(),
             uid_counter: 0,
             source_id,
+            imports: vec![],
         }
     }
 
-    pub fn parse(&mut self) -> Result<ast::Ast> {
+    pub fn parse(&mut self) -> Result<ParseOutput> {
         let program = self.parse_program()?;
 
         let mut ast = match self.tokens.peek() {
@@ -41,7 +58,10 @@ impl<'a> Parser<'a> {
 
         closures::annotate_ast_with_var_captures(&mut ast);
 
-        Ok(ast)
+        Ok(ParseOutput {
+            ast,
+            imports: self.imports.clone(),
+        })
     }
 
     fn parse_program(&mut self) -> Result<ast::Ast> {
@@ -90,7 +110,7 @@ impl<'a> Parser<'a> {
         };
 
         let result = match token.kind {
-            TokenKind::Let => self.parse_declaration(),
+            TokenKind::Export | TokenKind::Let => self.parse_declaration(),
             TokenKind::If => match self.try_parse_if_expression_as_stmt()? {
                 Some(expr_stmt) => Ok(expr_stmt),
                 None => self.parse_if_statement(),
@@ -106,6 +126,7 @@ impl<'a> Parser<'a> {
             TokenKind::Do => self.parse_do_statement(),
             TokenKind::Return => self.parse_return_statement(),
             TokenKind::Continue => self.parse_continue_statement(),
+            TokenKind::Use => self.parse_import_statement(),
             _ => self.parse_expression().map(ast::Stmt::Expr),
         }?;
 
@@ -304,7 +325,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_declaration(&mut self) -> Result<ast::Stmt> {
-        let span_start = self.tokens.next().unwrap().span.start();
+        let first_token = self.tokens.next().unwrap();
+        let export = first_token.kind == TokenKind::Export;
+
+        if export {
+            self.skip_token(TokenKind::Let)?;
+        }
+
+        let span_start = first_token.span.start();
         let (name, _) = self.consume_identifier()?;
 
         match self.tokens.peek() {
@@ -332,7 +360,7 @@ impl<'a> Parser<'a> {
                 let span = SourceSpan::new(span_start, span_end, self.source_id);
 
                 let function_decl =
-                    ast::FunctionDecl::new(name, parameters, stmt, self.gen_uid(), span);
+                    ast::FunctionDecl::new(name, parameters, stmt, self.gen_uid(), export, span);
                 let function_decl = ast::Decl::Function(function_decl);
                 let function_decl = ast::Stmt::Decl(function_decl);
 
@@ -346,7 +374,7 @@ impl<'a> Parser<'a> {
                 let span_end = expr.get_span().end();
                 let span = SourceSpan::new(span_start, span_end, self.source_id);
 
-                let local_decl = ast::LocalDecl::new(name, expr, self.gen_uid(), span);
+                let local_decl = ast::LocalDecl::new(name, expr, self.gen_uid(), export, span);
                 let local_decl = ast::Decl::Local(local_decl);
 
                 Ok(ast::Stmt::Decl(local_decl))
@@ -426,6 +454,71 @@ impl<'a> Parser<'a> {
         let continue_stmt = ast::Stmt::Continue(continue_stmt);
 
         Ok(continue_stmt)
+    }
+
+    fn parse_import_statement(&mut self) -> Result<ast::Stmt> {
+        let use_token = self.tokens.next().unwrap();
+        let path_token = self
+            .tokens
+            .consume_one_of(token_slice![String])
+            .ok_or_else(|| {
+                vec![ParserError::MissingImportPath {
+                    span: self.tokens.next().unwrap().span.clone(),
+                }]
+            })?;
+
+        let raw_path = match path_token.literal.as_ref().unwrap() {
+            tenda_scanner::Literal::String(s) => s.clone(),
+            _ => return Err(vec![unexpected_token!(path_token)]),
+        };
+
+        let alias_token = self
+            .tokens
+            .consume_one_of(token_slice![As])
+            .and_then(|_| self.tokens.consume_one_of(token_slice![Identifier]));
+
+        let (alias, alias_span) = match alias_token {
+            Some(ref token) => match token.literal.as_ref().unwrap() {
+                tenda_scanner::Literal::String(alias) => (alias.clone(), token.span.clone()),
+                _ => return Err(vec![unexpected_token!(token)]),
+            },
+            None => {
+                let stem = Path::new(&raw_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| ParserError::InvalidImportPath {
+                        span: path_token.span.clone(),
+                    })
+                    .map_err(|e| vec![e])?;
+
+                if !is_identifier(stem) {
+                    return Err(vec![ParserError::InvalidImportAlias {
+                        alias: stem.into(),
+                        span: path_token.span.clone(),
+                    }]);
+                }
+
+                (stem.into(), path_token.span.clone())
+            }
+        };
+
+        let span_start = use_token.span.start();
+        let span_end = alias_span.end();
+        let span = SourceSpan::new(span_start, span_end, self.source_id);
+
+        self.imports.push(ImportSpec {
+            raw_path: raw_path.clone(),
+            alias: alias.clone(),
+            span: span.clone(),
+        });
+
+        let stmt = ast::Import {
+            raw_path,
+            alias: Some(alias),
+            span,
+        };
+
+        Ok(ast::Stmt::Import(stmt))
     }
 
     fn parse_expression(&mut self) -> Result<ast::Expr> {
