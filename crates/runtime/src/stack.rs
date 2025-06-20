@@ -35,6 +35,10 @@ impl Stack {
         self.base.as_ref().map(|env| env.has(name)).unwrap_or(false)
     }
 
+    pub fn is_global_scope(&self) -> bool {
+        self.frames.is_empty()
+    }
+
     pub fn define(&mut self, name: String, value: ValueCell) -> Result<(), StackDefinitionError> {
         let scope = self.get_innermost_frame_mut().get_env_mut();
 

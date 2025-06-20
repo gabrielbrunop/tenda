@@ -87,6 +87,7 @@ fn annotate_stmt_with_var_captures(stmt: &mut ast::Stmt, closure_list: &VarCaptu
 
             annotate_expr_with_var_captures(value, closure_list);
         }
+        Stmt::Decl(Decl::Export(_)) => {}
         Stmt::Decl(ast::Decl::Function(ast::FunctionDecl {
             body,
             captured: is_captured_var,
@@ -500,6 +501,7 @@ fn get_free_vars_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<FreeVarRef> {
                 get_free_vars_in_fn_body(body, name, *uid)
             }
             ast::Decl::Local(ast::LocalDecl { value, .. }) => get_free_vars_in_expr(value, name),
+            ast::Decl::Export(_) => vec![],
         },
         Stmt::Cond(ast::Cond { then, or_else, .. }) => {
             let mut references = get_free_vars_in_stmt(then, name);
@@ -636,6 +638,7 @@ fn get_free_vars_in_fn_body(stmt: &ast::Stmt, name: &str, closure_fn: usize) -> 
             .into_iter()
             .map(|expr| (expr, closure_fn))
             .collect::<Vec<_>>(),
+        Stmt::Decl(Decl::Export(_)) => vec![],
         Stmt::Cond(ast::Cond {
             cond,
             then,
@@ -798,6 +801,7 @@ fn get_var_refs_in_stmt(stmt: &ast::Stmt, name: &str) -> Vec<usize> {
                 _ => vec![],
             }
         }
+        Decl(ast::Decl::Export(_)) => vec![],
         Expr(expr) => get_var_refs_in_expr(expr, name),
         Cond(ast::Cond {
             cond,

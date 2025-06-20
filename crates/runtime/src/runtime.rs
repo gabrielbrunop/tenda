@@ -183,6 +183,7 @@ impl Runtime {
         match decl {
             Local(local) => self.visit_local_decl(local)?,
             Function(function) => self.visit_function_decl(function)?,
+            Export(export) => self.visit_export_decl(export)?,
         };
 
         Ok(Value::Nil)
@@ -337,6 +338,11 @@ impl Runtime {
         let value = self.visit_expr(value)?;
 
         let value = if local.exported {
+            assert!(
+                self.store.get_current().is_global_scope(),
+                "exported variables must be defined in the global scope"
+            );
+
             ValueCell::new_external(value)
         } else if local.captured {
             ValueCell::new_shared(value)
@@ -368,6 +374,11 @@ impl Runtime {
         let func = Value::Function(func);
 
         let value = if function.exported {
+            assert!(
+                self.store.get_current().is_global_scope(),
+                "exported functions must be defined in the global scope"
+            );
+
             ValueCell::new_external(func)
         } else if function.captured {
             ValueCell::new_shared(func)
@@ -387,6 +398,47 @@ impl Runtime {
                     }))
                 }
             },
+        }
+    }
+
+    fn visit_export_decl(&mut self, export: &ast::ExportDecl) -> Result<Value> {
+        use crate::PromotionKind::*;
+
+        let ast::ExportDecl { name, span, .. } = export;
+
+        assert!(
+            self.store.get_current().is_global_scope(),
+            "exported variables must be defined in the global scope"
+        );
+
+        let env = self.store.get_current_mut().global_mut();
+        let var = env.get(name);
+
+        match var {
+            Some(ValueCell::External(_)) => Err(Box::new(RuntimeError::AlreadyExported {
+                var_name: name.clone(),
+                span: Some(span.clone()),
+                stacktrace: vec![],
+            })),
+            Some(ValueCell::Shared(_)) => {
+                env.promote(name, SharedToExternal);
+
+                Ok(Value::Nil)
+            }
+            Some(ValueCell::Owned(_)) => {
+                env.promote(name, OwnedToExternal);
+
+                Ok(Value::Nil)
+            }
+            None => Err(Box::new(RuntimeError::UndefinedReference {
+                var_name: name.clone(),
+                span: Some(span.clone()),
+                help: Some(format!(
+                    "você precisa definir a variável '{}' antes de exportá-la",
+                    name
+                )),
+                stacktrace: vec![],
+            })),
         }
     }
 }

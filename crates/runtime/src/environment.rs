@@ -46,6 +46,33 @@ impl Environment {
         self.state.insert(name, value);
     }
 
+    pub fn promote(&mut self, name: &str, kind: PromotionKind) {
+        use PromotionKind::*;
+        use ValueCell::*;
+
+        let Some(cell) = self.state.get_mut(name) else {
+            return;
+        };
+
+        match kind {
+            OwnedToExternal => {
+                if !matches!(cell, Owned(_)) {
+                    return;
+                }
+
+                let value = cell.extract();
+                *cell = External(Rc::new(RefCell::new(value)));
+            }
+
+            SharedToExternal => {
+                if let Shared(rc) = cell {
+                    let rc_clone = Rc::clone(rc);
+                    *cell = External(rc_clone);
+                }
+            }
+        }
+    }
+
     pub fn seal(&mut self, name: String) -> Result<(), EnvironmentSealError> {
         if !self.state.contains_key(&name) {
             return Err(EnvironmentSealError::VariableNotFound(name));
@@ -106,6 +133,11 @@ impl ValueCell {
             Shared(val) | External(val) => val.borrow().clone(),
         }
     }
+}
+
+pub enum PromotionKind {
+    OwnedToExternal,
+    SharedToExternal,
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]

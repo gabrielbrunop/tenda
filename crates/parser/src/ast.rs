@@ -50,6 +50,7 @@ impl Stmt {
             Stmt::Decl(decl) => match decl {
                 Decl::Local(local) => &local.span,
                 Decl::Function(function) => &function.span,
+                Decl::Export(export) => &export.span,
             },
             Stmt::Cond(cond) => &cond.span,
             Stmt::While(while_stmt) => &while_stmt.span,
@@ -120,6 +121,7 @@ impl Block {
 pub enum Decl {
     Local(LocalDecl),
     Function(FunctionDecl),
+    Export(ExportDecl),
 }
 
 impl Decl {
@@ -127,6 +129,7 @@ impl Decl {
         match self {
             Decl::Local(local) => &local.name,
             Decl::Function(function) => &function.name,
+            Decl::Export(export) => &export.name,
         }
     }
 
@@ -134,6 +137,7 @@ impl Decl {
         match self {
             Decl::Local(local) => local.uid,
             Decl::Function(function) => function.uid,
+            Decl::Export(export) => export.uid,
         }
     }
 }
@@ -211,6 +215,19 @@ impl FunctionDecl {
             exported,
             span,
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ExportDecl {
+    pub name: String,
+    pub uid: usize,
+    pub span: SourceSpan,
+}
+
+impl ExportDecl {
+    pub fn new(name: String, uid: usize, span: SourceSpan) -> Self {
+        ExportDecl { name, uid, span }
     }
 }
 

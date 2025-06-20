@@ -325,12 +325,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_declaration(&mut self) -> Result<ast::Stmt> {
-        let first_token = self.tokens.next().unwrap();
-        let export = first_token.kind == TokenKind::Export;
+        let first_token = self
+            .tokens
+            .consume_one_of(token_slice![Export, Let])
+            .expect("expected export or let token");
 
-        if export {
-            self.skip_token(TokenKind::Let)?;
-        }
+        let export = first_token.kind == TokenKind::Export;
 
         let span_start = first_token.span.start();
         let (name, _) = self.consume_identifier()?;
@@ -378,6 +378,15 @@ impl<'a> Parser<'a> {
                 let local_decl = ast::Decl::Local(local_decl);
 
                 Ok(ast::Stmt::Decl(local_decl))
+            }
+            Some(token) if token.kind == TokenKind::Newline => {
+                let span_end = first_token.span.end();
+                let span = SourceSpan::new(span_start, span_end, self.source_id);
+
+                let export_decl = ast::ExportDecl::new(name, self.gen_uid(), span);
+                let export_decl = ast::Decl::Export(export_decl);
+
+                Ok(ast::Stmt::Decl(export_decl))
             }
             Some(token) => Err(vec![unexpected_token!(token)]),
             None => Err(vec![ParserError::UnexpectedEoi {

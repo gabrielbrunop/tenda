@@ -319,6 +319,17 @@ pub enum RuntimeError {
         #[metadata]
         stacktrace: Vec<StackFrame>,
     },
+
+    #[error("variável '{}' já foi exportada", .var_name)]
+    AlreadyExported {
+        var_name: String,
+
+        #[span]
+        span: Option<SourceSpan>,
+
+        #[metadata]
+        stacktrace: Vec<StackFrame>,
+    },
 }
 
 impl HasDiagnosticHooks<SourceSpan> for RuntimeError {
