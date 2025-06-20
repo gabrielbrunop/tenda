@@ -14,6 +14,8 @@ use tenda_parser::{self, ast};
 
 use crate::{loader_error::LoaderError, Cycle, ResolutionError};
 
+const EXTENSIONS: [&str; 2] = ["tenda", "tnd"];
+
 #[derive(Debug)]
 pub struct LoadOutput {
     pub modules: indexmap::IndexMap<PathBuf, ModuleData>,
@@ -181,7 +183,7 @@ where
     fn parse_source(&self, path: &Path, ctx: Option<ImportCtx>) -> Result<ModuleData, LoaderError> {
         let text: Rc<str> = match self.virtual_src.get(path) {
             Some(t) => Rc::clone(t),
-            None => match (self.read)(path) {
+            None => match self.read_file(path) {
                 Ok(s) => Rc::from(s),
                 Err(e) => match ctx {
                     Some(ctx) => {
@@ -247,6 +249,28 @@ where
             source_id: sid,
             text,
         })
+    }
+
+    fn read_file(&self, path: &Path) -> io::Result<String> {
+        match (self.read)(path) {
+            Ok(txt) => Ok(txt),
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+            Err(err) if path.extension().is_some() => Err(err),
+            Err(first_err) => {
+                for ext in EXTENSIONS {
+                    let mut alt = path.to_path_buf();
+                    alt.set_extension(ext);
+
+                    match (self.read)(&alt) {
+                        Ok(txt) => return Ok(txt),
+                        Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+
+                Err(first_err)
+            }
+        }
     }
 
     fn get_node(&mut self, p: &Path) -> NodeIndex {
