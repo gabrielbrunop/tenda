@@ -31,6 +31,14 @@ impl ScopeTracker {
     pub fn has_scope(&self, scope: BlockScope) -> bool {
         self.get().contains(&scope)
     }
+
+    pub fn depth(&self) -> usize {
+        self.get().len()
+    }
+
+    pub fn at_toplevel(&self) -> bool {
+        self.depth() == 1
+    }
 }
 
 impl Default for ScopeTracker {

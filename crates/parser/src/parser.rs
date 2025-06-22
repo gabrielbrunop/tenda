@@ -335,6 +335,13 @@ impl<'a> Parser<'a> {
         let span_start = first_token.span.start();
         let (name, _) = self.consume_identifier()?;
 
+        if export && !self.scope.at_toplevel() {
+            return Err(vec![ParserError::NonTopLevel {
+                token: first_token.clone_ref(),
+                span: first_token.span.clone(),
+            }]);
+        }
+
         match self.tokens.peek() {
             Some(token) if token.kind == TokenKind::LeftParen => {
                 let parameters = self.parse_function_parameters_signature()?;
@@ -467,6 +474,7 @@ impl<'a> Parser<'a> {
 
     fn parse_import_statement(&mut self) -> Result<ast::Stmt> {
         let use_token = self.tokens.next().unwrap();
+
         let path_token = self
             .tokens
             .consume_one_of(token_slice![String])
@@ -510,6 +518,13 @@ impl<'a> Parser<'a> {
                 (stem.into(), path_token.span.clone())
             }
         };
+
+        if !self.scope.at_toplevel() {
+            return Err(vec![ParserError::NonTopLevel {
+                token: use_token.clone_ref(),
+                span: use_token.span.clone(),
+            }]);
+        }
 
         let span_start = use_token.span.start();
         let span_end = alias_span.end();

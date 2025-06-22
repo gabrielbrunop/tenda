@@ -109,6 +109,15 @@ pub enum ParserError {
     #[error("nome de importação inválido: '{alias}'")]
     InvalidImportAlias {
         alias: String,
+
+        #[span]
+        span: SourceSpan,
+    },
+
+    #[error("'{}' só pode aparecer no escopo global do arquivo", .token.lexeme)]
+    NonTopLevel {
+        token: Token,
+
         #[span]
         span: SourceSpan,
     },
