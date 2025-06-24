@@ -37,7 +37,7 @@ Write-Host "Baixando $download"
 Invoke-WebRequest -Uri $download -OutFile "$tmp\$asset" -UseBasicParsing -ErrorAction Stop
 
 Write-Host 'Extraindo arquivos'
-Expand-Archive -LiteralPath "$tmp\$asset" -DestinationPath $tmp -Force  # :contentReference[oaicite:5]{index=5}
+Expand-Archive -LiteralPath "$tmp\$asset" -DestinationPath $tmp -Force
 
 Move-Item -Force "$tmp\tenda.exe" (Join-Path $binDir 'tenda.exe') -ErrorAction Stop
 Remove-Item -Recurse -Force $tmp
@@ -45,10 +45,13 @@ Remove-Item -Recurse -Force $tmp
 # Make PATH changes idempotent
 
 $pathLine = $binDir
-$current  = [Environment]::GetEnvironmentVariable('Path', 'User') ?? ''   # operador ?? desde PS 7 :contentReference[oaicite:6]{index=6}
+
+$current = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($null -eq $current) { $current = '' }
+
 if (-not ($current.Split(';') -contains $pathLine)) {
     $newPath = ($current.TrimEnd(';') + ';' + $pathLine).TrimStart(';')
-    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')       # persistente :contentReference[oaicite:7]{index=7}
+    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
     Write-Host "Adicionado $binDir ao PATH do usuário"
 }
 
