@@ -1,9 +1,9 @@
-param(
+﻿param(
     [string]$Tag
 )
 
 function ErrorExit ($msg) {
-    Write-Host "error: $msg" -ForegroundColor Red
+    Write-Host "erro: $msg" -ForegroundColor Red
     exit 1
 }
 
@@ -73,4 +73,4 @@ Write-Host "Tenda instalada com sucesso -> $(Join-Path $binDir 'tenda.exe')" -Fo
 $hint = "`$env:Path = `"$binDir;`$env:Path`""
 Write-Host "`nPara usar a Tenda imediatamente, execute:" -ForegroundColor Yellow
 Write-Host "  $hint" -ForegroundColor Yellow
-Write-Host "`nExecute 'tenda --ajuda' para começar!" -ForegroundColor Yellow
+Write-Host "`nExecute 'tenda --ajuda' para saber mais!" -ForegroundColor Yellow
