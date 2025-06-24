@@ -133,7 +133,7 @@ add_to_profile
 # Finale
 
 if command -v tenda >/dev/null 2>&1; then
-    success "Execute 'tenda --ajuda' para começar."
+    success "Execute 'tenda --ajuda' para começar!"
 else
     echo
     info "Reincie seu terminal ou execute:"
