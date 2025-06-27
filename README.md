@@ -43,7 +43,7 @@ export PATH="$TENDA_INSTALL/bin:$PATH"
 
 ## Contribuindo
 
-No momento, as contribuições externas estão fechadas. Isto significa que o recebimento de pull requests não está aberto ao público. Se você tiver sugestões ou encontrar bugs, sinta-se à vontade para abrir uma issue no nosso repositório do GitHub.
+Contribuições são bem-vindas! Veja o guia de [contribuição](/CONTRIBUTING.md) para saber como começar.
 
 ## Licença
 
