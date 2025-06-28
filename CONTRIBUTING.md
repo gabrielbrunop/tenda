@@ -63,7 +63,7 @@ Todas as contribuições serão licenciadas sob a licença GPL-3.0, conforme o a
 - Para adições à linguagem, crie uma proposta de mudança e discuta com os mantenedores antes de abrir a pull request.
 - Antes de criar uma issue, leia os [documentos internos do projeto](/docs/internal/README.md).
 - Caso você queira desenvolver uma parte grande do tooling, como a LSP, formatter, depurador etc., crie uma issue para discutir a implementação, definir requisitos e escopo, e obter feedback dos mantenedores. Também verifique se há outros issues relacionadas que possam impactar sua implementação, ou se a literatura técnica da Tenda já possui conteúdo sobre o assunto.
-- Para melhorias de performance, cheque as [diretrizes de performance no guia de estilo de código](/docs/internal/style/code-style.md#performance-1)] antes de criar uma issue ou pull request. Para melhorias não triviais, utilize profiling e dados concretos para justificar a mudança. Se você não tiver certeza se a mudança é trivial ou não, discuta com os mantenedores antes de abrir a pull request.
+- Para melhorias de performance, cheque as [diretrizes de performance no guia de estilo de código](/docs/internal/style/code-style.md#performance-1) antes de criar uma issue ou pull request. Para melhorias não triviais, utilize profiling e dados concretos para justificar a mudança. Se você não tiver certeza se a mudança é trivial ou não, discuta com os mantenedores antes de abrir a pull request.
 
 ### Desenvolvendo
 
