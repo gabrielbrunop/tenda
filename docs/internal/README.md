@@ -6,7 +6,7 @@
 
 ## Arquitetura
 
-- [Visão geral da arquitetura da Tenda](architecture/overview.md)]
+- [Visão geral da arquitetura da Tenda](architecture/overview.md)
 
 ## Planejamento
 
