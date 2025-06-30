@@ -470,9 +470,9 @@ pub fn is_identifier(s: &str) -> bool {
 
     let mut chars = s.chars();
 
-    if !matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_') {
+    if !matches!(chars.next(), Some(c) if c.is_alphabetic() || c == '_') {
         return false;
     }
 
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    chars.all(|c| c.is_alphanumeric() || c == '_')
 }

@@ -70,6 +70,7 @@ pub struct Loader<R: Fn(&Path) -> io::Result<String>> {
     read: R,
     cache: HashMap<PathBuf, ModuleData>,
     virtual_src: HashMap<PathBuf, Rc<str>>,
+    pnp: HashMap<String, PathBuf>,
     graph: DiGraph<PathBuf, ()>,
     node_ix: HashMap<PathBuf, NodeIndex>,
     edge_span: HashMap<(PathBuf, PathBuf), SourceSpan>,
@@ -84,6 +85,31 @@ where
     pub fn new(reader: R) -> Self {
         Self {
             read: reader,
+            cache: HashMap::new(),
+            virtual_src: HashMap::new(),
+            pnp: HashMap::new(),
+            graph: DiGraph::new(),
+            node_ix: HashMap::new(),
+            edge_span: HashMap::new(),
+            stack: Vec::new(),
+            counter: 0,
+        }
+    }
+
+    pub fn new_with_sources<I, S, P>(reader: R, sources: I) -> Self
+    where
+        I: IntoIterator<Item = (S, P)>,
+        S: Into<String>,
+        P: Into<PathBuf>,
+    {
+        let pnp = sources
+            .into_iter()
+            .map(|(k, p)| (k.into(), canonical(&p.into()))) // canonicalise *once*
+            .collect();
+
+        Self {
+            read: reader,
+            pnp,
             cache: HashMap::new(),
             virtual_src: HashMap::new(),
             graph: DiGraph::new(),
@@ -233,11 +259,19 @@ where
         let imports = po
             .imports
             .into_iter()
-            .map(|spec| ResolvedImport {
-                raw_path: spec.raw_path.clone(),
-                alias: spec.alias,
-                canonical: canonical(&path.parent().unwrap().join(&spec.raw_path)),
-                span: spec.span,
+            .map(|spec| {
+                let canonical = if let Some(mapped) = self.pnp.get(&spec.raw_path) {
+                    mapped.clone()
+                } else {
+                    canonical(&path.parent().unwrap().join(&spec.raw_path))
+                };
+
+                ResolvedImport {
+                    raw_path: spec.raw_path,
+                    alias: spec.alias,
+                    canonical,
+                    span: spec.span,
+                }
             })
             .collect();
 

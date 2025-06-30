@@ -16,6 +16,8 @@ use tenda_core::{
 };
 use yansi::Paint;
 
+mod pnp;
+
 #[derive(CommandParser)]
 #[command(
     author,
@@ -42,6 +44,18 @@ struct Cli {
         help = "Exibe ajuda (use '-h' para ver resumo)"
     )]
     help: bool,
+
+    #[arg(long = "pnp", value_name = "ARQUIVO")]
+    pnp: Option<PathBuf>,
+
+    #[arg(short = 'm',
+        long  = "map",
+        alias = "mapear",
+        value_name = "CAMINHO=ARQUIVO",
+        num_args = 0..,
+        value_delimiter = ','
+    )]
+    inline_map: Vec<String>,
 
     #[arg(short = 'V', long = "version", alias = "versão", help = "Exibe versão")]
     version: bool,
@@ -102,8 +116,33 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
+    let mut loader = {
+        let pnp_map_file = match cli.pnp.map_or(Ok(HashMap::new()), |p| pnp::load_plain(&p)) {
+            Ok(map) => map,
+            Err(e) => {
+                eprintln!("{} {}", Paint::red("erro:").bold(), e);
+                return Ok(());
+            }
+        };
+
+        let pnp_map_inline = match pnp::parse_inline(&cli.inline_map) {
+            Ok(map) => map,
+            Err(e) => {
+                eprintln!("{} {}", Paint::red("erro:").bold(), e);
+                return Ok(());
+            }
+        };
+
+        let mut pnp_map = pnp_map_file;
+        pnp_map.extend(pnp_map_inline);
+
+        let reader = |p: &Path| std::fs::read_to_string(p);
+
+        Loader::new_with_sources(reader, pnp_map)
+    };
+
     if let Some(path) = cli.file {
-        run_file(PathBuf::from(path));
+        run_file(PathBuf::from(path), &mut loader);
 
         return Ok(());
     }
@@ -114,17 +153,17 @@ fn main() -> io::Result<()> {
         let mut buffer = String::new();
         stdin.read_to_string(&mut buffer)?;
 
-        run_source(&buffer);
+        run_source(&buffer, &mut loader);
 
         return Ok(());
     }
 
-    start_repl();
+    start_repl(&mut loader);
 
     Ok(())
 }
 
-fn start_repl() {
+fn start_repl(loader: &mut Loader<impl Fn(&Path) -> io::Result<String>>) {
     let keybindings = default_emacs_keybindings();
     let edit_mode = Box::new(reedline::Emacs::new(keybindings));
     let validator = Box::new(BlockValidator);
@@ -139,7 +178,6 @@ fn start_repl() {
     );
 
     let platform = OSPlatform;
-    let mut loader = Loader::new(|p: &Path| std::fs::read_to_string(p));
     let mut runtime = Runtime::with_builtins(platform, get_runtime_prelude());
     let mut exiting = false;
     let mut source_history: HashMap<IdentifiedSource, Rc<str>> = HashMap::new();
@@ -203,9 +241,7 @@ fn start_repl() {
     }
 }
 
-fn run_file(path: PathBuf) {
-    let mut loader = Loader::new(|p: &Path| std::fs::read_to_string(p));
-
+fn run_file(path: PathBuf, loader: &mut Loader<impl Fn(&Path) -> io::Result<String>>) {
     let result = match loader.load_entry(path.clone()) {
         Ok(o) => o,
         Err(e) => return handle_loader_error(e, true),
@@ -243,10 +279,8 @@ fn run_file(path: PathBuf) {
     }
 }
 
-fn run_source(source: &str) {
+fn run_source(source: &str, loader: &mut Loader<impl Fn(&Path) -> io::Result<String>>) {
     let platform = OSPlatform;
-    let mut loader = Loader::new(|p: &Path| std::fs::read_to_string(p));
-
     let mut runtime = Runtime::with_builtins(platform, get_runtime_prelude());
 
     let result = match loader.register_virtual(source.to_string()) {
